@@ -26,7 +26,7 @@ from pathlib import Path
 
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._processes.operation import ProviderCommandError
-from marimo_studio._processes.supervisor import ProcessSupervisor
+from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessSupervisor
 from marimo_studio._processes.tools import NO_TOOLS, ProviderTools, provider_tools
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.python_project import project_environment
@@ -129,6 +129,8 @@ def _install(notebook: Path) -> tuple[str, ...]:
             cwd=notebook.parent,
             env=install.environment,
         )
+    except ProcessCleanupError:
+        raise
     except OSError as error:
         raise DependencyError(f"pixi could not start: {error}") from error
     finally:

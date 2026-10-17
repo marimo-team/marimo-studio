@@ -311,15 +311,17 @@ class SourceChangeProducer:
                 (*self._scope_files, *self._roots),
                 before,
             )
-            inspection = provider.inspect(inspection_request(project))
+            # Inspection and provenance use the tools of one environment
+            # revision, as the build that consumes this input does.
+            with notebook_tools(project.locations.notebook):
+                inspection = provider.inspect(inspection_request(project))
+                provenance = provider.provenance()
             input_files, roots = _validated_inputs(project, inspection)
             document_files = _validated_document_files(project, inspection)
             scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
             excluded_roots = (project_artifacts(project),)
             after = _tree_stamps((*scope_files, *roots), excluded_roots)
             inputs = _input_paths_from_tree(project, input_files, roots, after)
-            with notebook_tools(project.locations.notebook):
-                provenance = provider.provenance()
             input_id = project_revision(
                 project,
                 inspection,

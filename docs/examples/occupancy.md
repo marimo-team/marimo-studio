@@ -59,11 +59,15 @@ which the notebook declares for [pixi](https://pixi.prefix.dev/) beside its
 Python packages:
 
 ```python
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
 # [tool.pixi.dependencies]
 # tectonic = ">=0.15"
 ```
 
-With uv and pixi 0.81 or newer installed, run from the repository root:
+With uv and pixi installed, run from the repository root. The repository's
+pixi workspace, which the TeX cache step uses, needs pixi 0.81 or newer:
 
 ```console
 uv run marimo edit examples/occupancy.py --sandbox=pixi

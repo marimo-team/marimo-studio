@@ -46,6 +46,7 @@ from marimo_studio.view_providers import (
     BuildRequest,
     BuildResult,
     InspectionRequest,
+    ProjectDiagnostic,
     ProjectInspection,
     ProviderAvailability,
     ProviderCancellation,
@@ -314,8 +315,10 @@ class _RegisteredProvider:
         ):
             if self._process is not None:
                 result = build_in_provider_process(self._process, request)
-                return self._conformance.validate_build_result(request, result)
-            return self._conformance.build(self._local_provider(), request)
+                result = self._conformance.validate_build_result(request, result)
+            else:
+                result = self._conformance.build(self._local_provider(), request)
+        return replace(result, diagnostics=_with_tool_problem(result.diagnostics))
 
     def render(self, request: RenderRequest) -> RenderResult:
         if not self.can_render:
@@ -324,11 +327,13 @@ class _RegisteredProvider:
         with self._guard(f"render {request.source.as_posix()!r}"):
             if self._process is not None:
                 result = render_in_provider_process(self._process, request)
-                return self._conformance.validate_render_result(request, result)
-            return self._conformance.render(
-                cast(RenderProvider, self._local_provider()),
-                request,
-            )
+                result = self._conformance.validate_render_result(request, result)
+            else:
+                result = self._conformance.render(
+                    cast(RenderProvider, self._local_provider()),
+                    request,
+                )
+        return replace(result, diagnostics=_with_tool_problem(result.diagnostics))
 
     def provenance(self) -> ProviderProvenance:
         """Identify the provider and tool versions that build this provider's views.
@@ -346,6 +351,28 @@ class _RegisteredProvider:
         if self._provider is None:
             raise RuntimeError("Isolated provider has no in-process implementation")
         return self._provider
+
+
+def _with_tool_problem(
+    diagnostics: tuple[ProjectDiagnostic, ...],
+) -> tuple[ProjectDiagnostic, ...]:
+    """Name the notebook's failed pixi install beside a failed build or render.
+
+    A tool the environment would provide is then missing, and the provider's
+    own error names only the tool.
+    """
+    problem = current_tools().problem
+    if problem is None or not any(item.severity == "error" for item in diagnostics):
+        return diagnostics
+    return (
+        *diagnostics,
+        ProjectDiagnostic(
+            "pixi-environment-unavailable",
+            "error",
+            f"The notebook's pixi environment is unavailable: {problem}",
+            "Fix the pixi error, then build the view again.",
+        ),
+    )
 
 
 class ProviderRegistry:

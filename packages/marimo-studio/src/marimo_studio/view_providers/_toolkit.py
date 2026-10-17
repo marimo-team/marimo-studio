@@ -22,6 +22,7 @@ from marimo_studio._processes.supervisor import (
     ProcessSupervisor,
 )
 from marimo_studio._processes.tools import find_tool as _find_tool
+from marimo_studio._processes.tools import tool_environment as _tool_environment
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers._records import (
     BuildRequest,
@@ -180,9 +181,11 @@ def render_page(
 def find_tool(command: str) -> str | None:
     """Return the executable that a command named ``command`` runs, if any.
 
-    Studio searches the executable directories of the notebook's pixi script
-    environment, when its metadata has a ``[tool.pixi]`` table, then ``PATH``.
-    A path in ``command`` is returned when it names an executable.
+    Studio searches ``PATH``. For a provider call made for a standalone
+    notebook with ``[tool.pixi]`` metadata, while Marimo runs the notebook
+    with ``--sandbox=pixi`` or a ``marimo-studio`` command targets it, Studio
+    first searches the executable directories of the notebook's pixi script
+    environment. A path in ``command`` is returned when it names an executable.
     """
     return _find_tool(command)
 
@@ -225,7 +228,9 @@ def probe_tool(
         version = _PROBES.get(key)
     if version is None:
         try:
-            version, problem = _reported_version(name, key[0], environment)
+            version, problem = _reported_version(
+                name, key[0], _tool_environment(environment)
+            )
         except ProcessCleanupError:
             raise
         except OSError as error:

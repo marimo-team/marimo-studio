@@ -35,9 +35,10 @@ sandbox backends apply.
 
 View builds run in the process that requests them: the server, a CLI command,
 or a code-mode kernel. Provider system tools such as `tectonic` resolve from
-the notebook's pixi script environment when its PEP 723 metadata has a
-`[tool.pixi]` table and marimo runs it with `--sandbox=pixi` or a Studio
-command targets it, then from that process's `PATH`. See
+a standalone notebook's pixi script environment when its PEP 723 metadata has
+a `[tool.pixi]` table and marimo runs it with `--sandbox=pixi` or a Studio
+command targets it, then from that process's `PATH`. A notebook in a pixi
+workspace or uv project keeps that project's environment. See
 [provider environments](development_docs/architecture/provider-environments.md#pixi-script-environments).
 
 ## What the complexity buys

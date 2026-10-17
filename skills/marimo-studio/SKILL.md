@@ -101,7 +101,7 @@ LaTeX starter needs Tectonic. Add `tectonic = ">=0.15"` under
 `[tool.pixi.dependencies]` in the notebook's `# /// script` block, cap
 `requires-python` below 3.15, and open the notebook with `--sandbox=pixi` in
 place of `--sandbox`. Studio then runs Tectonic from the notebook's pixi
-environment. A notebook in a pixi workspace runs Studio through
+environment. `pixi global install tectonic` provides it for every notebook. A notebook in a pixi workspace runs Studio through
 `pixi run marimo edit notebook.py --no-sandbox --watch`.
 `help(marimo._code_mode)` then lists Studio as the `studio` capability, and
 sandboxed kernels import the same Studio as the server. For views across

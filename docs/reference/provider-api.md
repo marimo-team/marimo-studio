@@ -648,27 +648,26 @@ Studio shows `reason` and `action` in the view picker and in
 `marimo-studio doctor`. Studio records the `availability()` version with each
 build, so a tool upgrade rebuilds the views that use the provider.
 
-`find_tool()` returns the path of the executable a command name runs. When the
-notebook's `# /// script` metadata has a `[tool.pixi]` table, it searches the
-executable directories of the notebook's [pixi](https://pixi.prefix.dev/)
-script environment before `PATH`. `probe_tool()` finds its command the same
-way. `request.runner` puts those directories first on `PATH` for a command
-that inherits Studio's environment, and an `environment` mapping replaces the
-whole environment. A notebook declares a provider's tool with
-`pixi add --script analysis.py <package>`, and the provider runs the path
-`find_tool()` returns. This `build()` fragment compiles a Typst document into
-the published files:
+`find_tool()` returns the path of the executable a command name runs. It
+searches `PATH`. A provider call for a standalone notebook with a
+`[tool.pixi]` table in its `# /// script` metadata searches the executable
+directories of the notebook's [pixi](https://pixi.prefix.dev/) script
+environment first, while marimo runs the notebook with `--sandbox=pixi` or a
+`marimo-studio` command targets it. `probe_tool()` finds and runs its command
+the same way. `request.runner` puts those directories first on `PATH` for a
+command that inherits Studio's environment, and an `environment` mapping
+replaces the whole environment. A command that passes its own `environment`
+runs the path `find_tool()` returns:
 
 ```python
-def build(self, request):
-    typst = find_tool("typst")
-    if typst is None:
-        raise ProviderError("Studio cannot find the typst command.")
-    source = request.project.root / "main.typ"
-    output = request.staging_root / "main.pdf"
-    request.runner.run(
-        [typst, "compile", str(source), str(output)], cwd=request.work_root
-    )
+typst = find_tool("typst")
+if typst is None:
+    raise ProviderError("Studio cannot find the typst command.")
+request.runner.run(
+    [typst, "compile", "main.typ", str(request.work_root / "main.pdf")],
+    cwd=request.project.root,
+    environment={**os.environ, "SOURCE_DATE_EPOCH": "0"},
+)
 ```
 
 ## Record reference

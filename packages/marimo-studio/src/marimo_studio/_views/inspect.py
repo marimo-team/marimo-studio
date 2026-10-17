@@ -8,7 +8,10 @@ from functools import partial
 
 from marimo_studio._artifacts.inputs import build_input_state, project_source_snapshot
 from marimo_studio._artifacts.repository import read_artifact_state
-from marimo_studio._processes.provider_operation import raise_process_cleanup
+from marimo_studio._processes.provider_operation import (
+    raise_process_cleanup,
+    run_provider_operation,
+)
 from marimo_studio._projections.resolved import ProjectionDiagnostic
 from marimo_studio._views.inspection import inspect_view_project, project_provenance
 from marimo_studio._views.publication_hold import read_publication_hold
@@ -133,7 +136,9 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
         project = provider_registry().validate_project(project)
         inspection = await inspect_view_project(project)
         failed = any(item.severity == "error" for item in inspection.diagnostics)
-        source = await asyncio.to_thread(
+        # Provenance can install the notebook's pixi environment, which the
+        # provider operation cancels with this request.
+        source = await run_provider_operation(
             lambda: project_source_snapshot(
                 project,
                 inspection,

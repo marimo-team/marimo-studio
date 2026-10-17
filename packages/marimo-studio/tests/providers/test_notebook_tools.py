@@ -10,7 +10,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 from click.testing import CliRunner
@@ -24,6 +24,7 @@ from marimo_studio._processes.operation import (
     ProviderCommandError,
 )
 from marimo_studio._processes.provider_runner import create_provider_runner
+from marimo_studio._processes.tools import ProviderTools, provider_tools
 from marimo_studio._views.catalog import starters
 from marimo_studio._views.inspection import project_provenance
 from marimo_studio._views.records import Starter
@@ -33,8 +34,8 @@ from marimo_studio._workspace.project_manifest import (
     load_view_project,
 )
 from marimo_studio._workspace.tools import command_installs, notebook_tools
-from marimo_studio.errors import DependencyError
-from marimo_studio.view_providers import find_tool, probe_tool
+from marimo_studio.errors import ConfigurationError, DependencyError
+from marimo_studio.view_providers import RenderRequest, find_tool, probe_tool
 from marimo_studio.view_providers._host import provider_registry
 
 posix_only = pytest.mark.skipif(os.name == "nt", reason="uses POSIX shell scripts")
@@ -299,6 +300,59 @@ def test_failed_pixi_install_names_its_cause_in_availability(
     )
     assert availability.action == "Fix the pixi error, then build the view again."
     assert "solve failed" in caplog.text
+
+
+@posix_only
+def test_a_failed_render_names_the_notebook_pixi_problem(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    template = tmp_path / "template"
+    template.mkdir()
+    (template / "main.tex").write_text(
+        "\\documentclass{article}\n\\begin{document}x\\end{document}\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "output"
+    output.mkdir()
+    cancellation = ProviderCancellation()
+
+    with provider_tools(ProviderTools(problem="solve failed")):
+        result = (
+            provider_registry()
+            .get("marimo-studio/latex")
+            .render(
+                RenderRequest(
+                    source=PurePosixPath("main.tex"),
+                    template_root=template,
+                    values={},
+                    outputs={},
+                    cells={},
+                    output_root=output,
+                    cancellation=cancellation,
+                    runner=create_provider_runner(template, cancellation, 10),
+                    command_timeout=10,
+                )
+            )
+        )
+
+    assert [(item.code, item.message) for item in result.diagnostics] == [
+        ("provider-error", "Studio cannot find the tectonic command."),
+        (
+            "pixi-environment-unavailable",
+            "The notebook's pixi environment is unavailable: solve failed",
+        ),
+    ]
+
+
+def test_starters_command_rejects_a_missing_target_notebook(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        cli, ["starters", "--target", str(tmp_path / "missing.py"), "--json"]
+    )
+
+    assert isinstance(result.exception, ConfigurationError)
+    assert str(result.exception).startswith("Notebook does not exist")
 
 
 def test_missing_pixi_is_retried_after_the_metadata_changes(

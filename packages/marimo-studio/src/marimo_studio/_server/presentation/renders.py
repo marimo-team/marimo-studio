@@ -30,6 +30,7 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path, PurePosixPath
 
+from marimo_studio._processes.cancellation import provider_cancellation
 from marimo_studio._server.presentation.service import (
     NotebookPresentation,
     PresentationSnapshot,
@@ -292,7 +293,10 @@ class RenderStore:
             shutil.copytree(templates[0], destination, copy_function=shutil.copyfile)
 
         try:
-            with notebook_tools(presentation.notebook):
+            with (
+                provider_cancellation(cancellation),
+                notebook_tools(presentation.notebook),
+            ):
                 bundle = run_render(
                     provider_registry().get(artifact.provider.key),
                     copy_template,
