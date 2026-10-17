@@ -397,7 +397,8 @@ main.typ
 marimo.typ
 ```
 
-`marimo.typ` defines three functions. Write each selector or name as a string
+`marimo.typ` defines four functions. Write each selector or name you read
+with `marimo_value()`, `marimo_output()`, and `marimo_cell()` as a string
 literal so Studio can find what the document reads.
 
 `marimo_value(selector, default: none)` returns the current notebook value for
@@ -438,6 +439,32 @@ JPEG, WebP, or GIF image. A cell that ends with a matplotlib figure arrives as
 a PNG. Name the cell in the notebook, for example `def revenue_plot():`. A cell
 that has not run, or that shows text or a table, leaves `marimo_cell()` at its
 default. Use `marimo_output()` with the figure's variable for a vector PDF.
+
+`marimo_region(..selectors, body, label: none)` marks `body` as the part of
+the page that shows the notebook values `selectors` name, such as a table
+built from `marimo_value("rows")`:
+
+```typst
+#marimo_region("summary.rooms", label: "Rooms in use")[
+  Rooms in use: #marimo_value("summary.rooms", default: 0)
+]
+```
+
+Each selector names a value the document reads, optionally narrowed by
+`.field` and `[index]` steps, such as `"rows[0].total"`, and may be computed.
+The starter's `main.typ` marks each key figure and table cell this way.
+
+Every render locates each placed output, cell, and region on its PDF page and
+returns them as [render regions](provider-api.md#locate-parts-of-rendered-files),
+so a reader who selects a figure in the preview sees the notebook cell that
+computed it and the line where the document reads it. A region wraps its body
+in a [`box`](https://typst.app/docs/reference/layout/box/), which keeps inline
+content in its paragraph and keeps the body on one page. Mark the cells of a
+long table one by one. The starter's `main.typ` marks the cells of a table's
+first 25 rows.
+
+Regions need the `marimo.typ` of the current starter. Copy it into a project
+created with an earlier release.
 
 The build compiles the document with every `marimo_value()`,
 `marimo_output()`, and `marimo_cell()` call at its default to measure figure
@@ -515,6 +542,18 @@ steps, written as literal text so Studio can find it:
 | `\marimoforeach[count]{selector}{body}` | A list or table          | `body` for each item, anywhere else                                                    |
 | `\marimographics[keys]{selector}`       | A figure or chart        | The output with `\includegraphics`, drawn at the size it is placed at                  |
 | `\marimocell[keys]{name}`               | A named cell's output    | The output as marimo shows it, when it is an image                                     |
+| `\marimoregion[label]{selectors}{body}` | Values the body shows    | The body in a box, marked as the part of the page that shows those values              |
+
+Every render locates each `\marimographics`, `\marimocell`, and
+`\marimoregion` on its PDF page and returns them as
+[render regions](provider-api.md#locate-parts-of-rendered-files), so a reader
+can select a figure or a marked value in the preview and follow it to the
+notebook cell that computed it. `\marimoregion` takes comma-separated
+selectors that the document reads, optionally narrowed with `.field` and
+`[index]` steps, and keeps its body on one line, as `\mbox` does. Place it
+outside `\scalebox`, `\resizebox`, and `\rotatebox`, which move the body on
+the page after `marimo.sty` measures it. Regions need the `marimo.sty` of the
+current starter. Copy it into a project created with an earlier release.
 
 `\IfMarimoT` and `\IfMarimoF` take one branch. Inside `\marimorows` and
 `\marimoforeach`, `#1` is the item's selector and `#2` its position from 1, so

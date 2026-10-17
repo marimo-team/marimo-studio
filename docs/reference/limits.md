@@ -63,16 +63,19 @@ on every site.
 
 ## Renders
 
-| Boundary                                  |   Limit | Failure                    |
-| ----------------------------------------- | ------: | -------------------------- |
-| Renders declared by one view              |      32 | Provider conformance error |
-| Encoded render values for one render      |   8 MiB | `render-values-too-large`  |
-| Outputs and cells read by one render      |  16 MiB | `render-outputs-too-large` |
-| Files returned by one render              |   1,024 | Provider conformance error |
-| One rendered file                         | 512 MiB | `render-too-large`         |
-| All files returned by one render          |   1 GiB | `render-too-large`         |
-| Provider commands during one render       |   300 s | `render-failed`            |
-| Renders across one static export's states |     256 | `render-states-exceeded`   |
+| Boundary                                  |   Limit | Failure                          |
+| ----------------------------------------- | ------: | -------------------------------- |
+| Renders declared by one view              |      32 | Provider conformance error       |
+| Encoded render values for one render      |   8 MiB | `render-values-too-large`        |
+| Outputs and cells read by one render      |  16 MiB | `render-outputs-too-large`       |
+| Files returned by one render              |   1,024 | Provider conformance error       |
+| One rendered file                         | 512 MiB | `render-too-large`               |
+| All files returned by one render          |   1 GiB | `render-too-large`               |
+| Provider commands during one render       |   300 s | `render-failed`                  |
+| Renders across one static export's states |     256 | `render-states-exceeded`         |
+| Regions kept from one render              |   4,096 | `render-regions-limited` warning |
+| Reads kept by one region                  |      64 | Later reads left out             |
+| UTF-16 code units in one region label     |     256 | Label shortened                  |
 
 ## Active presentation projections
 

@@ -44,10 +44,47 @@
   [#metadata(record) <marimo-size>]
 }
 
+// While Studio renders, it queries these records for the part of a page each
+// output, cell, and region covers, so a reader can select the part in the
+// page and trace it to the cells that computed it. A start and an end record
+// mark the top left and bottom right corner of the part, in points from the
+// page's top left corner.
+#let _regions = sys.inputs.at("marimo-regions", default: none) != none
+
+#let _corner(edge, reads, natural: none, label: none) = context {
+  let position = here().position()
+  [#metadata((
+    edge: edge,
+    reads: reads,
+    label: label,
+    page: position.page,
+    x: position.x.pt(),
+    y: position.y.pt(),
+    natural: natural,
+  )) <marimo-region>]
+}
+
+// A box keeps inline content in its paragraph, inside Studio and out. An
+// image with a fixed width can overflow its container, which clips the box,
+// so a placed image also records the size it measures at on its own.
+#let _located(reads, body, label: none, picture: false) = box({
+  if _regions {
+    place(top + left, context {
+      let natural = if picture {
+        let size = measure(body)
+        (width: size.width.pt(), height: size.height.pt())
+      }
+      _corner("start", reads, natural: natural, label: label)
+    })
+  }
+  body
+  if _regions { place(bottom + right, _corner("end", reads)) }
+})
+
 #let marimo_output(selector, default: none, ..args) = layout(size => {
   _placed(selector, args.named(), size)
   let path = _outputs.at(selector, default: none)
-  if path == none { default } else { image(path, ..args) }
+  if path == none { default } else { _located((selector,), image(path, ..args), picture: true) }
 })
 
 // marimo_cell("name") places the output of the notebook cell with that name as
@@ -58,5 +95,18 @@
 
 #let marimo_cell(name, default: none, ..args) = {
   let path = _cells.at(name, default: none)
-  if path == none { default } else { image(path, ..args) }
+  if path == none { default } else { _located((name,), image(path, ..args), picture: true) }
+}
+
+// marimo_region("selector", ..., body) marks body as the part of the document
+// that shows those notebook values, such as a table built from
+// marimo_value("rows"). In Studio a reader can select it in the page and trace
+// it to the cells that computed them. Each selector names a value the document
+// reads with marimo_value(), optionally followed by .field and [index] steps,
+// such as "rows[0]". marimo_region() places body in a box, which keeps it in
+// its paragraph and on one page.
+#let marimo_region(..args, label: none) = {
+  assert(args.pos().len() >= 2, message: "marimo_region() takes one or more selectors, then its body")
+  let (..reads, body) = args.pos()
+  _located(reads, body, label: label)
 }

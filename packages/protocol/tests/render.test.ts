@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import { renderSourceSchema } from "../src/projections.ts";
-import { renderIndexSchema, renderRequestSchema, renderBundleSchema } from "../src/render.ts";
+import {
+  indexedBundle,
+  renderIndexSchema,
+  renderRequestSchema,
+  renderBundleSchema,
+  type RenderRegion,
+} from "../src/render.ts";
 
 const result = {
   render: "report.md",
@@ -15,6 +21,18 @@ const result = {
   preview: "pages/1.png",
   warnings: [],
   absent: ["total"],
+  regions: [
+    {
+      file: "pages/1.png",
+      rect: { x: 0.1, y: 0.2, width: 0.5, height: 0.25 },
+      reads: ["chart", "rows[0]"],
+      page: null,
+      start: null,
+      end: null,
+      source: { path: "report.md", line: 3, column: 1 },
+      label: "Chart",
+    },
+  ],
 };
 
 test("render results name their main and preview files from the bundle", () => {
@@ -32,16 +50,25 @@ test("render results name their main and preview files from the bundle", () => {
   );
 });
 
-test("a static render index keys results by state fingerprint, then render", () => {
-  const index = renderIndexSchema.parse({
-    schema: 1,
-    states: { "state-a": { "report.md": result } },
-  });
+test("a static render index stores each bundle once and names it from each state", () => {
+  const { render, bundle, warnings, absent, ...content } = result;
+  const states = {
+    "state-a": { "report.md": { bundle, warnings, absent } },
+    "state-b": { "report.md": { bundle, warnings: [], absent: [] } },
+  };
+  const index = renderIndexSchema.parse({ schema: 2, bundles: { [bundle]: content }, states });
 
-  assert.equal(index.states["state-a"]?.["report.md"]?.bundle, "a".repeat(64));
+  assert.deepEqual(indexedBundle(index, "state-a", "report.md"), result);
+  assert.deepEqual(indexedBundle(index, "state-b", "report.md")?.absent, []);
+  assert.equal(indexedBundle(index, "state-c", "report.md"), undefined);
+  assert.equal(indexedBundle(index, "state-a", render.replace("report", "other")), undefined);
+  assert.equal(renderIndexSchema.safeParse({ schema: 2, bundles: {}, states }).success, false);
   assert.equal(
-    renderIndexSchema.safeParse({ schema: 1, states: { "state-a": { "../report.md": result } } })
-      .success,
+    renderIndexSchema.safeParse({
+      schema: 2,
+      bundles: { [bundle]: content },
+      states: { "state-a": { "../report.md": states["state-a"]["report.md"] } },
+    }).success,
     false,
   );
 });
@@ -89,4 +116,18 @@ test("render bundle paths use forward slashes", () => {
     }).success,
     false,
   );
+});
+
+test("a bundle's regions lie inside the surface of one of its files", () => {
+  const [region] = result.regions;
+  const accepts = (changes: Partial<RenderRegion>) =>
+    renderBundleSchema.safeParse({ ...result, regions: [region, { ...region, ...changes }] })
+      .success;
+
+  assert.equal(accepts({ label: "Second" }), true);
+  assert.equal(accepts({ file: "missing.png" }), false);
+  assert.equal(accepts({ rect: { x: 0.6, y: 0, width: 0.5, height: 1 } }), false);
+  assert.equal(accepts({ rect: { x: 0, y: 0, width: 0, height: 1 } }), false);
+  assert.equal(accepts({ start: 2, end: 1 }), false);
+  assert.equal(accepts({ page: 0 }), false);
 });

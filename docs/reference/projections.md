@@ -328,6 +328,7 @@ as `detail`.
 | `files`    | `{ path, mediaType, size, url }` for every file                    |
 | `warnings` | Render warnings as diagnostics                                     |
 | `absent`   | Targets the render read without a current result, shown as default |
+| `regions`  | Parts of the files and the results they show, as `RenderRegion`    |
 
 `marimo-output-ready` fires for the first files, `marimo-output-updated` when
 the files change, and `marimo-output-error` on the first transition into
@@ -335,6 +336,46 @@ the files change, and `marimo-output-error` on the first transition into
 rendered HTML, SVG, and XML files with a sandbox policy, so such a file opened
 on its own runs in an opaque origin. A static export's web server sets its own
 headers.
+
+### Select parts of rendered files
+
+A render's regions make the parts of its files selectable with
+[Lens](https://marimo-team.github.io/marimo-lens/). Select a chart inside a
+Typst PDF, a table cell, or a shape in a paused video, and Lens records the
+cells that produced it, the value selector it shows, such as
+`report.readings[6].occupancy`, and the source line that reads it, such as
+`main.typ:85`. Selecting the file outside its regions records the results the
+render reads, up to 64 of them.
+
+Studio places a box over each region, in the host's light DOM, on these
+surfaces:
+
+| Surface                                      | Regions shown                                                    |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| A PDF page the host shows                    | The regions of that page                                         |
+| An image or video the host shows             | The regions of the file                                          |
+| An `img` or `video` in the page's own markup | The regions of the bundle file its `src` names                   |
+| An element with `data-marimo-render-file`    | The regions of that file, on `data-marimo-render-page` for a PDF |
+
+A video's regions follow its current time, and before it plays, its poster
+shows the regions of the preview file. While Lens selects, Studio outlines each
+region with a dashed line. Region boxes ignore the pointer otherwise, so
+readers scroll, select PDF text, and use video controls as usual. A page that
+draws a file itself, such as onto a canvas, marks the element that shows it:
+
+```html
+<marimo-output render="main.typ">
+  <canvas data-marimo-render-file="main.pdf" data-marimo-render-page="1"></canvas>
+</marimo-output>
+```
+
+Each box names its file part in `data-marimo-lens-media`, such as
+`{"path":"main.pdf","page":2}` or `{"path":"animation.mp4","start":3.2,"end":4}`,
+and Lens records it as the selection's `description.media`.
+
+The preview runs in an opaque origin, so Lens captures no snapshot image of a
+video frame and names that reason on the selection. The selection keeps its
+notebook sources, label, and source line.
 
 ### Render values and runtimes
 
@@ -478,8 +519,9 @@ reference that host from each row, with the row path in
 descriptive context, and the resolved source selector remains the collection.
 
 Browser calculations must reference their real kernel inputs, and can be
-separate targets that share a dataframe. Canvas charts and PDF pages
-are single surfaces unless their renderer supplies finer DOM targets.
+separate targets that share a dataframe. A canvas chart is a single surface
+unless its renderer supplies finer DOM targets. Rendered files expose their
+parts through [render regions](#select-parts-of-rendered-files).
 
 ### Selection labels
 

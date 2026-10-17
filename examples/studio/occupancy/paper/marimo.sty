@@ -32,11 +32,16 @@
 %   placed at, so its text keeps its point size.
 % \marimocell[<graphicx options>]{<cell name>}
 %   Places a named cell's image output as marimo shows it.
+% \marimoregion[<label>]{<selector>, ...}{<body>}
+%   Typesets body in a box and marks it as the part of the page that shows
+%   those values, so a reader can select it in Studio and trace it to the
+%   cells that computed it. Each selector names a value the document reads,
+%   optionally narrowed with .field and [index] steps.
 % \marimosetup{missing=<text>, null=<text>}
 %   Sets what a read typesets while Studio has no value for it (\textbf{??})
 %   and for a null value (an em dash in the surrounding face).
 \NeedsTeXFormat{LaTeX2e}[2020/10/01]
-\ProvidesExplPackage{marimo}{2026/10/16}{0.5.0}
+\ProvidesExplPackage{marimo}{2026/10/16}{0.6.0}
   {Notebook values, outputs, and cells from marimo Studio}
 \RequirePackage{amstext}
 \RequirePackage{graphicx}
@@ -466,6 +471,41 @@
       \__marimo_get:nN { cell~ #2 } \__marimo_graphics:nnnn {#1} {#2}
     \group_end:
   }
+% Studio's render reads these records from the log for the part of a page
+% each placed output, cell, and \marimoregion covers. A record holds the page,
+% the box's position in scaled points from the page's lower left corner, the
+% paper size and the box's width, height, and depth in big points, the label,
+% and the reads. The position is known when the page ships out, so the record
+% is written then.
+\box_new:N \l__marimo_region_box
+\cs_new_protected:Npn \__marimo_region:nnN #1#2#3
+  {
+    \leavevmode
+    \tex_savepos:D
+    \use:x
+      {
+        \iow_shipout_x:Nn \c_log_iow
+          {
+            marimo-region:
+            \exp_not:N \int_use:N \exp_not:N \ReadonlyShipoutCounter :
+            \exp_not:N \tex_the:D \exp_not:N \tex_lastxpos:D :
+            \exp_not:N \tex_the:D \exp_not:N \tex_lastypos:D :
+            \dim_to_decimal_in_bp:n { \paperwidth } :
+            \dim_to_decimal_in_bp:n { \paperheight } :
+            \dim_to_decimal_in_bp:n { \box_wd:N #3 } :
+            \dim_to_decimal_in_bp:n { \box_ht:N #3 } :
+            \dim_to_decimal_in_bp:n { \box_dp:N #3 }
+            | \tl_to_str:n {#1} | \tl_to_str:n {#2}
+          }
+      }
+    \box_use_drop:N #3
+  }
+\NewDocumentCommand \marimoregion { O{} m +m }
+  {
+    \hbox_set:Nn \l__marimo_region_box {#3}
+    \__marimo_region:nnN {#2} {#1} \l__marimo_region_box
+  }
+
 % An output placed without width, height, or scale takes the line width, the
 % width its placeholder and its measured size have.
 \cs_new_protected:Npn \__marimo_graphics:nnnn #1#2#3#4
@@ -495,7 +535,7 @@
                 }
               }
               { \__marimo_resized:n { fitted } }
-            \leavevmode \box_use_drop:N \l__marimo_graphic_box
+            \__marimo_region:nnN {#4} { } \l__marimo_graphic_box
           }
         { m } { \__marimo_not_supplied:n {#4} \__marimo_placeholder:n {#4} }
       }

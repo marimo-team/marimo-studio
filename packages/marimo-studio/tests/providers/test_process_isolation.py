@@ -37,10 +37,12 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
+    Rect,
     Render,
     RenderCell,
     RenderFile,
     RenderOutput,
+    RenderRegion,
     RenderRequest,
     RenderResult,
     RenderValue,
@@ -372,6 +374,15 @@ class _RenderingProvider(ProviderStub):
                     source=SourceLocation(request.source, 1, 1),
                 ),
             ),
+            regions=(
+                RenderRegion(
+                    PurePosixPath("card.svg"),
+                    Rect(0.25, 0.5, 0.5, 0.25),
+                    reads=('rows["north"][1]', "chart"),
+                    source=SourceLocation(request.source, 3, 20),
+                    label="North chart",
+                ),
+            ),
         )
 
 
@@ -538,6 +549,15 @@ def test_isolated_provider_round_trips_renders_sizes_and_render_results(
                 "warning",
                 "Rendered with defaults",
                 source=SourceLocation(PurePosixPath("card.txt"), 1, 1),
+            ),
+        ),
+        regions=(
+            RenderRegion(
+                PurePosixPath("card.svg"),
+                Rect(0.25, 0.5, 0.5, 0.25),
+                reads=('rows["north"][1]', "chart"),
+                source=SourceLocation(PurePosixPath("card.txt"), 3, 20),
+                label="North chart",
             ),
         ),
     )

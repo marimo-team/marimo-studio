@@ -194,6 +194,7 @@ class LatexProvider:
             (RenderFile(compiled.pdf, "application/pdf"),),
             compiled.pdf,
             diagnostics=compiled.diagnostics,
+            regions=compiled.regions,
         )
 
 

@@ -166,9 +166,9 @@ assert set(marimo_studio.view_providers.__all__) == {
     "PackagedStarter", "ProjectDiagnostic", "ProjectInspection", "ProjectionKind",
     "ProjectionSite", "ProviderAvailability", "ProviderCancellation",
     "ProviderCommandError", "ProviderCommandResult", "ProviderError",
-    "ProviderInfo", "ProviderRunner", "ProviderStarter", "Render", "RenderCell",
-    "RenderFile", "RenderOutput", "RenderProvider", "RenderRequest", "RenderResult",
-    "RenderValue", "Representation", "Size",
+    "ProviderInfo", "ProviderRunner", "ProviderStarter", "Rect", "Render", "RenderCell",
+    "RenderFile", "RenderOutput", "RenderProvider", "RenderRegion", "RenderRequest",
+    "RenderResult", "RenderValue", "Representation", "Size",
     "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
     "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
@@ -233,7 +233,7 @@ assert tuple(field.name for field in fields(providers.BuildResult)) == (
     "document", "diagnostics", "output_sizes",
 )
 assert tuple(field.name for field in fields(providers.RenderResult)) == (
-    "files", "main", "preview", "diagnostics",
+    "files", "main", "preview", "diagnostics", "regions",
 )
 assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",

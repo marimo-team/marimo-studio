@@ -1,4 +1,4 @@
-#import "marimo.typ": marimo_value
+#import "marimo.typ": marimo_region, marimo_value
 
 #let notebook = __NOTEBOOK_LABEL_TYP__
 #let title = __VIEW_HEADING_TYP__
@@ -28,6 +28,18 @@ __REPORT_BINDING_TYP__
 
 #let field-name(key) = upper(key.replace("_", " "))
 
+// The selector of one field or row of a value, such as `report.rooms` or
+// `report.readings[0]`. marimo_region() marks the part of the page that shows
+// it, so a reader can select a figure or a table cell in Studio and trace it to
+// the notebook cell that computed it.
+#let step(selector, key) = if type(key) == int {
+  selector + "[" + str(key) + "]"
+} else if key.match(regex("^[A-Za-z_][A-Za-z0-9_]*$")) != none {
+  selector + "." + key
+} else {
+  selector + "[" + repr(key) + "]"
+}
+
 #let show-value(item) = {
   if item == none [—]
   else if type(item) == bool { if item [Yes] else [No] }
@@ -36,7 +48,7 @@ __REPORT_BINDING_TYP__
   else { repr(item) }
 }
 
-#let figures(fields) = grid(
+#let figures(fields, selector) = grid(
   columns: (1fr,) * calc.min(fields.len(), 3),
   gutter: 14pt,
   ..fields.map(((key, item)) => block(
@@ -45,11 +57,11 @@ __REPORT_BINDING_TYP__
     stroke: (top: 0.6pt + luma(200)),
   )[
     #text(7.5pt, fill: muted, tracking: 0.06em, field-name(key)) \
-    #text(15pt, show-value(item))
+    #marimo_region(step(selector, key), text(15pt, show-value(item)))
   ]),
 )
 
-#let records(rows) = {
+#let records(rows, selector) = {
   let columns = rows.first().keys()
   table(
     columns: (1fr,) * columns.len(),
@@ -59,7 +71,12 @@ __REPORT_BINDING_TYP__
       right
     } else { left },
     table.header(..columns.map(column => text(8pt, weight: "bold", field-name(column)))),
-    ..rows.map(row => columns.map(column => show-value(row.at(column, default: none)))).flatten(),
+    // The first 25 rows mark their cells, which keeps a long table quick to
+    // render.
+    ..rows.enumerate().map(((index, row)) => columns.map(column => {
+      let shown = show-value(row.at(column, default: none))
+      if index < 25 { marimo_region(step(step(selector, index), column), shown) } else { shown }
+    })).flatten(),
   )
 }
 
@@ -78,14 +95,14 @@ __REPORT_BINDING_TYP__
   ]
 } else {
   let scalars = report.pairs().filter(((key, item)) => type(item) not in (array, dictionary))
-  if scalars.len() > 0 { figures(scalars) }
+  if scalars.len() > 0 { figures(scalars, "report") }
   for (key, item) in report.pairs() {
     if type(item) == array and item.len() > 0 and type(item.first()) == dictionary {
       heading(level: 2, field-name(key))
-      records(item)
+      records(item, step("report", key))
     } else if type(item) == dictionary and item.len() > 0 {
       heading(level: 2, field-name(key))
-      figures(item.pairs())
+      figures(item.pairs(), step("report", key))
     }
   }
 }

@@ -3,7 +3,7 @@
 Studio renders a private copy of a view's template with the notebook results
 one render reads. The provider lists the files it wrote, and Studio copies
 exactly those into a bundle it owns. A bundle's ID is the digest of its files,
-media types, and roles, so identical output shares one bundle.
+media types, roles, and regions, so identical output shares one bundle.
 """
 
 from __future__ import annotations
@@ -28,11 +28,13 @@ from marimo_studio.view_providers import (
     JsonValue,
     ProjectDiagnostic,
     ProviderCancellation,
+    RenderRegion,
     RenderRequest,
     RenderResult,
     Representation,
 )
 from marimo_studio.view_providers._artifact_sites import ArtifactSite
+from marimo_studio.view_providers._regions import admit_regions
 from marimo_studio.view_providers._targets import MAX_RENDER_FILES
 
 # A render may encode a video, so it runs longer than one compile.
@@ -79,7 +81,11 @@ class BundleFile:
 
 @dataclass(frozen=True)
 class RenderBundle:
-    """The immutable files one render published, stored beneath ``root``."""
+    """The immutable files one render published, stored beneath ``root``.
+
+    ``regions`` locates the parts of those files that notebook results
+    produced, and belongs to the bundle's identity.
+    """
 
     id: str
     root: Path
@@ -87,6 +93,7 @@ class RenderBundle:
     main: PurePosixPath
     preview: PurePosixPath | None
     warnings: tuple[ProjectDiagnostic, ...]
+    regions: tuple[RenderRegion, ...] = ()
 
     @property
     def size(self) -> int:
@@ -102,6 +109,7 @@ class RenderBundle:
             "main": self.main.as_posix(),
             "preview": self.preview.as_posix() if self.preview is not None else None,
             "warnings": [item.to_dict() for item in self.warnings],
+            "regions": [item.to_dict() for item in self.regions],
         }
 
 
@@ -292,11 +300,13 @@ def _bundle_id(
     files: tuple[BundleFile, ...],
     main: PurePosixPath,
     preview: PurePosixPath | None,
+    regions: tuple[RenderRegion, ...],
 ) -> str:
     identity = {
         "files": [item.to_dict() for item in files],
         "main": main.as_posix(),
         "preview": preview.as_posix() if preview is not None else None,
+        "regions": [item.to_dict() for item in regions],
     }
     encoded = json.dumps(identity, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode()).hexdigest()
@@ -306,6 +316,7 @@ def run_render(
     renderer: Renderer,
     copy_template: Callable[[Path], object],
     source: PurePosixPath,
+    sites: tuple[ArtifactSite, ...],
     values: Mapping[str, JsonValue],
     outputs: Mapping[str, Representation],
     cells: Mapping[str, Representation],
@@ -314,7 +325,9 @@ def run_render(
 ) -> RenderBundle:
     """Render a private, writable copy of a template into ``destination``.
 
-    ``copy_template`` writes the template into the directory it receives.
+    ``sites`` are the render's read sites, which bound the reads its regions
+    may name. ``copy_template`` writes the template into the directory it
+    receives.
     ``destination`` must be absent, and receives exactly the files the render
     lists. Raises ``DiagnosticsError`` with the render diagnostics when the
     render fails or the template fails verification. A provider failure after
@@ -382,6 +395,11 @@ def run_render(
                     ),
                 )
             )
+        regions, problems = admit_regions(
+            result.regions,
+            {item.path: item.media_type for item in result.files},
+            sites,
+        )
         tracker = FileBudgetTracker(RENDER_OUTPUT_BUDGET, f"The render of {source}")
         destination.mkdir()
         files: list[BundleFile] = []
@@ -409,10 +427,14 @@ def run_render(
             raise
         ordered = tuple(sorted(files, key=lambda item: item.path.as_posix()))
         return RenderBundle(
-            _bundle_id(ordered, result.main, result.preview),
+            _bundle_id(ordered, result.main, result.preview, regions),
             destination,
             ordered,
             result.main,
             result.preview,
-            tuple(item for item in result.diagnostics if item.severity == "warning"),
+            (
+                *(item for item in result.diagnostics if item.severity == "warning"),
+                *problems,
+            ),
+            regions,
         )

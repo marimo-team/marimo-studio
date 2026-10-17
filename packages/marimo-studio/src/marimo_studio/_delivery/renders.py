@@ -4,10 +4,12 @@ A static bundle has no server to render against. The Prepared runtime knows
 which exported state a reader is viewing, so the export renders every declared
 render with each state's values, outputs, and cells, and stores each distinct
 bundle once beneath the view's support directory, where a live view serves
-them too. ``renders/index.json`` maps each state fingerprint to the bundle of
-each render, so the page resolves a state's files without guessing names. A
-view whose renders read no notebook results has no prepared states, so its
-index holds one state, keyed by the artifact revision, rendered once.
+them too. ``renders/index.json`` lists each bundle's files and regions once,
+under its ID, and maps each state fingerprint to the bundle ID, warnings, and
+absent reads of each render, so the page resolves a state's files without
+guessing names. A view whose renders read no notebook results has no prepared
+states, so its index holds one state, keyed by the artifact revision, rendered
+once.
 """
 
 from __future__ import annotations
@@ -195,6 +197,7 @@ def write_static_renders(
                             provider,
                             copy_template,
                             source,
+                            sites,
                             values,
                             outputs,
                             cells,
@@ -214,8 +217,8 @@ def write_static_renders(
                     )
                 result, absent = by_key[key]
                 index[fingerprint(state)][source.as_posix()] = {
-                    **result.to_dict(),
-                    "render": source.as_posix(),
+                    "bundle": result.id,
+                    "warnings": [item.to_dict() for item in result.warnings],
                     "absent": absent,
                 }
         for result in stored.values():
@@ -226,10 +229,20 @@ def write_static_renders(
                 shutil.copyfile(result.root.joinpath(*item.path.parts), target)
                 target.chmod(0o644)
                 written += 1
+    bundles = {
+        result.id: {
+            key: value
+            for key, value in result.to_dict().items()
+            if key in ("files", "main", "preview", "regions")
+        }
+        for result in stored.values()
+    }
     bundle.ensure_directory(root)
     bundle.write(
         root / "index.json",
-        json.dumps({"schema": 1, "states": index}, sort_keys=True).encode(),
+        json.dumps(
+            {"schema": 2, "bundles": bundles, "states": index}, sort_keys=True
+        ).encode(),
         mode=0o644,
     )
     return written + 1

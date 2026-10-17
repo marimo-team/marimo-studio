@@ -32,10 +32,12 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
+    Rect,
     Render,
     RenderCell,
     RenderFile,
     RenderOutput,
+    RenderRegion,
     RenderResult,
     RenderValue,
     Representation,
@@ -426,6 +428,7 @@ def render_result_payload(result: RenderResult) -> dict[str, object]:
         "main": result.main.as_posix() if result.main is not None else None,
         "preview": result.preview.as_posix() if result.preview is not None else None,
         "diagnostics": [item.to_dict() for item in result.diagnostics],
+        "regions": [item.to_dict() for item in result.regions],
     }
 
 
@@ -500,7 +503,9 @@ def _sizes(value: object) -> dict[str, Size]:
 
 def render_result_from_payload(value: object) -> RenderResult:
     data = _record(
-        value, {"files", "main", "preview", "diagnostics"}, "provider render result"
+        value,
+        {"files", "main", "preview", "diagnostics", "regions"},
+        "provider render result",
     )
 
     def path(item: object, label: str) -> PurePosixPath | None:
@@ -520,7 +525,44 @@ def render_result_from_payload(value: object) -> RenderResult:
         path(data["main"], "provider rendered main file"),
         path(data["preview"], "provider rendered preview file"),
         tuple(_diagnostic(item) for item in _items(data["diagnostics"])),
+        tuple(_region(item) for item in _items(data["regions"])),
     )
+
+
+def _region(value: object) -> RenderRegion:
+    data = _record(
+        value,
+        {"file", "rect", "reads", "page", "start", "end", "source", "label"},
+        "provider render region",
+    )
+    rect = _record(data["rect"], {"x", "y", "width", "height"}, "provider region rect")
+    page = data["page"]
+    if page is not None and type(page) is not int:
+        raise ValueError("Provider region page must be an integer")
+    source = data["source"]
+    return RenderRegion(
+        PurePosixPath(_text(data["file"], "provider region file")),
+        Rect(
+            *(
+                _number(rect[field], "provider region rect")
+                for field in ("x", "y", "width", "height")
+            )
+        ),
+        reads=tuple(
+            _text(item, "provider region read") for item in _items(data["reads"])
+        ),
+        page=page,
+        start=None if data["start"] is None else _number(data["start"], "region start"),
+        end=None if data["end"] is None else _number(data["end"], "region end"),
+        source=None if source is None else _source_location(source),
+        label=_optional_text(data["label"], "provider region label"),
+    )
+
+
+def _number(value: object, label: str) -> float:
+    if type(value) not in (int, float):
+        raise ValueError(f"{label.capitalize()} must be a number")
+    return float(cast("int | float", value))
 
 
 def _size(value: object) -> Size:

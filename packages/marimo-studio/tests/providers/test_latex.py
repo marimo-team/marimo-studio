@@ -1423,3 +1423,53 @@ def test_inspection_distinguishes_control_symbols_and_projection_macros(
 ) -> None:
     inspection = inspect_view_project_sync(_project(tmp_path, _document(body)))
     assert [read.target for read in _reads(inspection).values] == expected
+
+
+@pytest.mark.pixi
+@tectonic
+def test_render_locates_figures_cells_and_regions_on_their_pages(
+    tmp_path: Path,
+) -> None:
+    image = pytest.importorskip("matplotlib.image")
+    numpy = pytest.importorskip("numpy")
+    png = io.BytesIO()
+    image.imsave(png, numpy.zeros((300, 600, 3)), format="png")
+    chart = Representation("image/png", png.getvalue())
+    project = _project(
+        tmp_path,
+        _document(
+            "\\noindent\\marimographics[width=8cm]{chart}\n"
+            "\\newpage\n"
+            'Rooms \\marimoregion[Rooms | in use]{summary.rooms, rows["a,b"]}'
+            "{\\marimovalue{summary.rooms}} "
+            "and \\marimocell[width=4cm]{plot}"
+        ),
+    )
+
+    _output, result = _render(
+        project, {"summary.rooms": 12}, outputs={"chart": chart}, cells={"plot": chart}
+    )
+
+    assert result.diagnostics == ()
+    assert len(result.regions) == 3
+    regions = {region.reads[0]: region for region in result.regions}
+    figure, rooms, plot = regions["chart"], regions["summary.rooms"], regions["plot"]
+    assert (figure.file, figure.page, figure.reads) == (
+        PurePosixPath("main.pdf"),
+        1,
+        ("chart",),
+    )
+    # A letter page is 8.5 by 11 inches, and the figure is 8cm by 4cm.
+    assert figure.rect.width == pytest.approx(8 / 2.54 / 8.5, abs=1e-3)
+    assert figure.rect.height == pytest.approx(4 / 2.54 / 11, abs=1e-3)
+    # Selectors split at commas outside quoted keys, and the label keeps its |.
+    assert (rooms.page, rooms.reads, rooms.label) == (
+        2,
+        ("summary.rooms", 'rows["a,b"]'),
+        "Rooms | in use",
+    )
+    assert (plot.page, plot.reads) == (2, ("plot",))
+    assert plot.rect.width == pytest.approx(4 / 2.54 / 8.5, abs=1e-3)
+    assert rooms.rect.y == pytest.approx(
+        plot.rect.y + plot.rect.height - rooms.rect.height, abs=0.01
+    )

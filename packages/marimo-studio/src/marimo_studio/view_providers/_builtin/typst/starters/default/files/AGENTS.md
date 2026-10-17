@@ -90,6 +90,28 @@ that output is an image, such as a cell that ends with a matplotlib figure:
 - `marimo_cell()` returns its `default` until the cell has run, and when its
   output is text, a table, or another output without an image form.
 
+## Mark traceable parts
+
+Studio locates each `marimo_output()` and `marimo_cell()` on its PDF page, so a
+reader can select a figure in the preview with Lens and follow it to the
+notebook cell that computed it. Wrap content built from values in
+`marimo_region()` to make it selectable as well:
+
+```typst
+#import "marimo.typ": marimo_region, marimo_value
+
+#marimo_region("summary.rooms", label: "Rooms in use")[
+  Rooms in use: #marimo_value("summary.rooms", default: 0)
+]
+```
+
+- Each selector names a value the document reads with `marimo_value()`,
+  optionally narrowed with `.field` and `[index]` steps, such as
+  `"rows[0].total"`. The selector may be computed, as `main.typ` does for each
+  table cell.
+- A region keeps its body on one page. Mark the cells of a long table one by
+  one.
+
 ## Write the document
 
 Use any Typst feature: page setup, show rules, tables, figures, bibliographies,

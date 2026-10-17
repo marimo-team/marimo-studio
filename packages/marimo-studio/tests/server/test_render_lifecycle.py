@@ -145,6 +145,7 @@ def _store(
     presentation = SimpleNamespace(lease_artifact=lambda _view, _revision: _Lease())
     snapshot = SimpleNamespace(
         view_name="card",
+        sites=(),
         artifact=SimpleNamespace(
             artifact_revision="sha256:card",
             provider=SimpleNamespace(key=registry.ids[0]),

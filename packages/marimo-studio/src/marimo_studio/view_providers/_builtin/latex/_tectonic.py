@@ -19,7 +19,9 @@ are warnings, because a value that grows can push a line into the margin.
 ``marimo.sty`` logs the size it places each output at as
 ``marimo-size:<width>:<height>:<selector>:`` in big points, with an empty
 height when the document sets none. The compile returns those sizes, widest
-first, for Studio to draw each figure at.
+first, for Studio to draw each figure at. It also logs a ``marimo-region:``
+record for each placed output, cell, and ``\\marimoregion`` when its page
+ships out, which the compile returns as regions of the PDF.
 """
 
 from __future__ import annotations
@@ -35,6 +37,8 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderError,
     ProviderRunner,
+    Rect,
+    RenderRegion,
     Size,
     SourceLocation,
     probe_tool,
@@ -58,6 +62,14 @@ _LOCATED = re.compile(
 )
 _CONTINUED = re.compile(r"^(?:error|warning|note|caused by):")
 _TEX_ERROR = re.compile(r"^! (?P<message>.+)$")
+_REGION = re.compile(
+    r"marimo-region:(?P<page>\d+):(?P<x>-?\d+):(?P<y>-?\d+)"
+    r":(?P<paper_width>[0-9.]+):(?P<paper_height>[0-9.]+)"
+    r":(?P<width>[0-9.]+):(?P<height>[0-9.]+):(?P<depth>[0-9.]+)"
+    r"\|(?P<rest>.*)$"
+)
+# Positions are in scaled points, and a big point holds 65,781.76 of them.
+_SCALED_PER_BIG = 65_781.76
 _CONTEXT = re.compile(r"^l\.(?P<line>\d+) (?:\.\.\.)?(?P<text>.*)$")
 # TeX's help prompts and the "(package)" prefix that continues a package's
 # message on the next line, which Tectonic joins into one line.
@@ -390,6 +402,72 @@ def _output_sizes(log: str) -> dict[str, Size]:
     return largest_sizes(placements)
 
 
+def _reads_and_label(record: str) -> tuple[tuple[str, ...], str]:
+    """Split a record's ``reads|label`` tail.
+
+    Selectors are separated by commas, and the label follows the first ``|``.
+    Both separators count only outside brackets and quoted keys, so a selector
+    such as ``report["a,b"]`` keeps its key and a label may hold ``|``.
+    """
+    reads: list[str] = []
+    start = depth = index = 0
+    quote = None
+    while index < len(record):
+        character = record[index]
+        if quote is not None:
+            if character == "\\":
+                index += 1
+            elif character == quote:
+                quote = None
+        elif character in "\"'":
+            quote = character
+        elif character == "[":
+            depth += 1
+        elif character == "]":
+            depth = max(depth - 1, 0)
+        elif depth == 0 and character in ",|":
+            reads.append(record[start:index].strip())
+            start = index + 1
+            if character == "|":
+                break
+        index += 1
+    else:
+        reads.append(record[start:].strip())
+    label = record[start:].strip() if index < len(record) else ""
+    return tuple(read for read in reads if read), label
+
+
+def _regions(log: str, pdf: PurePosixPath) -> tuple[RenderRegion, ...]:
+    """Return a region of ``pdf`` for each ``marimo-region:`` record in the log."""
+    regions: dict[RenderRegion, None] = {}
+    for line in _log_lines(log):
+        if (match := _REGION.search(line)) is None:
+            continue
+        paper_width = float(match["paper_width"])
+        paper_height = float(match["paper_height"])
+        if paper_width <= 0 or paper_height <= 0:
+            continue
+        x = int(match["x"]) / _SCALED_PER_BIG
+        baseline = int(match["y"]) / _SCALED_PER_BIG
+        height = float(match["height"])
+        reads, label = _reads_and_label(match["rest"])
+        regions[
+            RenderRegion(
+                pdf,
+                Rect(
+                    x / paper_width,
+                    (paper_height - baseline - height) / paper_height,
+                    float(match["width"]) / paper_width,
+                    (height + float(match["depth"])) / paper_height,
+                ),
+                reads=reads,
+                page=int(match["page"]),
+                label=label or None,
+            )
+        ] = None
+    return tuple(regions)
+
+
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -399,11 +477,13 @@ def _read(path: Path) -> str:
 
 @dataclass(frozen=True)
 class CompiledLatex:
-    """The PDF one compile wrote, its diagnostics, and the sizes it measured."""
+    """The PDF one compile wrote, its diagnostics, the sizes it measured, and
+    the regions it located."""
 
     pdf: PurePosixPath | None
     diagnostics: tuple[ProjectDiagnostic, ...]
     output_sizes: dict[str, Size]
+    regions: tuple[RenderRegion, ...] = ()
 
 
 def compile_latex(
@@ -456,4 +536,5 @@ def compile_latex(
             sources,
         ),
         _output_sizes(log),
+        _regions(log, PurePosixPath(pdf.name)),
     )

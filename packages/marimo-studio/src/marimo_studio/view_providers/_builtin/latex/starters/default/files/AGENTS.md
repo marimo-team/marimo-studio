@@ -170,6 +170,23 @@ matplotlib figure. Name the cell in the notebook, for example
 at screen resolution, so prefer `\marimographics` with the figure's variable
 in print.
 
+## Mark traceable parts
+
+Studio locates each `\marimographics` and `\marimocell` on its PDF page, so a
+reader can select a figure in the preview with Lens and follow it to the
+notebook cell that computed it. Wrap text built from values in
+`\marimoregion` to make it selectable as well:
+
+```latex
+Rooms in use: \marimoregion[Rooms in use]{summary.rooms}{\marimovalue{summary.rooms}}
+```
+
+- List the selectors the body shows, separated by commas. Each names a value
+  the document reads, optionally narrowed with `.field` and `[index]` steps.
+- The body stays on one line, as in `\mbox`.
+- Place `\marimoregion` outside `\scalebox`, `\resizebox`, and `\rotatebox`,
+  which move the body after `marimo.sty` measures it.
+
 ## Write the document
 
 Use any LaTeX class and package. Tectonic downloads the packages a document

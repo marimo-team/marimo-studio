@@ -47,6 +47,7 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     Representation,
 )
+from marimo_studio.view_providers._artifact_sites import read_sites
 from marimo_studio.view_providers._host import provider_registry
 
 _STORE_MAX_BYTES = 2 * 1024 * 1024 * 1024
@@ -294,6 +295,7 @@ class RenderStore:
                 provider_registry().get(artifact.provider.key),
                 copy_template,
                 source,
+                read_sites(snapshot.sites, source),
                 values,
                 outputs,
                 cells,

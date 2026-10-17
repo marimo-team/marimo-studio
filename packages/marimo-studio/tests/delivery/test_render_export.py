@@ -92,18 +92,16 @@ def test_zero_python_export_renders_each_distinct_state_capture_once(
     index = json.loads(view.joinpath("renders", "index.json").read_bytes())
     states: dict[str, dict[str, Any]] = index["states"]
     assert set(states) == set(scales)
-    bundles = {
-        scales[fingerprint]: entry["main.typ"] for fingerprint, entry in states.items()
+    shown = {
+        scales[fingerprint]: entry["main.typ"]["bundle"]
+        for fingerprint, entry in states.items()
     }
-    assert bundles[1]["bundle"] == bundles[3]["bundle"] != bundles[2]["bundle"]
-    for entry in bundles.values():
-        (file,) = entry["files"]
-        assert (entry["render"], entry["main"], file["mediaType"]) == (
-            "main.typ",
-            "main.pdf",
-            "application/pdf",
-        )
-        content = view.joinpath("renders", entry["bundle"], "main.pdf").read_bytes()
+    assert shown[1] == shown[3] != shown[2]
+    assert set(index["bundles"]) == set(shown.values())
+    for bundle_id, bundle in index["bundles"].items():
+        (file,) = bundle["files"]
+        assert (bundle["main"], file["mediaType"]) == ("main.pdf", "application/pdf")
+        content = view.joinpath("renders", bundle_id, "main.pdf").read_bytes()
         assert content.startswith(b"%PDF-")
         assert hashlib.sha256(content).hexdigest() == file["sha256"]
     assert not any(output.rglob("*.typ"))
@@ -130,7 +128,7 @@ def test_zero_python_export_keeps_the_warnings_of_each_state(
 
     def warned(*args: Any) -> Any:
         bundle = run_render(*args)
-        scale = args[3]["scale.value"]
+        scale = args[4]["scale.value"]
         warning = ProjectDiagnostic("scale", "warning", f"Scale {scale}")
         return replace(bundle, warnings=(warning,))
 
@@ -164,12 +162,10 @@ def test_zero_python_export_renders_a_render_without_reads_once(
 
     view = output / "_marimo-studio" / "views" / "report"
     index = json.loads(view.joinpath("renders", "index.json").read_bytes())
-    ((entry,),) = (state.values() for state in index["states"].values())
-    assert (entry["render"], entry["main"], entry["absent"]) == (
-        "main.typ",
-        "main.pdf",
-        [],
-    )
+    (state,) = index["states"].values()
+    entry = state["main.typ"]
+    assert entry["absent"] == []
+    assert index["bundles"][entry["bundle"]]["main"] == "main.pdf"
     content = view.joinpath("renders", entry["bundle"], "main.pdf").read_bytes()
     assert content.startswith(b"%PDF-")
 

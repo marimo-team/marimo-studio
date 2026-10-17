@@ -19,6 +19,11 @@ that is one of those images. The render writes images beneath
 ``/.marimo-studio`` in its copy of the template. ``marimo.typ`` reads the
 values and image paths from ``sys.inputs``, so the project also compiles with
 the Typst CLI or an editor preview, where every call returns its default.
+
+A render also sets the ``marimo-regions`` input, so ``marimo.typ`` records the
+corners of each placed output and cell, and of each ``marimo_region()``, as
+``<marimo-region>`` metadata. The render returns them as ``RenderRegion``
+records of the PDF, in fractions of the size each page laid out at.
 """
 
 from __future__ import annotations
@@ -43,7 +48,9 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderRunner,
     ProviderStarter,
+    Rect,
     RenderFile,
+    RenderRegion,
     RenderRequest,
     RenderResult,
     Representation,
@@ -92,6 +99,70 @@ TYPST = TypesetLanguage(
 )
 
 
+def _number(value: object) -> float | None:
+    return float(cast("float", value)) if type(value) in (int, float) else None
+
+
+def _regions(
+    records: object, pages: object, rendered: PurePosixPath
+) -> tuple[RenderRegion, ...]:
+    """Return a region for each pair of ``<marimo-region>`` corner records.
+
+    A part's start record precedes the records of parts inside it, so pairs
+    match like brackets. Records hold points from the page's top left corner,
+    and ``pages`` holds the width and height of each page in points.
+    """
+    sizes = pages if isinstance(pages, list) else []
+    regions: list[RenderRegion] = []
+    open_parts: list[dict[str, object]] = []
+    for record in records if isinstance(records, list) else ():
+        if not isinstance(record, dict):
+            continue
+        if record.get("edge") == "start":
+            open_parts.append(record)
+            continue
+        if record.get("edge") != "end" or not open_parts:
+            continue
+        start = open_parts.pop()
+        page, reads, natural = (
+            start.get("page"),
+            start.get("reads"),
+            start.get("natural"),
+        )
+        corners = [_number(item.get(key)) for item in (start, record) for key in "xy"]
+        size = sizes[page - 1] if type(page) is int and 0 < page <= len(sizes) else None
+        page_size = [_number(item) for item in size] if isinstance(size, list) else []
+        if (
+            not isinstance(reads, list)
+            or None in corners
+            or len(page_size) != 2
+            or not all(value is not None and value > 0 for value in page_size)
+        ):
+            continue
+        x, y, right, bottom = cast("list[float]", corners)
+        width, height = right - x, bottom - y
+        if isinstance(natural, dict) and (_number(natural.get("width")) or 0) > 0:
+            width = cast("float", _number(natural.get("width")))
+            height = _number(natural.get("height")) or height
+        page_width, page_height = cast("list[float]", page_size)
+        label = start.get("label")
+        regions.append(
+            RenderRegion(
+                rendered,
+                Rect(
+                    x / page_width,
+                    y / page_height,
+                    width / page_width,
+                    height / page_height,
+                ),
+                reads=tuple(str(read) for read in reads if isinstance(read, str)),
+                page=cast("int", page),
+                label=label if isinstance(label, str) else None,
+            )
+        )
+    return tuple(regions)
+
+
 def _compile_diagnostic(
     item: dict[str, object],
     severity: str,
@@ -134,6 +205,7 @@ def _run_typst(
     inputs: Path,
     output: str,
     timeout: float,
+    *options: str,
 ) -> dict[str, object] | ProjectDiagnostic:
     """Run ``_compile.py`` and return its report, or the diagnostic it failed with."""
     compiler = resources.files(__name__).joinpath("_compile.py")
@@ -148,6 +220,7 @@ def _run_typst(
                 document.as_posix(),
                 str(inputs),
                 output,
+                *options,
             ],
             cwd=root,
             timeout=timeout,
@@ -280,11 +353,13 @@ class TypstProvider:
                     ),
                     "marimo-outputs": place(request.outputs),
                     "marimo-cells": place(request.cells),
+                    "marimo-regions": "true",
                 }
             ),
             encoding="utf-8",
         )
         rendered = PurePosixPath(f"{request.source.stem}.pdf")
+        located = root.joinpath(*_OUTPUTS.parent.parts, "regions.json")
         report = _run_typst(
             request.runner,
             root,
@@ -292,10 +367,15 @@ class TypstProvider:
             inputs,
             str(request.output_root.joinpath(*rendered.parts)),
             request.command_timeout,
+            f"--regions={located}",
         )
         if isinstance(report, ProjectDiagnostic):
             return RenderResult(diagnostics=(report,))
         warnings = report.get("warnings")
+        try:
+            found = json.loads(located.read_text("utf-8"))
+        except (OSError, ValueError):
+            found = {}
         return RenderResult(
             (RenderFile(rendered, "application/pdf"),),
             rendered,
@@ -303,6 +383,9 @@ class TypstProvider:
                 _compile_diagnostic(item, "warning", root, request.source)
                 for item in (warnings if isinstance(warnings, list) else ())
             ),
+            regions=_regions(found.get("records"), found.get("pages"), rendered)
+            if isinstance(found, dict)
+            else (),
         )
 
 

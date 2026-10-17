@@ -59,6 +59,7 @@ from marimo_studio.view_providers import (
     JsonValue,
     ProjectDiagnostic,
     ProjectionKind,
+    RenderRegion,
     Representation,
     ViewProvider,
 )
@@ -95,12 +96,18 @@ class ProviderCheckError(AssertionError):
 
 @dataclass(frozen=True)
 class CheckedRender:
-    """The files one render produced from the check's notebook results."""
+    """The files one render produced from the check's notebook results.
+
+    ``regions`` holds the regions Studio admitted, and ``warnings`` describes
+    the render's warnings, including regions Studio left out.
+    """
 
     main: PurePosixPath
     preview: PurePosixPath | None
     files: Mapping[PurePosixPath, bytes]
     media_types: Mapping[PurePosixPath, str]
+    regions: tuple[RenderRegion, ...] = ()
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -356,6 +363,7 @@ def _render(
                 host.provider_registry().get(key),
                 lease.copy_template,
                 source,
+                sites,
                 canonical_values(read_values)[0],
                 read_outputs,
                 read_cells,
@@ -376,6 +384,8 @@ def _render(
                 for item in bundle.files
             },
             {item.path: item.media_type for item in bundle.files},
+            bundle.regions,
+            tuple(_describe(item) for item in bundle.warnings),
         )
 
 

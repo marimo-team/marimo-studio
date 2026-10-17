@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Literal, Protocol
 
@@ -481,6 +481,65 @@ class RenderFile:
 
 
 @dataclass(frozen=True)
+class Rect:
+    """A rectangle on a rendered surface, in fractions of its width and height.
+
+    ``x`` and ``y`` locate the top left corner, so ``Rect(0, 0, 1, 1)`` covers
+    the whole page, image, or video frame.
+    """
+
+    x: float
+    y: float
+    width: float
+    height: float
+
+    def to_dict(self) -> dict[str, float]:
+        return {"x": self.x, "y": self.y, "width": self.width, "height": self.height}
+
+
+@dataclass(frozen=True)
+class RenderRegion:
+    """A part of a rendered file and the notebook results that produced it.
+
+    ``file`` names a file in ``RenderResult.files``, and ``rect`` locates the
+    part on one of its surfaces: ``page`` of a PDF, counted from 1, a still
+    image, or a video's frames from ``start`` until ``end`` seconds. A video
+    region without ``start`` begins with the first frame, and one without
+    ``end`` lasts until the video ends.
+
+    ``reads`` names the notebook results the part shows, at least one. Each is
+    a target the render reads, optionally narrowed by ``.field`` and
+    ``[index]`` steps, such as ``"joint[2][3]"`` for one cell of the ``joint``
+    table. ``source`` is the project line that placed the part. Without it,
+    Studio uses the line where the render reads its first result. ``label``
+    names the part for people and agents. Lens shows the first read when it
+    is unset.
+    """
+
+    file: PurePosixPath
+    rect: Rect
+    _: KW_ONLY
+    reads: tuple[str, ...]
+    page: int | None = None
+    start: float | None = None
+    end: float | None = None
+    source: SourceLocation | None = None
+    label: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "file": self.file.as_posix(),
+            "rect": self.rect.to_dict(),
+            "reads": list(self.reads),
+            "page": self.page,
+            "start": self.start,
+            "end": self.end,
+            "source": self.source.to_dict() if self.source is not None else None,
+            "label": self.label,
+        }
+
+
+@dataclass(frozen=True)
 class RenderResult:
     """The files one render publishes.
 
@@ -489,14 +548,16 @@ class RenderResult:
     keeps their relative paths, so an HTML file can load its images and
     stylesheets. ``main`` names the file a reader opens and downloads.
     ``preview`` optionally names a file a page shows in its place, such as a
-    video's poster image or a PDF of a Word document. An error diagnostic fails
-    the render, and Studio publishes none of its files.
+    video's poster image or a PDF of a Word document. ``regions`` locates the
+    parts of those files that notebook results produced. An error diagnostic
+    fails the render, and Studio publishes none of its files.
     """
 
     files: tuple[RenderFile, ...] = ()
     main: PurePosixPath | None = None
     preview: PurePosixPath | None = None
     diagnostics: tuple[ProjectDiagnostic, ...] = ()
+    regions: tuple[RenderRegion, ...] = ()
 
 
 class ViewProvider(Protocol):

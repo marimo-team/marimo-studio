@@ -269,3 +269,9 @@
 :where(marimo-cell, marimo-output) :where(.marimo-cell-diagnostic span) {
   color: color-mix(in srgb, currentColor 72%, transparent);
 }
+
+/* While Lens selects, outline the parts of rendered files it can trace. */
+html[data-marimo-lens-armed="true"] [data-marimo-studio-region] {
+  outline: 1px dashed color-mix(in srgb, #2563eb 55%, transparent);
+  outline-offset: -1px;
+}

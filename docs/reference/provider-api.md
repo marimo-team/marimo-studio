@@ -28,32 +28,33 @@ in an environment that contains credentials or private notebook source.
 
 ## Terms
 
-| Term             | Meaning                                                                       | In the API                   |
-| ---------------- | ----------------------------------------------------------------------------- | ---------------------------- |
-| View project     | The directory that holds one view's files                                     | `ViewProject`                |
-| View manifest    | `view.toml`, which records the provider key and provider options              | `ViewProject.manifest`       |
-| Provider key     | Distribution and registration name, such as `acme-views/report`               | `ViewProject.provider`       |
-| Provider options | The `[options]` table in `view.toml`                                          | `ViewProject.options`        |
-| Starter          | A template for a new view, shown in the **New view** picker                   | `ProviderStarter`            |
-| Starter key      | The starter's name within its provider, such as `default`                     | `ProviderStarter.key`        |
-| Starter ID       | Provider key and starter key, such as `acme-views/report:default`             | `CheckedView.starter`        |
-| Cell target      | The name a `<marimo-cell>` host uses: a marimo cell name or a Studio alias    | `StarterCellTarget`          |
-| Source document  | A file shown in Studio's Source panel                                         | `SourceDocument`             |
-| Build input      | A file or directory the build reads. A change rebuilds the view               | `BuildInput`                 |
-| Projection host  | `<marimo-cell>`, `<marimo-output>`, or an element with `mo-value`             |                              |
-| Projection site  | The source location, kind, and targets of one projection host                 | `ProjectionSite`             |
-| Target           | The cell name or value selector that a host shows                             | `ProjectionSite.targets`     |
-| Build snapshot   | A private copy of the build inputs with a site ID on every host               | `BuildRequest.project`       |
-| Page             | The HTML entry document a build returns                                       | `BuildResult.document`       |
-| Render           | The files the provider makes from one project file and notebook results       | `Render`                     |
-| Render template  | Private build output that renders start from                                  | `BuildRequest.template_root` |
-| Render value     | A notebook value that a render reads as JSON                                  | `RenderValue`                |
-| Render output    | A notebook value, such as a figure, that a render places as media             | `RenderOutput`               |
-| Render cell      | A named notebook cell whose output a render places as media                   | `RenderCell`                 |
-| Rendered files   | The files one render returns, with a main file and an optional preview        | `RenderResult`               |
-| Render host      | `<marimo-output render="main.typ">`, which shows a render's files on the page |                              |
-| Accept list      | The media types a host or render read can show, in preference order           | `RenderOutput.accept`        |
-| Diagnostic       | A problem with a code, message, hint, and optional source location            | `ProjectDiagnostic`          |
+| Term             | Meaning                                                                        | In the API                   |
+| ---------------- | ------------------------------------------------------------------------------ | ---------------------------- |
+| View project     | The directory that holds one view's files                                      | `ViewProject`                |
+| View manifest    | `view.toml`, which records the provider key and provider options               | `ViewProject.manifest`       |
+| Provider key     | Distribution and registration name, such as `acme-views/report`                | `ViewProject.provider`       |
+| Provider options | The `[options]` table in `view.toml`                                           | `ViewProject.options`        |
+| Starter          | A template for a new view, shown in the **New view** picker                    | `ProviderStarter`            |
+| Starter key      | The starter's name within its provider, such as `default`                      | `ProviderStarter.key`        |
+| Starter ID       | Provider key and starter key, such as `acme-views/report:default`              | `CheckedView.starter`        |
+| Cell target      | The name a `<marimo-cell>` host uses: a marimo cell name or a Studio alias     | `StarterCellTarget`          |
+| Source document  | A file shown in Studio's Source panel                                          | `SourceDocument`             |
+| Build input      | A file or directory the build reads. A change rebuilds the view                | `BuildInput`                 |
+| Projection host  | `<marimo-cell>`, `<marimo-output>`, or an element with `mo-value`              |                              |
+| Projection site  | The source location, kind, and targets of one projection host                  | `ProjectionSite`             |
+| Target           | The cell name or value selector that a host shows                              | `ProjectionSite.targets`     |
+| Build snapshot   | A private copy of the build inputs with a site ID on every host                | `BuildRequest.project`       |
+| Page             | The HTML entry document a build returns                                        | `BuildResult.document`       |
+| Render           | The files the provider makes from one project file and notebook results        | `Render`                     |
+| Render template  | Private build output that renders start from                                   | `BuildRequest.template_root` |
+| Render value     | A notebook value that a render reads as JSON                                   | `RenderValue`                |
+| Render output    | A notebook value, such as a figure, that a render places as media              | `RenderOutput`               |
+| Render cell      | A named notebook cell whose output a render places as media                    | `RenderCell`                 |
+| Rendered files   | The files one render returns, with a main file and an optional preview         | `RenderResult`               |
+| Render region    | A rectangle on a page, image, or video frame and the notebook results it shows | `RenderRegion`               |
+| Render host      | `<marimo-output render="main.typ">`, which shows a render's files on the page  |                              |
+| Accept list      | The media types a host or render read can show, in preference order            | `RenderOutput.accept`        |
+| Diagnostic       | A problem with a code, message, hint, and optional source location             | `ProjectDiagnostic`          |
 
 ## Register the provider
 
@@ -500,6 +501,80 @@ renders, can read one figure in different media types and sizes. Studio
 captures a render's reads between two notebook runs in every runtime, so one
 render never mixes results from different runs.
 
+### Locate parts of rendered files
+
+Return `RenderResult.regions` to tell Studio which part of a rendered file
+each notebook result produced. A `RenderRegion` is a rectangle on one surface
+of a file: a PDF page, an image, or a video's frames between two times. The
+page shows each region over the file as a
+[selection target](projections.md#select-parts-of-rendered-files), so a reader
+can point at a chart inside a PDF, or at a shape in one frame of a video, and
+follow it to the cells that computed it:
+
+```python
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import Rect, RenderFile, RenderRegion, RenderResult
+
+RenderResult(
+    files=(RenderFile(PurePosixPath("report.pdf"), "application/pdf"),),
+    main=PurePosixPath("report.pdf"),
+    regions=(
+        RenderRegion(
+            PurePosixPath("report.pdf"),
+            Rect(x=0.12, y=0.2, width=0.76, height=0.3),
+            reads=("revenue_chart",),
+            page=1,
+            label="Revenue chart",
+        ),
+        RenderRegion(
+            PurePosixPath("report.pdf"),
+            Rect(x=0.12, y=0.55, width=0.1, height=0.02),
+            reads=("rows[3].total",),
+            page=1,
+        ),
+    ),
+)
+```
+
+`Rect` holds fractions of the surface's width and height, measured from its
+top left corner. The other fields are keyword arguments:
+
+| Field             | Meaning                                                                                                 | Default                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `reads`           | Targets the part shows, as declared in `inspect()`, optionally narrowed by `.field` and `[index]` steps | Required, at least one                                |
+| `page`            | The PDF page, counted from 1. Required for a PDF                                                        | `None`                                                |
+| `start` and `end` | The seconds of a video during which the part shows                                                      | The whole video                                       |
+| `source`          | Where the render's source places the part, shown as the selection's rendering source                    | The source line where the render reads its first read |
+| `label`           | The name Lens shows for the selection                                                                   | The first read                                        |
+
+A read such as `rows[3].total` names one cell of the `rows` table. Studio
+resolves each read through the render's read site to the cell that produced
+it. A video region names the frames a shape appears in:
+
+```python
+RenderRegion(
+    PurePosixPath("scene.mp4"),
+    Rect(x=0.4, y=0.3, width=0.2, height=0.25),
+    reads=("kernel",),
+    start=1.5,
+    end=4.0,
+)
+```
+
+Regions are evidence beside the files, and the files publish whatever the
+regions hold. Studio leaves out a region whose file the render did not publish,
+whose rectangle leaves its surface, or that names no result the render reads.
+It removes each read that names a result the render does not read and keeps
+the region. One `render-regions-invalid` warning reports both. A region that
+is not a `RenderRegion` with a `Rect` fails provider conformance, as any
+malformed record does. A render
+keeps its first 4,096 regions and warns with `render-regions-limited` about
+the rest. Each region keeps its first 64 reads, and Studio shortens a label to
+256 characters. The built-in Typst and LaTeX providers return a region for
+each placed output and cell, and for each part the document marks with
+`marimo_region()` or `\marimoregion`.
+
 ## Report problems
 
 Raise `ProviderError` from `inspect()`, `build()`, or `render()` when the
@@ -816,9 +891,24 @@ RenderResult(
     main: PurePosixPath | None = None,
     preview: PurePosixPath | None = None,
     diagnostics: tuple[ProjectDiagnostic, ...] = (),
+    regions: tuple[RenderRegion, ...] = (),
 )
 
 RenderFile(path: PurePosixPath, media_type: str)
+
+RenderRegion(
+    file: PurePosixPath,
+    rect: Rect,
+    *,
+    reads: tuple[str, ...],
+    page: int | None = None,
+    start: float | None = None,
+    end: float | None = None,
+    source: SourceLocation | None = None,
+    label: str | None = None,
+)
+
+Rect(x: float, y: float, width: float, height: float)
 ```
 
 `BuildRequest.inputs` lists every build input file, with directories expanded.
@@ -863,6 +953,16 @@ publishes, each with a lowercase `type/subtype` media type such as
 and `preview` name listed files, and `preview` differs from `main`. Return no
 `main`, with an error diagnostic, when the render fails. Warning diagnostics
 publish with the files.
+
+`RenderResult.regions` locates parts of the published files. A region's
+`file` names a listed PDF, `image/*`, or `video/*` file. A PDF region names
+its `page`, counted from 1. A video region shows from `start` until `end`
+seconds, from the first frame when `start` is `None`, and until the video ends
+when `end` is `None`. `Rect` coordinates are fractions from 0 to 1 of the
+surface's width and height, from its top left corner. A region without a
+`source` takes the source of the read site of its first read, and a region
+without a `label` shows its first read. Studio keeps the first 64 reads of a
+region and the first 4,096 regions of a render.
 
 ### Commands and cancellation
 
@@ -1027,6 +1127,8 @@ CheckedRender(
     preview: PurePosixPath | None,
     files: Mapping[PurePosixPath, bytes],
     media_types: Mapping[PurePosixPath, str],
+    regions: tuple[RenderRegion, ...] = (),
+    warnings: tuple[str, ...] = (),
 )
 ```
 
@@ -1050,7 +1152,8 @@ installed provider key, loaded the way Studio loads it. `notebook` defaults to
 a notebook that defines `metric` and `report`. `options` become the provider
 options of each view. `values`, `outputs`, and `cells` feed
 each declared render for the targets it reads, as Studio supplies them, and
-`renders` holds the files each render returned, by render source. Each output
+`renders` holds the files each render returned, by render source, with the
+regions Studio kept and the render's warnings. Each output
 and cell is a `Representation` in one of the media types the render accepts.
 `CheckedView.starter` is the starter ID, `documents` lists the view's Source
 documents, and `warnings` lists the build's warning diagnostics.

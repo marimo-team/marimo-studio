@@ -15,7 +15,7 @@ import {
 } from "../src/renders/inputs.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { setRuntimeConnectionState } from "../src/runtime-state.ts";
-import { runtimeConfig } from "./runtime-fixtures.ts";
+import { projectionRuntimeConfig, runtimeConfig } from "./runtime-fixtures.ts";
 
 const SUPPORT = "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard";
 const RENDERS = `${SUPPORT}/renders`;
@@ -47,6 +47,7 @@ interface BundleOptions {
   readonly main?: string;
   readonly preview?: string | null;
   readonly absent?: readonly string[];
+  readonly regions?: readonly JsonValue[];
 }
 
 const bundle = (id: string, options: BundleOptions = {}) => ({
@@ -57,6 +58,7 @@ const bundle = (id: string, options: BundleOptions = {}) => ({
   preview: options.preview ?? null,
   warnings: [],
   absent: options.absent ?? [],
+  regions: options.regions ?? [],
 });
 
 const pending = () => {
@@ -412,13 +414,22 @@ test("a static export shows the bundle rendered for the prepared state in view",
   commitRuntimeConfig(browserRuntime("run", "zero-python"));
   let current = "state-b";
   const release = publishPreparedState(() => current);
+  const indexed = ({
+    render,
+    bundle: id,
+    warnings,
+    absent,
+    ...content
+  }: ReturnType<typeof bundle>) => ({
+    bundles: { [id]: content },
+    entry: { [render]: { bundle: id, warnings, absent } },
+  });
+  const [a, b] = [indexed(bundle("a")), indexed(bundle("b"))];
   index = () =>
     json({
-      schema: 1,
-      states: {
-        "state-a": { "figure.py": bundle("a") },
-        "state-b": { "figure.py": bundle("b") },
-      },
+      schema: 2,
+      bundles: { ...a.bundles, ...b.bundles },
+      states: { "state-a": a.entry, "state-b": b.entry },
     });
   const { host, shadow, events } = mount();
 
@@ -555,4 +566,252 @@ test("removing the page's markup shows the current render with the stock present
       `${RENDERS}/${"a".repeat(64)}/scene.mp4`,
     ),
   );
+});
+
+// The render reads one value, one output, and one cell, each produced by its own cell.
+const commitRenderReads = (cellRefs?: Record<string, string>) => {
+  const config = projectionRuntimeConfig([
+    { siteId: "read-joint", instanceId: "joint", target: "joint", kind: "value" },
+    { siteId: "read-chart", instanceId: "chart", target: "chart", kind: "output" },
+    { siteId: "read-summary", instanceId: "summary", target: "summary", kind: "cell" },
+  ]);
+  commitRuntimeConfig({
+    ...config,
+    sites: config.sites.map((item) => ({
+      ...item,
+      render: "figure.py",
+      accept: [...READ_ACCEPT[item.kind]],
+    })),
+    runtimeBindings: cellRefs ? { cellRefs } : config.runtimeBindings,
+  });
+};
+
+const region = (changes: Record<string, JsonValue>) => ({
+  file: "figure.png",
+  rect: { x: 0, y: 0, width: 1, height: 1 },
+  reads: [],
+  source: null,
+  label: null,
+  page: null,
+  start: null,
+  end: null,
+  ...changes,
+});
+
+const sources = (element: Element) =>
+  Array.from(
+    element.querySelectorAll<HTMLElement>(":scope > [data-marimo-lens-cell-id]"),
+    (item) => ({
+      cellId: item.dataset.marimoLensCellId,
+      selector: item.dataset.marimoLensSelector ?? null,
+      hidden: item.hidden,
+    }),
+  );
+
+const regionTargets = (host: Element) =>
+  Array.from(host.querySelectorAll<HTMLElement>("[data-marimo-studio-region]"));
+
+test("regions of a rendered file are Lens targets that name the cells producing them", async () => {
+  commitRenderReads();
+  renders.push(() =>
+    json(
+      bundle("a", {
+        regions: [
+          region({
+            rect: { x: 0.5, y: 0.25, width: 0.25, height: 0.5 },
+            reads: ["joint[2][3]"],
+            source: { path: "figure.py", line: 12, column: 5 },
+            label: "Square",
+          }),
+          region({ reads: ["chart", "summary"] }),
+        ],
+      }),
+    ),
+  );
+  const { host, shadow } = mount();
+
+  await vi.waitFor(() => expect(host.dataset.state).toBe("ready"));
+
+  expect(shown(shadow)?.getAttribute("src")).toContain("a".repeat(64));
+  // Smaller regions come later, so they sit above the regions around them.
+  const [whole, square] = regionTargets(host);
+  expect(whole?.dataset.marimoLensLabel).toBe("chart");
+  expect(sources(whole!)).toEqual([
+    { cellId: "chart-cell", selector: "chart", hidden: true },
+    { cellId: "summary-cell", selector: null, hidden: true },
+  ]);
+  expect(square?.hasAttribute("data-marimo-lens-target")).toBe(true);
+  expect(square?.dataset.marimoLensLabel).toBe("Square");
+  expect(square?.dataset.marimoLensDetail).toBe("figure.png");
+  expect(JSON.parse(square?.dataset.marimoLensRenderSource ?? "null")).toEqual({
+    path: "figure.py",
+    line: 12,
+    column: 5,
+  });
+  expect(sources(square!)).toEqual([
+    { cellId: "joint-cell", selector: "joint[2][3]", hidden: true },
+  ]);
+  expect(JSON.parse(square?.dataset.marimoLensMedia ?? "null")).toEqual({ path: "figure.png" });
+  expect(square?.style).toMatchObject({ left: "50%", top: "25%", width: "25%", height: "50%" });
+  // The host traces the whole file to every read of the render.
+  expect(sources(host)).toEqual([
+    { cellId: "joint-cell", selector: "joint", hidden: true },
+    { cellId: "chart-cell", selector: "chart", hidden: true },
+    { cellId: "summary-cell", selector: null, hidden: true },
+  ]);
+  expect(host.dataset.marimoLensContext).toBe("");
+  expect(host.dataset.marimoLensLabel).toBe("figure.py");
+  // The host names exactly its own sources, apart from those of its regions.
+  const inputs = host.dataset.marimoLensInputs?.split(" ") ?? [];
+  expect(inputs.map((id) => document.getElementById(id)?.parentElement)).toEqual([
+    host,
+    host,
+    host,
+  ]);
+});
+
+test("regions follow the images a page presents itself", async () => {
+  commitRenderReads();
+  renders.push(() => json(bundle("a", { regions: [region({ reads: ["chart"] })] })));
+  const { host } = mount(
+    `<marimo-output render="figure.py"><img alt="Figure"><p>Caption</p></marimo-output>`,
+  );
+  host.addEventListener("marimo-output-ready", () => {
+    host.querySelector("img")!.src = host.marimoRender!.files[0]!.url;
+  });
+
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(1));
+
+  const layer = host.querySelector<HTMLElement>("[data-marimo-studio-regions]");
+  expect(layer?.slot).toBe("marimo-regions");
+  expect(sources(regionTargets(host)[0]!)).toEqual([
+    { cellId: "chart-cell", selector: "chart", hidden: true },
+  ]);
+
+  host.querySelector("img")!.removeAttribute("src");
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(0));
+});
+
+test("a newer bundle replaces the regions, and a removed host releases them", async () => {
+  commitRenderReads();
+  renders.push(
+    () => json(bundle("a", { regions: [region({ reads: ["chart"], label: "First" })] })),
+    () => json(bundle("b", { regions: [region({ reads: ["joint"], label: "Second" })] })),
+  );
+  const { host } = mount();
+  await vi.waitFor(() => expect(regionTargets(host)[0]?.dataset.marimoLensLabel).toBe("First"));
+
+  notifyNotebookResults();
+
+  await vi.waitFor(() => expect(regionTargets(host)[0]?.dataset.marimoLensLabel).toBe("Second"));
+  expect(regionTargets(host)).toHaveLength(1);
+  host.remove();
+  await Promise.resolve();
+  expect(regionTargets(host)).toHaveLength(0);
+  expect(sources(host)).toEqual([]);
+  expect(host.hasAttribute("data-marimo-lens-context")).toBe(false);
+  expect(host.hasAttribute("data-marimo-lens-inputs")).toBe(false);
+});
+
+test("regions keep their targets until their producers change", async () => {
+  commitRenderReads();
+  renders.push(() => json(bundle("a", { regions: [region({ reads: ["chart"] })] })));
+  const { host } = mount();
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(1));
+  const [first] = regionTargets(host);
+
+  commitRenderReads();
+  expect(regionTargets(host)).toEqual([first]);
+
+  commitRenderReads({
+    "cell:v1:joint": "joint-cell",
+    "cell:v1:chart": "chart-restarted",
+    "cell:v1:summary": "summary-cell",
+  });
+  const [second] = regionTargets(host);
+  expect(second).not.toBe(first);
+  expect(sources(second!)).toEqual([
+    { cellId: "chart-restarted", selector: "chart", hidden: true },
+  ]);
+});
+
+test("regions move between the page's markup and the stock presentation", async () => {
+  commitRenderReads();
+  renders.push(() => json(bundle("a", { regions: [region({ reads: ["chart"] })] })));
+  const { host } = mount(`<marimo-output render="figure.py"><img alt="Figure"></marimo-output>`);
+  await vi.waitFor(() => expect(host.dataset.state).toBe("ready"));
+  expect(regionTargets(host)).toHaveLength(0);
+
+  host.querySelector("img")!.remove();
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(1));
+
+  host.append(document.createElement("canvas"));
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(0));
+});
+
+test("a video shows the regions of its poster, then of the frames it plays", async () => {
+  commitRenderReads();
+  renders.push(() =>
+    json(
+      bundle("a", {
+        files: [file("scene.mp4", "video/mp4"), file("poster.png", "image/png")],
+        main: "scene.mp4",
+        preview: "poster.png",
+        regions: [
+          region({ file: "poster.png", label: "Title" }),
+          region({ file: "scene.mp4", label: "Square", start: 0, end: 1 }),
+          region({ file: "scene.mp4", label: "Circle", start: 1, end: 2 }),
+        ],
+      }),
+    ),
+  );
+  const { host, shadow } = mount();
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(3));
+  const visible = () =>
+    regionTargets(host)
+      .filter((element) => element.style.display !== "none")
+      .map((element) => element.dataset.marimoLensLabel);
+  expect(visible()).toEqual(["Title"]);
+  expect(JSON.parse(regionTargets(host)[2]?.dataset.marimoLensMedia ?? "null")).toEqual({
+    path: "scene.mp4",
+    start: 1,
+    end: 2,
+  });
+
+  // jsdom does not play media, so the video reports the moment it shows.
+  const video = shadow.querySelector("video")!;
+  const playing = (time: number) => {
+    Object.defineProperties(video, {
+      currentTime: { configurable: true, get: () => time },
+      played: { configurable: true, get: () => ({ length: 1 }) },
+      duration: { configurable: true, get: () => 2 },
+    });
+    video.dispatchEvent(new Event("timeupdate"));
+  };
+  playing(0.5);
+  expect(visible()).toEqual(["Square"]);
+  playing(2);
+  expect(visible()).toEqual(["Circle"]);
+});
+
+test("an element the page draws a PDF on names its page", async () => {
+  commitRenderReads();
+  renders.push(() =>
+    json(
+      bundle("a", {
+        files: [file("report.pdf", "application/pdf")],
+        main: "report.pdf",
+        regions: [region({ file: "report.pdf", page: 1, reads: ["chart"] })],
+      }),
+    ),
+  );
+  const { host } = mount(
+    `<marimo-output render="figure.py"><canvas data-marimo-render-file="report.pdf"></canvas></marimo-output>`,
+  );
+  await vi.waitFor(() => expect(host.dataset.state).toBe("ready"));
+  expect(regionTargets(host)).toHaveLength(0);
+
+  host.querySelector("canvas")!.dataset.marimoRenderPage = "1";
+
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(1));
 });
