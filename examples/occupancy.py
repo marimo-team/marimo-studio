@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.12"
+# requires-python = ">=3.12,<3.15"
 # dependencies = [
 #     "marimo>=0.24.0",
 #     "matplotlib>=3.10.8",
@@ -15,6 +15,12 @@
 # show_cell_logs = false
 #
 # [tool.marimo-studio.cells]
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+#
+# [tool.pixi.dependencies]
+# tectonic = ">=0.15"
 # ///
 
 import marimo

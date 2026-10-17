@@ -29,7 +29,9 @@ From the repository root, open one example notebook:
 uv run marimo edit examples/quadratic_program.py --sandbox
 ```
 
-Replace `quadratic_program.py` with `athletes.py`, `earthquakes.py`, or
-`occupancy.py` to open another example. Studio discovers the view projects
-stored beside each notebook. The examples fetch pinned datasets and can load
-fonts, maps, or remote modules declared by their view source.
+Replace `quadratic_program.py` with `athletes.py` or `earthquakes.py` to open
+another example. Studio discovers the view projects stored beside each
+notebook. Each example page lists the tools its views need.
+[Building occupancy](occupancy.md#run-locally) declares Tectonic for its LaTeX
+paper and opens with `--sandbox=pixi`. The examples fetch pinned datasets and
+can load fonts, maps, or remote modules declared by their view source.

@@ -54,23 +54,41 @@ threshold evaluation that every view presents.
 
 ## Run locally
 
-From the repository root:
+The Journal paper compiles with [Tectonic](https://tectonic-typesetting.github.io/),
+which the notebook declares for [pixi](https://pixi.prefix.dev/) beside its
+Python packages:
 
-```console
-uv run marimo edit examples/occupancy.py --sandbox
+```python
+# [tool.pixi.dependencies]
+# tectonic = ">=0.15"
 ```
 
+With uv and pixi 0.81 or newer installed, run from the repository root:
+
+```console
+uv run marimo edit examples/occupancy.py --sandbox=pixi
+```
+
+pixi installs the notebook's environment, including Tectonic, and marimo runs
+the notebook there. Studio runs the same Tectonic when it typesets the paper.
 Studio opens `monitor`, the notebook's default view. Switch among `monitor`,
-`pdf-report`, `paper`, and `model-review`. The notebook fetches the pinned
-occupancy CSV from `raw.githubusercontent.com`, and the Field report loads
-Takumi's WebAssembly module from jsDelivr. The Journal paper compiles with the
-`tectonic` command. Install Tectonic with `pixi global install tectonic`, or
-start marimo with `pixi run` from the repository root, whose pixi environment
-provides it. The first compile downloads the TeX packages the paper uses and
-can outlast a build, so run `pixi run --locked ./scripts/fetch-tex-packages.sh`
-once before opening the view. The Browser runtime also needs
-[Pyodide](https://pyodide.org/), the Python distribution that runs in the
-browser, and its Python packages on an uncached run.
+`pdf-report`, `paper`, and `model-review`.
+
+The paper's first compile downloads its TeX packages and can outlast the 120
+second build, which then reports `latex-compile-unfinished`. Build again to
+continue from the downloaded packages, or cache them once from the repository
+root:
+
+```console
+pixi run --locked ./scripts/fetch-tex-packages.sh
+```
+
+The notebook fetches the pinned occupancy CSV from `raw.githubusercontent.com`,
+and the Field report loads Takumi's WebAssembly module from jsDelivr. The
+Browser runtime also needs [Pyodide](https://pyodide.org/), the Python
+distribution that runs in the browser, and its Python packages on an uncached
+run. [LaTeX](../guide/formats.md#latex) explains the notebook metadata and the
+view format.
 
 ## Read the source
 
