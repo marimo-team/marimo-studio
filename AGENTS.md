@@ -9,6 +9,34 @@ Marimo owns process lifecycle, authentication, notebook execution, sessions,
 reactivity, virtual files, controls, widgets, and native output rendering.
 Keep private Marimo integration inside `_compat`.
 
+## How Studio runs inside marimo
+
+Studio is a marimo extension. Users start `marimo edit` or `marimo run`, and
+marimo loads Studio through the
+[entry points](https://packaging.python.org/en/latest/specifications/entry-points/)
+that `packages/marimo-studio/pyproject.toml` registers:
+
+| Entry point group               | Studio object                      | Loaded by                              |
+| ------------------------------- | ---------------------------------- | -------------------------------------- |
+| `marimo.server.asgi.middleware` | `_entrypoints:server_middleware`   | The marimo server, for Studio's routes |
+| `marimo.kernel.lifespan`        | `_composition:kernel_lifespan`     | Each notebook kernel process           |
+| `marimo.agent.capability`       | `marimo_studio.agent`              | Code mode, as the `studio` capability  |
+| `marimo_studio.view_provider`   | Built-in and third-party providers | Studio's provider registry             |
+
+The `marimo-studio` console script (`_cli`) is a companion CLI for views,
+builds, validation, status, and exports. The editor and server always start
+through `marimo`.
+
+marimo discovers entry points from the environment of the process that loads
+them. The server needs Studio installed beside marimo. A sandboxed kernel runs
+in its own environment, so `_compat/server/sandbox_runtime.py` adds the
+server's Studio to marimo's runtime overlay, which both the uv and pixi
+sandbox backends apply.
+
+View builds run in the process that requests them: the server, a CLI command,
+or a code-mode kernel. Provider system tools such as `tectonic` resolve from
+that process's `PATH`.
+
 ## What the complexity buys
 
 | Mechanism                                      | User capability                                                                                                               |
