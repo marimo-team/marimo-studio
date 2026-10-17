@@ -172,7 +172,8 @@ assert set(marimo_studio.view_providers.__all__) == {
     "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
     "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
-    "create_starter", "html_sites", "parse_accept", "probe_tool", "project_files",
+    "create_starter", "find_tool", "html_sites", "parse_accept", "probe_tool",
+    "project_files",
     "project_path", "render_page", "script_json",
 }
 assert set(marimo_studio.view_providers.testing.__all__) == {
