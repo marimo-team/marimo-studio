@@ -26,11 +26,11 @@ ships out, which the compile returns as regions of the PDF.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from marimo_studio._processes.tools import tool_environment
 from marimo_studio.view_providers import (
     ProjectDiagnostic,
     ProviderAvailability,
@@ -518,7 +518,7 @@ def compile_latex(
         ],
         cwd=root.joinpath(*entry.parent.parts),
         timeout=timeout,
-        environment={**tool_environment(), "SOURCE_DATE_EPOCH": "0"},
+        environment={**os.environ, "SOURCE_DATE_EPOCH": "0"},
     )
     sources = _Sources(root, entry)
     pdf = output / f"{entry.stem}.pdf"
