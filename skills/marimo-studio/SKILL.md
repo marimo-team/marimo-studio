@@ -96,9 +96,12 @@ marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
 Notebook Kit starters, and its `typst` extra enables the Typst starter. The
 Quarto starter needs the `quarto` command from
-https://quarto.org/docs/get-started/ or `pixi global install quarto`, and the
-LaTeX starter needs the `tectonic` command from `pixi global install tectonic`.
-A notebook in a pixi workspace runs Studio through
+https://quarto.org/docs/get-started/ or `pixi global install quarto`. The
+LaTeX starter needs Tectonic. Add `tectonic = ">=0.15"` under
+`[tool.pixi.dependencies]` in the notebook's `# /// script` block, cap
+`requires-python` below 3.15, and open the notebook with `--sandbox=pixi` in
+place of `--sandbox`. Studio then runs Tectonic from the notebook's pixi
+environment. A notebook in a pixi workspace runs Studio through
 `pixi run marimo edit notebook.py --no-sandbox --watch`.
 `help(marimo._code_mode)` then lists Studio as the `studio` capability, and
 sandboxed kernels import the same Studio as the server. For views across

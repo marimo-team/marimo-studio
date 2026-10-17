@@ -203,12 +203,13 @@ async def _owned_view_request(
 
 
 async def _retired_view_response(
+    notebook: Path,
     name: str,
     retire: Callable[[], Awaitable[RetiredView]],
 ) -> Response:
     try:
         starter_records = await run_provider_operation(
-            lambda: tuple(item.to_dict() for item in starters())
+            lambda: tuple(item.to_dict() for item in starters(notebook))
         )
         result = await retire()
         inventory = await run_provider_operation(
@@ -256,6 +257,7 @@ async def delete_view_response(
     if requested != name:
         return _invalid_request(error, message)
     return await _retired_view_response(
+        studio.notebook,
         name,
         lambda: delete_owned_view(
             studio,
@@ -288,6 +290,7 @@ async def rename_view_response(
         return owned
     new_name, owner = owned
     return await _retired_view_response(
+        studio.notebook,
         new_name,
         lambda: rename_owned_view(
             studio,
@@ -341,7 +344,7 @@ def view_inventory_payload(
         "starters": (
             list(starter_records)
             if starter_records is not None
-            else [item.to_dict() for item in starters()]
+            else [item.to_dict() for item in starters(definition.notebook)]
         ),
     }
 
@@ -363,7 +366,7 @@ def unconfigured_view_inventory_payload(
         "starters": (
             list(starter_records)
             if starter_records is not None
-            else [item.to_dict() for item in starters()]
+            else [item.to_dict() for item in starters(notebook)]
         ),
     }
 

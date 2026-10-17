@@ -28,8 +28,9 @@ INSTALL_ACTION = (
     "or with `pixi global install quarto`, then restart Studio."
 )
 ACTIVATE_ACTION = (
-    "Activate the environment that provides Quarto, for example with "
-    "`pixi shell` or `conda activate <environment>`, then restart Studio."
+    "Start Studio in the activated environment that provides Quarto, for "
+    "example through `pixi run` or `pixi shell`, or install Quarto with "
+    "`pixi global install quarto`, then restart Studio."
 )
 _ERROR_LINE = re.compile(r"^\s*ERROR:\s*(.+)$", re.MULTILINE)
 _MAX_REPORT_CHARACTERS = 2_000
@@ -45,7 +46,11 @@ def _conda_quarto(executable: Path) -> bool:
 
 
 def quarto_availability() -> ProviderAvailability:
-    """Report whether a supported Quarto CLI can run."""
+    """Report whether a supported Quarto CLI can run.
+
+    Quarto comes from ``PATH``. A notebook's pixi script environment starts
+    without activation, so conda-forge Quarto installed there cannot run.
+    """
     found = shutil.which("quarto")
     # conda-forge Quarto finds Pandoc, Deno, and its resources through
     # variables that environment activation sets.
@@ -62,8 +67,14 @@ def quarto_availability() -> ProviderAvailability:
             ),
             action=ACTIVATE_ACTION,
         )
+    if found is None:
+        return ProviderAvailability(
+            False,
+            reason="Studio cannot find the quarto command.",
+            action=INSTALL_ACTION,
+        )
     return probe_tool(
-        ("quarto", "--version"),
+        (found, "--version"),
         minimum=QUARTO_MIN_VERSION,
         install=INSTALL_ACTION,
     )

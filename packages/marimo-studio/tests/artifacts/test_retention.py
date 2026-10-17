@@ -401,7 +401,11 @@ def test_stale_artifact_lease_does_not_recreate_removed_project(
     lease = publish_artifact_lease(project, "development")
     missing = tmp_path / "removed" / "view"
     stale_project = replace(
-        project, root=missing, locations=CatalogLocations.inside_views(missing.parent)
+        project,
+        root=missing,
+        locations=CatalogLocations.inside_views(
+            missing.parent / "notebook.py", missing.parent
+        ),
     )
     lease.project = stale_project
     lease.artifact = replace(

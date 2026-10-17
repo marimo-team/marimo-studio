@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
@@ -82,6 +82,32 @@ class StaticNotebook:
 
 class StaticNotebookLoader(Protocol):
     def __call__(self, path: Path, source: str) -> StaticNotebook: ...
+
+
+@dataclass(frozen=True)
+class ScriptEnvironmentInstall:
+    """The command that installs a notebook's pixi script environment.
+
+    ``executable_directories`` reads the command's standard error and returns
+    the environment's executable directories. It raises ``DependencyError``
+    when the report names no environment.
+    """
+
+    command: tuple[str, ...]
+    environment: Mapping[str, str]
+    executable_directories: Callable[[str], tuple[str, ...]]
+
+
+class ScriptEnvironments(Protocol):
+    """Marimo's pixi script environments for notebooks."""
+
+    def selected(self) -> bool:
+        """Return whether Marimo runs this process's notebooks in pixi sandboxes."""
+        ...
+
+    def install(self, notebook: Path) -> ScriptEnvironmentInstall:
+        """Return the install command, or raise ``DependencyError`` without pixi."""
+        ...
 
 
 class EnvironmentFlagBuilder(Protocol):

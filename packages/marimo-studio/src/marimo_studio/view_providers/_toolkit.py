@@ -21,6 +21,7 @@ from marimo_studio._processes.supervisor import (
     ProcessResult,
     ProcessSupervisor,
 )
+from marimo_studio._processes.tools import find_tool as _find_tool
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers._records import (
     BuildRequest,
@@ -176,6 +177,16 @@ def render_page(
     return RENDER_PAGE
 
 
+def find_tool(command: str) -> str | None:
+    """Return the executable that a command named ``command`` runs, if any.
+
+    Studio searches the executable directories of the notebook's pixi script
+    environment, when its metadata has a ``[tool.pixi]`` table, then ``PATH``.
+    A path in ``command`` is returned when it names an executable.
+    """
+    return _find_tool(command)
+
+
 def probe_tool(
     command: Sequence[str],
     *,
@@ -185,7 +196,7 @@ def probe_tool(
 ) -> ProviderAvailability:
     """Run a tool's version command and report whether it is new enough.
 
-    ``command[0]`` is found on ``PATH`` unless it is a path. The version is the
+    ``command[0]`` is found with ``find_tool`` unless it is a path. The version is the
     first dotted version the command prints, on standard output or else on standard
     error, with any prerelease suffix. This process remembers a reported
     version until the executable changes. ``install`` tells the user how to
@@ -193,7 +204,7 @@ def probe_tool(
     operation is cancelled.
     """
     name = Path(command[0]).name
-    found = shutil.which(command[0])
+    found = find_tool(command[0])
     if found is None:
         return ProviderAvailability(
             False,

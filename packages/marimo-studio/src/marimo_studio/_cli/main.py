@@ -19,6 +19,7 @@ from marimo_studio._cli.diagnostics import (
 )
 from marimo_studio._cli.help import ColoredGroup
 from marimo_studio._cli.output import echo_error
+from marimo_studio._workspace.tools import command_installs
 from marimo_studio.errors import MarimoStudioError
 
 _STUDIO_REQUIREMENT = f"marimo-studio=={version('marimo-studio')}"
@@ -38,8 +39,12 @@ Default Vanilla authoring:
     no_args_is_help=True,
 )
 @click.version_option(prog_name="marimo-studio", package_name="marimo-studio")
-def cli() -> None:
+@click.pass_context
+def cli(context: click.Context) -> None:
     """Design custom views for marimo notebooks."""
+    # A command targets one notebook, so its provider calls may install the
+    # pixi environment that notebook's metadata declares.
+    context.with_resource(command_installs())
 
 
 cli.add_command(doctor)

@@ -377,7 +377,7 @@ def test_values_that_need_too_many_definitions_fail_before_tex_runs(
 @pytest.fixture
 def stand_in(monkeypatch: pytest.MonkeyPatch) -> None:
     """Resolve the tectonic command without an installed Tectonic."""
-    monkeypatch.setattr("shutil.which", lambda name: name)
+    monkeypatch.setattr("shutil.which", lambda name, **_kwargs: name)
 
 
 def _tex_log(*lines: str) -> str:
@@ -537,7 +537,7 @@ def test_rendering_without_tectonic_names_the_install(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     project = _project(tmp_path)
-    monkeypatch.setattr("shutil.which", lambda _name: None)
+    monkeypatch.setattr("shutil.which", lambda _name, **_kwargs: None)
 
     with pytest.raises(ProviderError, match="cannot find the tectonic command"):
         _render(project, {})

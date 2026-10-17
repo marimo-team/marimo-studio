@@ -29,6 +29,7 @@ from marimo_studio._workspace.locations import ARTIFACT_DIRECTORY
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.project_manifest import CatalogProject
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import ConfigurationError, MarimoStudioError
 from marimo_studio.view_providers import ProjectInspection, ViewProject
 from marimo_studio.view_providers._host import provider_registry
@@ -317,10 +318,12 @@ class SourceChangeProducer:
             excluded_roots = (project_artifacts(project),)
             after = _tree_stamps((*scope_files, *roots), excluded_roots)
             inputs = _input_paths_from_tree(project, input_files, roots, after)
+            with notebook_tools(project.locations.notebook):
+                provenance = provider.provenance()
             input_id = project_revision(
                 project,
                 inspection,
-                provider.provenance(),
+                provenance,
                 input_paths=inputs,
             )
         except Exception as error:

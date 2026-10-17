@@ -20,7 +20,7 @@ from collections.abc import Iterator, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, suppress
 from contextvars import Context, copy_context
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.metadata import EntryPoint, entry_points
 from pathlib import Path
 from threading import Lock, RLock
@@ -34,6 +34,7 @@ from marimo_studio._processes.provider_operation import (
     find_process_cleanup_error,
     raise_process_cleanup,
 )
+from marimo_studio._processes.tools import current_tools
 from marimo_studio.errors import (
     ConfigurationError,
     MarimoStudioError,
@@ -178,7 +179,9 @@ class _RegisteredProvider:
         self._extension_timeout = extension_timeout
         self._starter_lock = Lock()
         self._starters: tuple[ProviderStarter, ...] | None = None
-        self._availability: ProviderAvailability | None = None
+        # Tool versions differ between notebooks whose pixi environments
+        # provide their own tools, so availability is kept per environment.
+        self._availability: dict[str, ProviderAvailability] = {}
         self._conformance = ProviderConformance(
             self.key,
             info,
@@ -233,7 +236,17 @@ class _RegisteredProvider:
                 reason=f"{type(error).__name__}: {error}",
                 action="Repair or remove the provider registration.",
             )
-        self._availability = availability
+        tools = current_tools()
+        if not availability.available and tools.problem is not None:
+            detail = f"The notebook's pixi environment is unavailable: {tools.problem}"
+            availability = replace(
+                availability,
+                reason=(
+                    f"{availability.reason} {detail}" if availability.reason else detail
+                ),
+                action="Fix the pixi error, then build the view again.",
+            )
+        self._availability[tools.identity] = availability
         return availability
 
     def starters(self) -> tuple[ProviderStarter, ...]:
@@ -320,11 +333,13 @@ class _RegisteredProvider:
     def provenance(self) -> ProviderProvenance:
         """Identify the provider and tool versions that build this provider's views.
 
-        The tool version comes from the latest availability check. Builds check
-        availability first, so a tool upgrade reaches the next build.
+        The tool version comes from the latest availability check for the
+        current tool environment. Builds check availability first, so a tool
+        upgrade reaches the next build.
         """
+        availability = self._availability.get(current_tools().identity)
         return self._conformance.provenance(
-            (self._availability or self.availability()).version
+            (availability or self.availability()).version
         )
 
     def _local_provider(self) -> ViewProvider:

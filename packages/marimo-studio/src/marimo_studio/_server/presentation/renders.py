@@ -40,6 +40,7 @@ from marimo_studio._views.renders import (
     render_key,
     run_render,
 )
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import ConfigurationError, MarimoStudioError
 from marimo_studio.errors._internal import ArtifactIntegrityError
 from marimo_studio.view_providers import (
@@ -291,17 +292,18 @@ class RenderStore:
             shutil.copytree(templates[0], destination, copy_function=shutil.copyfile)
 
         try:
-            bundle = run_render(
-                provider_registry().get(artifact.provider.key),
-                copy_template,
-                source,
-                read_sites(snapshot.sites, source),
-                values,
-                outputs,
-                cells,
-                cancellation,
-                pending,
-            )
+            with notebook_tools(presentation.notebook):
+                bundle = run_render(
+                    provider_registry().get(artifact.provider.key),
+                    copy_template,
+                    source,
+                    read_sites(snapshot.sites, source),
+                    values,
+                    outputs,
+                    cells,
+                    cancellation,
+                    pending,
+                )
         except MarimoStudioError as error:
             if cancellation.cancelled:
                 raise RenderUnavailable("The render request ended") from error

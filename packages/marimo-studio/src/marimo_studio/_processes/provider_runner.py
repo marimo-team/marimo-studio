@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from time import monotonic
@@ -15,6 +14,7 @@ from marimo_studio._processes.operation import (
     ProviderRunner,
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessSupervisor
+from marimo_studio._processes.tools import tool_environment
 
 DEFAULT_PROVIDER_COMMAND_TIMEOUT = 120.0
 
@@ -86,7 +86,7 @@ class _SupervisedProviderRunner:
         )
         unregister = self._cancellation.register(supervisor.cancel)
         child_environment = (
-            os.environ.copy() if environment is None else dict(environment)
+            tool_environment() if environment is None else dict(environment)
         )
         started = monotonic()
         try:

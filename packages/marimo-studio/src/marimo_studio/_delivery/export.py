@@ -81,7 +81,10 @@ from marimo_studio._projections.resolution import (
 )
 from marimo_studio._projections.resolved import ResolvedStudio
 from marimo_studio._views.build import publish_view
-from marimo_studio._views.inspection import inspect_view_project_sync
+from marimo_studio._views.inspection import (
+    inspect_view_project_sync,
+    project_provenance,
+)
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.models import (
@@ -687,7 +690,7 @@ def _write_bundle(
                 == project_revision(
                     project,
                     inspection,
-                    provider_registry().get(project.provider).provenance(),
+                    project_provenance(project),
                 )
                 and document == lease.read_text(artifact.document)
                 and notebook_source == _notebook_text(studio.notebook)

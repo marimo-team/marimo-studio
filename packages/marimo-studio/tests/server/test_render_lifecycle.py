@@ -60,6 +60,10 @@ def _card(
     )
 
 
+# Renders read the notebook's pixi metadata, and this notebook has none.
+NOTEBOOK = Path(__file__).with_name("analysis.py")
+
+
 class SlowRenderer(ProviderStub):
     def __init__(self, marker: Path) -> None:
         super().__init__("test-slow/card", "default")
@@ -142,7 +146,9 @@ def _store(
         (candidate("card", renderer, distribution="test-renderer"),)
     )
     monkeypatch.setattr(renders_module, "provider_registry", lambda: registry)
-    presentation = SimpleNamespace(lease_artifact=lambda _view, _revision: _Lease())
+    presentation = SimpleNamespace(
+        notebook=NOTEBOOK, lease_artifact=lambda _view, _revision: _Lease()
+    )
     snapshot = SimpleNamespace(
         view_name="card",
         sites=(),
@@ -631,7 +637,7 @@ def test_renders_of_one_revision_verify_its_template_once(
         leases.append(revision)
         return _Lease()
 
-    presentation = SimpleNamespace(lease_artifact=lease_artifact)
+    presentation = SimpleNamespace(notebook=NOTEBOOK, lease_artifact=lease_artifact)
 
     async def exercise() -> None:
         for total in (1, 2, 3):

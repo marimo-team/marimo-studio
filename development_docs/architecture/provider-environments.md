@@ -87,6 +87,52 @@ A uv re-entry child drops `CONDA_PREFIX`, `CONDA_DEFAULT_ENV`, and the `PIXI_*`
 activation variables. Otherwise uv adopts the interpreter of an enclosing
 activated environment.
 
+## Pixi script environments
+
+A standalone notebook whose PEP 723 metadata has a `[tool.pixi]` table
+describes a pixi script environment. `marimo edit --sandbox=pixi` runs the
+kernel there, while the server, and every Studio build, stays in the invoking
+environment. Conda packages under `[tool.pixi.dependencies]`, such as
+`tectonic`, therefore reach provider commands through Studio:
+
+```text
+CatalogLocations.notebook, NotebookPresentation.notebook, or a starter target
+  -> _workspace.tools.notebook_tools(notebook)
+  -> _composition.create_script_environments()
+  -> _compat.pixi_environment: marimo's `pixi install --script` command and report
+  -> ProcessSupervisor run, cancelled with the provider call
+  -> _processes.tools.ProviderTools context: directories before PATH
+  -> find_tool, probe_tool, the provider runner, provider worker processes
+```
+
+Studio installs the environment only where the user chose it: in a process
+marimo runs with the pixi sandbox backend, and inside a `marimo-studio`
+command, whose group callback enters `command_installs()`. A notebook owned by
+a pixi workspace or uv project keeps that project's environment.
+
+`publish_view`, inspection, server and export renders, starter availability,
+and `_views.inspection.project_provenance(project)` install the context for
+their notebook. One install runs per resolved notebook path behind a lock for
+that path, keyed by the metadata pixi reads: `dependencies`,
+`requires-python`, and `[tool.pixi]`. Studio keeps a successful result until
+that metadata changes or the environment directory disappears. A failure
+leaves provider commands on `PATH`, reaches availability as
+`ProviderTools.problem`, and runs again after a minute. Waiters and the install
+stop when the provider call is cancelled.
+
+A view revision includes provider provenance, which carries the tool version
+from the latest availability check. The registry keeps that check per
+`ProviderTools.identity`, the notebook path and metadata digest, so source,
+revision, inspection, and export paths compute the revision a build records.
+
+pixi names the cached environment after the script path. Studio passes the
+resolved notebook path while marimo passes the path it opened, so a notebook
+reached through a symlinked directory gets a second cached copy.
+
+`view create` prints `--sandbox=pixi` for such a notebook. conda-forge Quarto
+reads its resources from activation variables, and a script environment
+starts unactivated, so Quarto comes from `PATH`.
+
 ## Requirement composition
 
 Provider keys use `distribution/entry-point` form. Studio derives the owning
@@ -201,5 +247,7 @@ current user's filesystem, process, environment, and network authority.
 - Re-enter the CLI and preserve JSON stdout plus JSON Lines stderr.
 - Bound untrusted provider output and reject forged child diagnostics.
 - Cancel and time out a provider worker with descendants, then verify cleanup.
+- Resolve provider tools, starter availability, and view revisions from a
+  notebook's pixi script environment, and keep `PATH` when pixi is missing.
 - Install one external provider package and exercise discovery, creation,
   inspection, build, type checking, and browser mount.

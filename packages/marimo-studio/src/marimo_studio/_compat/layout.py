@@ -339,6 +339,47 @@ _SYMBOLS = {
             "40e8899556119579c6401b1df39549046c4fca9e863da3fb2ba5c3a8ec4c6d7e",
         ),
     ),
+    "pixi-script-tools": (
+        SymbolContract(
+            "marimo._environments.backends",
+            "current_backend",
+            (),
+            "b9116030b518d196b967cf517670d37c6141b30518370b94ea618f896933578b",
+        ),
+        _source_contract(
+            "marimo._environments.pixi",
+            "require_pixi_bin",
+            "de55b9a6050ecbbf7eadfe9915fea8335780a634f6ee0d77842685ebbbff7775",
+        ),
+        SymbolContract(
+            "marimo._environments.pixi",
+            "_sync_command",
+            _parameters(("script", "POSITIONAL_OR_KEYWORD", False)),
+            "6c391b7dd5d6c7a92d0e10bee5ba6ca62acfb0f5eb2b196344301122cac7b086",
+        ),
+        SymbolContract(
+            "marimo._environments.pixi",
+            "_parse_sync_report",
+            _parameters(("stderr", "POSITIONAL_OR_KEYWORD", False)),
+            "3d46a67fa2cd21332fe0cedf625ba6936cc1696e41bcd473f3d390d695d0fa3e",
+        ),
+        _source_contract(
+            "marimo._environments.pixi",
+            "_env_python",
+            "153504ee405a7da5a81f9daac72da81d7dcb4043978fdcf57794603a896a8f05",
+        ),
+        _source_contract(
+            "marimo._environments.pixi",
+            "command_env",
+            "8ad5e137e239e3195e0a738b9ac37adf3f99da038987035dc3cf1629474459bf",
+        ),
+        SymbolContract(
+            "marimo._environments.pixi",
+            "_activation_path_entries",
+            _parameters(("root", "POSITIONAL_OR_KEYWORD", False)),
+            "1b4fd18ecd53762cee8c3056ed2651f399ab4c0f48f569e973ccd8e3a61abe02",
+        ),
+    ),
     "zero-python-state-ledger": (
         SymbolContract(
             "marimo._runtime.runner.hooks",

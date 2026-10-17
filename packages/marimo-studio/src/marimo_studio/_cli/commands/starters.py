@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import click
 
@@ -11,13 +12,23 @@ from marimo_studio._cli.catalog_output import render_starter
 from marimo_studio._cli.diagnostics import json_option
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.output import echo_json
+from marimo_studio._cli.targets import resolve_notebook
 
 
 @click.command("starters", cls=ColoredCommand)
+@click.option(
+    "--target",
+    type=click.Path(path_type=Path),
+    help=(
+        "Report availability for a notebook, project directory, or "
+        "pyproject.toml, with the tools its pixi metadata declares."
+    ),
+)
 @json_option
-def starters(json_output: bool) -> None:
+def starters(target: Path | None, json_output: bool) -> None:
     """List installed starting points for new views."""
-    records = asyncio.run(installed_starters())
+    notebook = resolve_notebook(target) if target is not None else None
+    records = asyncio.run(installed_starters(notebook))
     if json_output:
         echo_json(
             {

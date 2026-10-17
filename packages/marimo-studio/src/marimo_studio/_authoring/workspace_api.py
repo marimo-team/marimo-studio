@@ -162,7 +162,7 @@ class Workspace:
 
     async def starters(self) -> tuple[Starter, ...]:
         """Return installed view starters and their availability."""
-        return await list_starters()
+        return await list_starters(self.notebook)
 
     async def create_view(
         self,

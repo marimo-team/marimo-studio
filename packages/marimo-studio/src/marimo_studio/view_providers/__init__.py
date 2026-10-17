@@ -18,11 +18,11 @@ the parts of the rendered files that notebook results produced. Raise
 ``ProviderError`` for a problem the author can fix in the project.
 
 The helpers cover work that every provider repeats: ``project_files`` and
-``copy_inputs`` list and copy build inputs, ``probe_tool`` checks an external
-tool, ``html_sites`` finds projection sites in HTML, ``parse_accept`` reads an
-output host's ``accept`` attribute, ``render_page`` writes a page that shows
-one render, and ``PackagedStarter`` with ``create_starter`` ships starter files
-as package data.
+``copy_inputs`` list and copy build inputs, ``find_tool`` locates an external
+tool and ``probe_tool`` checks its version, ``html_sites`` finds projection
+sites in HTML, ``parse_accept`` reads an output host's ``accept`` attribute,
+``render_page`` writes a page that shows one render, and ``PackagedStarter``
+with ``create_starter`` ships starter files as package data.
 ``marimo_studio.view_providers.testing.check_provider`` runs a provider
 through the same steps as Studio.
 """
@@ -87,6 +87,7 @@ from marimo_studio.view_providers._starters import (
 )
 from marimo_studio.view_providers._toolkit import (
     copy_inputs,
+    find_tool,
     probe_tool,
     project_files,
     project_path,
@@ -144,6 +145,7 @@ __all__ = [
     "ViewProvider",
     "copy_inputs",
     "create_starter",
+    "find_tool",
     "html_sites",
     "parse_accept",
     "probe_tool",

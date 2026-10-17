@@ -349,7 +349,8 @@ pixi run marimo edit analysis.py --no-sandbox --watch
 
 conda-forge Quarto finds Pandoc and its resources through environment
 activation. Start marimo with `pixi run` or inside `pixi shell`, or `doctor` and
-`starters` report Quarto as unavailable. The
+`starters` report Quarto as unavailable. A notebook's pixi script environment
+starts unactivated, so Studio takes Quarto from `PATH` for every notebook. The
 [Quarto installer](https://quarto.org/docs/get-started/) works as well.
 
 conda-forge Quarto pins its own Deno. In a workspace that also adds
@@ -639,16 +640,24 @@ warnings above the PDF.
 LaTeX build driver, compiles the project outside Studio, where every read
 typesets its fallback.
 
-The provider runs the `tectonic` command on `PATH`. Install Tectonic 0.15 or
-newer with [pixi](https://pixi.prefix.dev/):
+The provider runs Tectonic 0.15 or newer. A standalone notebook can declare it
+for [pixi](https://pixi.prefix.dev/) in its `# /// script` metadata:
 
 ```console
-pixi global install tectonic
+pixi add --script analysis.py tectonic
 ```
 
-In a pixi workspace, `pixi add tectonic` keeps Tectonic beside Python and
-Studio. The [Tectonic installers](https://tectonic-typesetting.github.io/)
-work as well.
+Studio then runs the `tectonic` in the notebook's pixi script environment,
+before any on `PATH`, when marimo runs the notebook with `--sandbox=pixi` and
+in Studio commands that target the notebook. Studio installs that environment
+with `pixi install --script`, the command marimo runs before it starts the
+kernel, and installs it again after the notebook's dependencies change. When
+pixi cannot install it, availability names pixi's error.
+
+`pixi global install tectonic` puts Tectonic on `PATH` for every notebook. In
+a pixi workspace, `pixi add tectonic` keeps Tectonic beside Python and Studio.
+The [Tectonic installers](https://tectonic-typesetting.github.io/) work as
+well.
 
 ### Options
 

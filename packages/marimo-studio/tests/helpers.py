@@ -168,7 +168,12 @@ def write_marimohub_context(
 
 def load_standalone_project(root: Path) -> CatalogProject:
     """Load a view project outside any catalog with its state inside it."""
-    return load_view_project(root, locations=CatalogLocations.inside_views(root.parent))
+    return load_view_project(
+        root,
+        locations=CatalogLocations.inside_views(
+            root.parent / "notebook.py", root.parent
+        ),
+    )
 
 
 def catalog_project(project: ViewProject) -> CatalogProject:
@@ -179,5 +184,7 @@ def catalog_project(project: ViewProject) -> CatalogProject:
         project.manifest,
         project.provider,
         project.options,
-        locations=CatalogLocations.inside_views(project.root.parent),
+        locations=CatalogLocations.inside_views(
+            project.root.parent / "notebook.py", project.root.parent
+        ),
     )

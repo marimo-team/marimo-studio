@@ -69,7 +69,7 @@ Inspect its view provider and setup action:
 
 ```console
 uvx marimo-studio doctor marimo-studio/react
-uvx marimo-studio starters
+uvx marimo-studio starters --target analysis.py
 ```
 
 React, Reveal.js, Svelte, and Notebook Kit starters need the Deno extra:
@@ -83,10 +83,17 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
 The Quarto starter needs `quarto`, from `pixi global install quarto`. When
 `starters` reports
 `Studio found Quarto in a pixi or conda environment that is not activated.`,
-start marimo through `pixi run` or inside `pixi shell`. The LaTeX starter needs
-`tectonic`, from `pixi global install tectonic`. Restart marimo after either
-install. [Tectonic](https://tectonic-typesetting.github.io/) is a
-self-contained TeX engine.
+start marimo through `pixi run` or inside `pixi shell`. Restart marimo after
+the install.
+
+The LaTeX starter needs [Tectonic](https://tectonic-typesetting.github.io/), a
+self-contained TeX engine. Declare it in the notebook's
+[pixi](https://pixi.prefix.dev/) metadata as [LaTeX](formats.md#latex) shows,
+and open the notebook with `--sandbox=pixi`. When the starter reports
+`The notebook's pixi environment is unavailable`, the rest of the reason is
+pixi's error. Fix it, and Studio installs the environment again within a
+minute. `pixi global install tectonic` works for every notebook after a marimo
+restart.
 
 Keep a third-party provider distribution in the notebook or Python project
 dependencies, because Studio derives the provider requirement from each saved

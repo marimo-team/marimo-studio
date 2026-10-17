@@ -137,7 +137,7 @@ def test_starter_human_output_reports_unavailable_recovery_once(
         ),
     )
 
-    async def records():
+    async def records(_notebook):
         return (starter,)
 
     monkeypatch.setattr(
@@ -177,7 +177,7 @@ def test_starter_list_separates_human_records(
         provider="example/second",
     )
 
-    async def records():
+    async def records(_notebook):
         return (first, second)
 
     monkeypatch.setattr(

@@ -26,7 +26,10 @@ from marimo_studio._filesystem.files import FileTree
 from marimo_studio._filesystem.settle import while_unchanged
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._views.build import publish_view
-from marimo_studio._views.inspection import inspect_view_project_sync
+from marimo_studio._views.inspection import (
+    inspect_view_project_sync,
+    project_provenance,
+)
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import (
     ConfigurationError,
@@ -35,7 +38,6 @@ from marimo_studio.errors import (
     ViewNotFoundError,
 )
 from marimo_studio.view_providers import BuildProfile, ProjectInspection
-from marimo_studio.view_providers._host import provider_registry
 
 
 def _close_leases(
@@ -143,12 +145,11 @@ def capture_source_snapshot(
     projects: dict[str, PreparedViewProject] = {}
     for name in selected:
         project = studio.views[name]
-        provider = provider_registry().get(project.provider)
         inspection = inspect_view_project_sync(project)
         project_snapshot = project_revision_snapshot(
             project,
             inspection,
-            provider.provenance(),
+            project_provenance(project),
         )
         identity = (
             name,

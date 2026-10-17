@@ -84,9 +84,9 @@ async def inspect_notebook(
     )
 
 
-async def starters() -> tuple[Starter, ...]:
-    """Return installed view starters and their availability."""
-    return await run_provider_operation(installed_starters)
+async def starters(notebook: Path | None = None) -> tuple[Starter, ...]:
+    """Return installed view starters and their availability for ``notebook``."""
+    return await run_provider_operation(partial(installed_starters, notebook))
 
 
 async def create_view(
