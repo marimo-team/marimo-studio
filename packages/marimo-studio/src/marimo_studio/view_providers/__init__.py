@@ -13,8 +13,9 @@ projection site its ID and adds the site attribute to the build snapshot before
 it calls ``build()``. A ``RenderProvider`` also declares renders, writes their
 template beneath the template root, and returns files from ``render()``
 whenever the notebook results a render reads change. A page shows a render
-with ``<marimo-output render="...">``. Raise ``ProviderError`` for a problem
-the author can fix in the project.
+with ``<marimo-output render="...">``, and ``RenderResult.regions`` locates
+the parts of the rendered files that notebook results produced. Raise
+``ProviderError`` for a problem the author can fix in the project.
 
 The helpers cover work that every provider repeats: ``project_files`` and
 ``copy_inputs`` list and copy build inputs, ``probe_tool`` checks an external
@@ -57,11 +58,13 @@ from marimo_studio.view_providers._records import (
     ProviderError,
     ProviderInfo,
     ProviderStarter,
+    Rect,
     Render,
     RenderCell,
     RenderFile,
     RenderOutput,
     RenderProvider,
+    RenderRegion,
     RenderRequest,
     RenderResult,
     RenderValue,
@@ -118,11 +121,13 @@ __all__ = [
     "ProviderInfo",
     "ProviderRunner",
     "ProviderStarter",
+    "Rect",
     "Render",
     "RenderCell",
     "RenderFile",
     "RenderOutput",
     "RenderProvider",
+    "RenderRegion",
     "RenderRequest",
     "RenderResult",
     "RenderValue",

@@ -1,6 +1,10 @@
+import type { RenderRegion } from "@marimo-studio/protocol/render";
 import type { ProjectDiagnostic } from "@marimo-studio/protocol/view-project";
 
+import type { RenderSurface } from "./regions.ts";
+
 import { openPdf } from "./pdf.ts";
+import { REGION_SLOT } from "./regions.ts";
 
 /** One file of a render's bundle, with the URL the page fetches it from. */
 export interface RenderFileRecord {
@@ -12,7 +16,8 @@ export interface RenderFileRecord {
 
 /**
  * The bundle a render host shows. `main` and `preview` name files in
- * `files`, and `absent` lists the targets read without a current result.
+ * `files`, `absent` lists the targets read without a current result, and
+ * `regions` locates the parts of the files that notebook results produced.
  */
 export interface RenderRecord {
   readonly render: string;
@@ -22,10 +27,12 @@ export interface RenderRecord {
   readonly files: readonly RenderFileRecord[];
   readonly warnings: readonly ProjectDiagnostic[];
   readonly absent: readonly string[];
+  readonly regions: readonly RenderRegion[];
 }
 
 interface Presented {
   readonly element: HTMLElement;
+  readonly surfaces: readonly RenderSurface[];
   resize(width: number): void;
   destroy(): void;
 }
@@ -37,6 +44,7 @@ const DESK = "color-mix(in srgb, CanvasText 7%, Canvas)";
 const STYLE = `
 :host { display: block; }
 :host([hidden]) { display: none; }
+.regions { position: relative; z-index: 1; height: 0; }
 .toolbar { display: flex; gap: 12px; align-items: center; justify-content: flex-end;
   min-height: 1.4em; padding: 10px ${PAGE_GUTTER}px; font: 12px/1.4 system-ui, sans-serif;
   color: color-mix(in srgb, CanvasText 68%, transparent); }
@@ -51,6 +59,7 @@ const STYLE = `
 .problems p { margin: 0; }
 .problems .hint, .problems .source { color: color-mix(in srgb, CanvasText 66%, transparent); }
 .content > :is(img, video) { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.content[hidden] { display: none; }
 .content > audio { display: block; width: 100%; }
 .content > iframe { display: block; width: 100%; min-height: 480px; border: 0; }
 .content > .note { margin: 0; padding: 0 ${PAGE_GUTTER}px 12px; font: 13px/1.5 system-ui, sans-serif; }
@@ -100,6 +109,11 @@ const presentPdf = async (
   element.append(...pages.pages);
   return {
     element,
+    surfaces: pages.pages.map((page, index) => ({
+      element: page,
+      file: file.path,
+      page: index + 1,
+    })),
     resize: (layout) => pages.resize(layout),
     destroy: () => pages.destroy(),
   };
@@ -111,7 +125,12 @@ const presentImage = async (file: RenderFileRecord, alt: string): Promise<Presen
   image.src = file.url;
   // Decoding first keeps the previous bundle on screen until this one paints.
   await image.decode();
-  return { element: image, resize: () => {}, destroy: () => {} };
+  return {
+    element: image,
+    surfaces: [{ element: image, file: file.path, page: null }],
+    resize: () => {},
+    destroy: () => {},
+  };
 };
 
 const presentMedia = (file: RenderFileRecord, poster: RenderFileRecord | undefined): Presented => {
@@ -126,6 +145,10 @@ const presentMedia = (file: RenderFileRecord, poster: RenderFileRecord | undefin
   }
   return {
     element: media,
+    surfaces:
+      media instanceof HTMLVideoElement
+        ? [{ element: media, file: file.path, page: null, poster: poster?.path }]
+        : [],
     resize: () => {},
     destroy: () => {
       media.removeAttribute("src");
@@ -141,7 +164,7 @@ const presentHtml = (file: RenderFileRecord, title: string): Presented => {
   frame.setAttribute("sandbox", "allow-scripts");
   frame.title = title;
   frame.src = file.url;
-  return { element: frame, resize: () => {}, destroy: () => {} };
+  return { element: frame, surfaces: [], resize: () => {}, destroy: () => {} };
 };
 
 const presentFile = (
@@ -167,7 +190,7 @@ const presentNote = (main: RenderFileRecord): Presented => {
   const note = document.createElement("p");
   note.className = "note";
   note.textContent = `${fileName(main.path)} is ready to download.`;
-  return { element: note, resize: () => {}, destroy: () => {} };
+  return { element: note, surfaces: [], resize: () => {}, destroy: () => {} };
 };
 
 /**
@@ -201,9 +224,11 @@ const present = async (
 /**
  * The toolbar, problems list, and content of one render host's shadow root.
  *
- * The stock presentation is the fallback content of the root's slot. Markup a
- * page places inside the host replaces it, and the page presents the files
- * from the host's render record itself.
+ * Markup a page places inside the host replaces the stock presentation, and
+ * the page presents the files from the host's render record itself. The
+ * stock content stays outside the slot, so a capture of the host draws it.
+ * Region layers from the host's light DOM render above both through the
+ * regions slot.
  */
 export class RenderView {
   private readonly status = document.createElement("span");
@@ -211,13 +236,15 @@ export class RenderView {
   private readonly problems = document.createElement("div");
   private readonly slot = document.createElement("slot");
   private readonly content = document.createElement("div");
+  private readonly regions = document.createElement("div");
   private shown?: Presented;
   private shownBundle?: string;
   private requested?: RenderRecord;
   // Advances with each show, so a slow presentation never replaces a newer one.
   private showing = 0;
 
-  constructor(root: ShadowRoot) {
+  /** `presented` runs after markup added to or removed from the host swaps the presentation. */
+  constructor(root: ShadowRoot, presented: () => void) {
     const style = document.createElement("style");
     style.textContent = STYLE;
     const toolbar = document.createElement("div");
@@ -233,14 +260,18 @@ export class RenderView {
     this.problems.setAttribute("role", "alert");
     this.content.className = "content";
     this.content.setAttribute("part", "content");
-    this.slot.append(this.content);
+    this.regions.className = "regions";
+    const regionSlot = document.createElement("slot");
+    regionSlot.name = REGION_SLOT;
+    this.regions.append(regionSlot);
     // Markup added to or removed from the host switches the presentation.
     this.slot.addEventListener("slotchange", () => {
+      this.content.hidden = this.pagePresents();
       if (this.requested) {
-        this.show(this.requested, new AbortController().signal).catch(() => undefined);
+        this.show(this.requested, new AbortController().signal).then(presented, () => undefined);
       }
     });
-    root.replaceChildren(style, toolbar, this.problems, this.slot);
+    root.replaceChildren(style, toolbar, this.problems, this.regions, this.content, this.slot);
   }
 
   setStatus(text: string): void {
@@ -255,7 +286,7 @@ export class RenderView {
     const showing = ++this.showing;
     this.requested = record;
     this.link(record);
-    if (this.slot.assignedElements().length > 0) {
+    if (this.pagePresents()) {
       this.clear();
       return;
     }
@@ -272,6 +303,13 @@ export class RenderView {
     this.shown = shown;
     this.shownBundle = record.bundle;
     this.content.replaceChildren(shown.element);
+  }
+
+  /** Return whether the host holds markup that presents the files, which may be text. */
+  private pagePresents(): boolean {
+    return this.slot
+      .assignedNodes()
+      .some((node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim());
   }
 
   private link(record: RenderRecord): void {
@@ -314,6 +352,16 @@ export class RenderView {
 
   observedElement(): HTMLElement {
     return this.content;
+  }
+
+  /** The element region layers are placed against, at the top of the host. */
+  regionAnchor(): HTMLElement {
+    return this.regions;
+  }
+
+  /** The surfaces of the stock presentation, or none while the page presents. */
+  surfaces(): readonly RenderSurface[] {
+    return this.shown?.surfaces ?? [];
   }
 
   /** Remove the presentation and forget the record, so markup changes show nothing. */

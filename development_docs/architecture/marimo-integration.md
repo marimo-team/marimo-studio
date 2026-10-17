@@ -531,6 +531,21 @@ Descriptions use `data-marimo-lens-label`, `data-marimo-lens-detail`, and
 projection's authored source location. Authored descriptions take precedence and
 remain owned by the author through projection updates and teardown.
 
+Render hosts publish their bundle's regions through the same contract.
+`RenderRegions` appends one layer per surface to the host's light DOM, because
+Lens accepts targets in the document tree only, and the shadow root shows the
+layers above the presentation through the `marimo-regions` slot. A layer
+follows the picture box of its surface: a stock PDF page, image, or video, or
+an `img`, `video`, or `[data-marimo-render-file]` element in page markup whose
+source is a bundle file. Each region is a `data-marimo-lens-target` box whose
+hidden children carry `data-marimo-lens-cell-id` and the region's narrowed
+`data-marimo-lens-selector`, resolved through the render's read sites with the
+ordinary projection resolution. The host names its own sources with
+`data-marimo-lens-inputs`, which Lens takes as the complete input set, so the
+whole file traces to every read without adding up the regions' sources, and
+sets `data-marimo-lens-context` so a region's snapshot crops the host. Region
+boxes keep `pointer-events: none`, and Lens enables them while it is armed.
+
 Custom rendered regions use `data-marimo-lens-inputs` to reference existing
 source hosts. `data-marimo-lens-context` marks a preferred image container. Lens
 captures descriptions at selection creation and keeps them through History and

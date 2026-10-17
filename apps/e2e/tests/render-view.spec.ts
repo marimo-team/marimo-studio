@@ -110,6 +110,42 @@ test("embeds a notebook figure in a Typst document and renders it again when it 
   await expect(viewer).toHaveAttribute("data-state", "ready");
 });
 
+test("traces a figure inside a Typst PDF to the cell that computed it", async ({
+  page,
+  studioCli,
+}) => {
+  test.setTimeout(180_000);
+  await createChartReport(studioCli);
+
+  await page.goto("/studio/report/?file=notebook.py");
+  const preview = await waitForPreview(page);
+  const viewer = preview.locator('marimo-output[render="main.typ"]');
+  await expect(viewer).toHaveAttribute("data-state", "ready");
+  const region = viewer.locator("[data-marimo-studio-region][data-marimo-lens-target]");
+  await expect(region).toHaveCount(1);
+  await expect(region).toHaveAttribute("data-marimo-lens-label", "chart");
+  await expect(region).toHaveAttribute("data-marimo-lens-detail", /main\.pdf, page 1$/);
+  expect(JSON.parse((await region.getAttribute("data-marimo-lens-render-source")) ?? "")).toEqual({
+    path: "main.typ",
+    line: 3,
+    column: 2,
+  });
+  const source = region.locator(":scope > [hidden][data-marimo-lens-cell-id]");
+  await expect(source).toHaveAttribute("data-marimo-lens-selector", "chart");
+  // The host traces the whole PDF to the reads it names, apart from its regions.
+  const inputs = (await viewer.getAttribute("data-marimo-lens-inputs"))?.split(" ") ?? [];
+  expect(inputs).toHaveLength(1);
+  await expect(preview.locator(`#${inputs[0]}`)).toHaveAttribute(
+    "data-marimo-lens-cell-id",
+    (await source.getAttribute("data-marimo-lens-cell-id")) ?? "",
+  );
+  // The figure is 10cm wide on a 12cm page.
+  const page1 = await viewer.locator(".page").first().boundingBox();
+  const box = await region.boundingBox();
+  expect(box!.width / page1!.width).toBeCloseTo(10 / 12, 2);
+  expect(box!.x).toBeGreaterThan(page1!.x);
+});
+
 test("embeds a notebook figure in a Typst document in the browser runtime", async ({
   page,
   studioCli,

@@ -1,9 +1,10 @@
-import type { ProjectionRequest } from "@marimo-studio/protocol/projections";
+import type { ArtifactSite, ProjectionRequest } from "@marimo-studio/protocol/projections";
 import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import { isRenderSource } from "@marimo-studio/protocol/projections";
 import {
+  indexedBundle,
   renderIndexSchema,
   renderBundleSchema,
   type RenderIndex,
@@ -23,6 +24,7 @@ import type { RenderReads } from "./inputs.ts";
 import { errorMessage } from "../errors.ts";
 import { responseJsonOrNull } from "../json.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
+import { resolveProjection } from "../projections/resolution.ts";
 import { readiness } from "../readiness.ts";
 import {
   getRuntimeConfig,
@@ -35,6 +37,7 @@ import {
   RenderInputError,
   subscribeRenderInputs,
 } from "./inputs.ts";
+import { markupSurfaces, RenderRegions, type ReadProducer } from "./regions.ts";
 import { RenderView, type RenderRecord } from "./view.ts";
 
 export type { RenderFileRecord, RenderRecord } from "./view.ts";
@@ -110,6 +113,57 @@ const renderReads = (config: RuntimeConfig, render: string): RenderReads => {
   };
 };
 
+/** Return every target `render` reads. */
+const renderTargets = (config: RuntimeConfig, render: string): string[] =>
+  config.sites.flatMap((site) =>
+    site.render === render && site.targets?.[0] !== undefined ? [site.targets[0]] : [],
+  );
+
+/**
+ * Return the cell that produced `read`, a target of `render` or a narrower
+ * selector of a value or output target, such as `joint[2]` for `joint`. The
+ * read resolves through the render's read site, as the render's inputs do.
+ */
+const readProducer = (
+  config: RuntimeConfig,
+  render: string,
+  read: string,
+): ReadProducer | undefined => {
+  let site: ArtifactSite | undefined;
+  for (const candidate of config.sites) {
+    const target = candidate.targets?.[0];
+    if (candidate.render !== render || target === undefined) {
+      continue;
+    }
+    const narrows =
+      read === target ||
+      (candidate.kind !== "cell" &&
+        (read.startsWith(`${target}.`) || read.startsWith(`${target}[`)));
+    if (narrows && target.length > (site?.targets?.[0]?.length ?? -1)) {
+      site = candidate;
+    }
+  }
+  const target = site?.targets?.[0];
+  if (!site || target === undefined) {
+    return undefined;
+  }
+  const resolution = resolveProjection(config, {
+    siteId: site.id,
+    instanceId: `render:${render}:${site.id}`,
+    target,
+    kind: site.kind,
+  });
+  const cellId = resolution.ok ? resolution.value.runtimeCellId : undefined;
+  if (!resolution.ok || cellId === undefined) {
+    return undefined;
+  }
+  return {
+    cellId,
+    selector: site.kind === "cell" ? null : read,
+    label: resolution.value.producerLabel,
+  };
+};
+
 const fileUrl = (supportUrl: string, bundle: string, path: string): string =>
   appendUrlPath(
     supportUrl,
@@ -134,6 +188,7 @@ const renderRecord = (result: RenderBundle, supportUrl: string): RenderRecord =>
     ),
     warnings: Object.freeze([...result.warnings]),
     absent: Object.freeze([...result.absent]),
+    regions: Object.freeze([...result.regions]),
   });
 
 /** Load a static export's `renders/index.json` once per revision. */
@@ -184,6 +239,7 @@ const currentState = (index: RenderIndex): string | undefined => {
  */
 export class RenderHost {
   private readonly view: RenderView;
+  private readonly regions: RenderRegions;
   private record?: RenderRecord;
   private request?: AbortController;
   // Set once a change stops a request, until a later request completes.
@@ -202,7 +258,8 @@ export class RenderHost {
     readonly source: string,
     root: ShadowRoot,
   ) {
-    this.view = new RenderView(root);
+    this.view = new RenderView(root, () => this.showRegions());
+    this.regions = new RenderRegions(host, this.view.regionAnchor());
   }
 
   /** The last bundle this host showed. */
@@ -231,6 +288,9 @@ export class RenderHost {
       const config = getRuntimeConfig();
       if (config.revision !== this.revision || config.presentationSessionId !== this.sessionId) {
         this.schedule(true);
+      } else {
+        // Runtime cell IDs can change within one revision, as after a restart.
+        this.showRegions();
       }
     };
     const connectionChanged = (
@@ -251,11 +311,25 @@ export class RenderHost {
       globalThis.addEventListener("resize", resized);
       stopResize = () => globalThis.removeEventListener("resize", resized);
     }
+    // A page that presents the files itself points its images and videos at
+    // them after each update, and the regions follow.
+    const markup = new MutationObserver((records) => {
+      if (records.some((record) => !this.regions.owns(record))) {
+        this.showRegions();
+      }
+    });
+    markup.observe(this.host, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["src", "poster", "data-marimo-render-file", "data-marimo-render-page"],
+    });
     this.release = [
       subscribeRuntimeConfig(configChanged),
       subscribeRenderInputs(() => this.schedule()),
       readiness.subscribe(connectionChanged),
       stopResize,
+      () => markup.disconnect(),
     ];
     this.schedule();
   }
@@ -274,6 +348,7 @@ export class RenderHost {
     this.request?.abort();
     this.request = undefined;
     this.superseded = false;
+    this.regions.clear();
     this.view.destroy();
     this.record = undefined;
     this.failing = false;
@@ -411,7 +486,10 @@ export class RenderHost {
       this.begin();
       const index = await renderIndex(config);
       const state = index === null ? undefined : currentState(index);
-      const result = state === undefined ? undefined : index?.states[state]?.[this.source];
+      const result =
+        index === null || state === undefined
+          ? undefined
+          : indexedBundle(index, state, this.source);
       return result
         ? { kind: "result", result }
         : { kind: "failure", diagnostics: [unavailable()] };
@@ -505,6 +583,29 @@ export class RenderHost {
     this.setState(this.record ? "stale" : "loading");
   }
 
+  /** Show the current bundle's regions over the surfaces that present it. */
+  private showRegions(): void {
+    const record = this.record;
+    if (!record || !hasRuntimeConfig()) {
+      this.regions.clear();
+      return;
+    }
+    const config = getRuntimeConfig();
+    const stock = this.view.surfaces();
+    const producers = new Map<string, ReadProducer | undefined>();
+    this.regions.show(
+      record,
+      stock.length > 0 ? stock : markupSurfaces(this.host, record),
+      renderTargets(config, this.source),
+      (read) => {
+        if (!producers.has(read)) {
+          producers.set(read, readProducer(config, this.source, read));
+        }
+        return producers.get(read);
+      },
+    );
+  }
+
   private succeed(record: RenderRecord): void {
     const previous = this.record;
     this.record = record;
@@ -524,6 +625,7 @@ export class RenderHost {
         }),
       );
     }
+    this.showRegions();
   }
 
   /** Report `diagnostics`, keeping the last bundle on screen. */

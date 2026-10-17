@@ -32,20 +32,16 @@ test("a static export shows a render that reads no notebook results", async () =
     if (url === `${config.supportUrl}/renders/index.json`) {
       return new Response(
         JSON.stringify({
-          schema: 1,
-          states: {
-            baseline: {
-              "card.svg": {
-                render: "card.svg",
-                bundle,
-                files: [{ path: "card.svg", mediaType: "image/svg+xml", sha256: bundle, size: 9 }],
-                main: "card.svg",
-                preview: null,
-                warnings: [],
-                absent: [],
-              },
+          schema: 2,
+          bundles: {
+            [bundle]: {
+              files: [{ path: "card.svg", mediaType: "image/svg+xml", sha256: bundle, size: 9 }],
+              main: "card.svg",
+              preview: null,
+              regions: [],
             },
           },
+          states: { baseline: { "card.svg": { bundle, warnings: [], absent: [] } } },
         }),
       );
     }

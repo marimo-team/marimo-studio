@@ -73,6 +73,8 @@ on every site.
 | All files returned by one render          |   1 GiB | `render-too-large`         |
 | Provider commands during one render       |   300 s | `render-failed`            |
 | Renders across one static export's states |     256 | `render-states-exceeded`   |
+| Regions kept from one render              |   4,096 | `render-regions-limited`   |
+| Reads kept by one region                  |      64 | Later reads left out       |
 
 ## Active presentation projections
 

@@ -261,6 +261,103 @@ def test_render_places_a_matplotlib_figure_as_pdf(tmp_path: Path) -> None:
     assert output.joinpath("main.pdf").read_bytes().startswith(b"%PDF-")
 
 
+def test_render_locates_outputs_cells_and_regions_on_their_pages(
+    tmp_path: Path,
+) -> None:
+    project = _project(
+        tmp_path,
+        '#import "marimo.typ": marimo_cell, marimo_output, marimo_region, '
+        "marimo_value\n"
+        "#set page(width: 20cm, height: 10cm, margin: 1cm)\n"
+        '#figure(marimo_output("chart", width: 8cm), caption: [Chart])\n'
+        "#pagebreak()\n"
+        '#marimo_region("report.rooms", label: "Rooms")[\n'
+        '  Rooms: #marimo_value("report.rooms")\n'
+        "]\n"
+        '#let summary = "summary"\n'
+        "#marimo_cell(summary, width: 4cm)\n",
+    )
+    media = Representation("image/svg+xml", SVG_CHART)
+
+    _output, result = _render(
+        project,
+        {"report.rooms": 12},
+        outputs={"chart": media},
+        cells={"summary": media},
+    )
+
+    assert result.diagnostics == ()
+    regions = {region.reads[0]: region for region in result.regions}
+    chart, rooms = regions["chart"], regions["report.rooms"]
+    summary = regions["summary"]
+    assert (chart.file, chart.page, chart.label) == (PurePosixPath("main.pdf"), 1, None)
+    # 8cm wide and 4cm tall, centered on a 20cm by 10cm page below a 1cm margin.
+    assert chart.rect.width == pytest.approx(0.4)
+    assert chart.rect.height == pytest.approx(0.4)
+    assert chart.rect.x == pytest.approx(0.3)
+    assert chart.rect.y == pytest.approx(0.1)
+    assert (rooms.page, rooms.label) == (2, "Rooms")
+    assert rooms.rect.x == pytest.approx(0.05)
+    assert summary.page == 2
+    assert summary.rect.width == pytest.approx(0.2)
+
+
+def test_render_locates_outputs_on_pages_that_grow_with_their_content(
+    tmp_path: Path,
+) -> None:
+    project = _project(
+        tmp_path,
+        '#import "marimo.typ": marimo_output\n'
+        "#set page(width: 12cm, height: auto, margin: 1cm)\n"
+        '#marimo_output("chart", width: 10cm)\n',
+    )
+    media = Representation("image/svg+xml", SVG_CHART)
+
+    _output, result = _render(project, {}, outputs={"chart": media})
+
+    (chart,) = result.regions
+    # The 10cm by 5cm chart fills the page between its 1cm margins.
+    assert chart.page == 1
+    assert chart.rect.x == pytest.approx(1 / 12)
+    assert chart.rect.width == pytest.approx(10 / 12)
+    assert chart.rect.y == pytest.approx(1 / 7)
+    assert chart.rect.height == pytest.approx(5 / 7)
+
+
+def test_render_locates_an_output_wider_than_its_container(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        '#import "marimo.typ": marimo_output\n'
+        "#set page(width: 12cm, height: 8cm, margin: 2cm)\n"
+        '#marimo_output("chart", width: 10cm)\n',
+    )
+    media = Representation("image/svg+xml", SVG_CHART)
+
+    _output, result = _render(project, {}, outputs={"chart": media})
+
+    (chart,) = result.regions
+    # The chart keeps its 10cm width past the 8cm between the margins.
+    assert chart.rect.x == pytest.approx(2 / 12)
+    assert chart.rect.width == pytest.approx(10 / 12)
+
+
+def test_regions_keep_inline_text_in_its_paragraph(tmp_path: Path) -> None:
+    project = _project(
+        tmp_path,
+        '#import "marimo.typ": marimo_region, marimo_value\n'
+        "#set page(width: 12cm, height: 8cm, margin: 1cm)\n"
+        'Rooms #marimo_region("report.rooms")[#marimo_value("report.rooms")] '
+        'at #marimo_region("report.occupancy")[#marimo_value("report.occupancy")].\n',
+    )
+
+    _output, result = _render(project, {"report.rooms": 12, "report.occupancy": 0.71})
+
+    rooms, occupancy = sorted(result.regions, key=lambda region: region.rect.x)
+    assert rooms.rect.y == pytest.approx(occupancy.rect.y)
+    assert rooms.rect.x + rooms.rect.width < occupancy.rect.x
+    assert rooms.rect.height < 0.1
+
+
 def test_outputs_and_none_values_place_their_default(tmp_path: Path) -> None:
     project = _project(
         tmp_path,
@@ -392,7 +489,8 @@ class _PackageWarningCompiler:
         timeout: float = 120.0,
         environment: Mapping[str, str] | None = None,
     ) -> ProviderCommandResult:
-        Path(command[-1]).write_bytes(b"%PDF-1.7\n")
+        # python -I _compile.py ROOT ENTRY INPUTS OUTPUT [--regions]
+        Path(command[6]).write_bytes(b"%PDF-1.7\n")
         warning = {
             "message": "`cetz.draw.content` is deprecated",
             "hints": [],

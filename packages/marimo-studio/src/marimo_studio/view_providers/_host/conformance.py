@@ -37,11 +37,13 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     ProviderError,
     ProviderInfo,
+    Rect,
     Render,
     RenderCell,
     RenderFile,
     RenderOutput,
     RenderProvider,
+    RenderRegion,
     RenderRequest,
     RenderResult,
     RenderValue,
@@ -71,6 +73,12 @@ from marimo_studio.view_providers._host._shapes import (
     require_unique,
 )
 from marimo_studio.view_providers._host.records import ProviderProvenance
+from marimo_studio.view_providers._regions import (
+    MAX_REGION_LABEL,
+    MAX_REGION_READ,
+    MAX_REGION_READS,
+    MAX_RENDER_REGIONS,
+)
 from marimo_studio.view_providers._targets import (
     MAX_CELL_TARGETS,
     MAX_RENDER_FILES,
@@ -140,6 +148,17 @@ _SOURCE_LANGUAGES = {
     ".yaml": "yaml",
     ".yml": "yaml",
 }
+
+
+def _label(label: str | None) -> str | None:
+    """Return a label at most ``MAX_REGION_LABEL`` UTF-16 code units long."""
+    text = None if label is None else label.strip()
+    if not text:
+        return None
+    encoded = text.encode("utf-16-le")
+    if len(encoded) <= 2 * MAX_REGION_LABEL:
+        return text
+    return encoded[: 2 * (MAX_REGION_LABEL - 1)].decode("utf-16-le", "ignore") + "…"
 
 
 def _located(
@@ -848,7 +867,92 @@ class ProviderConformance:
                 )
         if preview == main:
             raise conformance_error(self.key, "names the main file as its own preview")
-        return RenderResult(tuple(files), main, preview, diagnostics)
+        if not isinstance(value.regions, tuple):
+            raise conformance_error(self.key, "requires render regions to be a tuple")
+        regions = tuple(
+            self._region(item) for item in value.regions[:MAX_RENDER_REGIONS]
+        )
+        if len(value.regions) > MAX_RENDER_REGIONS:
+            # Regions are evidence beside the files, so a render with more
+            # keeps the first ones and still publishes.
+            diagnostics = (
+                *diagnostics,
+                ProjectDiagnostic(
+                    "render-regions-limited",
+                    "warning",
+                    f"Studio kept the first {MAX_RENDER_REGIONS:,} of "
+                    f"{len(value.regions):,} regions of the render.",
+                    "Mark fewer parts of the rendered files, such as the rows a "
+                    "reader is likely to select.",
+                ),
+            )
+        return RenderResult(tuple(files), main, preview, diagnostics, regions)
+
+    def _region(self, value: object) -> RenderRegion:
+        """Check the shape and size of one region.
+
+        Studio checks what a region means on admission. A long label is cut
+        short and only the first reads are kept, so a provider's regions stay
+        within the size of one response.
+        """
+        if not isinstance(value, RenderRegion) or not isinstance(value.rect, Rect):
+            raise conformance_error(
+                self.key, "requires RenderRegion records with a Rect"
+            )
+
+        def number(item: object, field: str) -> float:
+            if type(item) in (int, float):
+                try:
+                    return float(cast("float", item))
+                except OverflowError:
+                    pass
+            raise conformance_error(self.key, f"requires region {field} to be a number")
+
+        rect = Rect(
+            *(
+                number(getattr(value.rect, field), f"rect {field}")
+                for field in ("x", "y", "width", "height")
+            )
+        )
+        if value.page is not None and type(value.page) is not int:
+            raise conformance_error(self.key, "requires region page to be an integer")
+        if not isinstance(value.reads, tuple) or not all(
+            isinstance(read, str) for read in value.reads
+        ):
+            raise conformance_error(self.key, "requires region reads to be strings")
+        if value.label is not None and not isinstance(value.label, str):
+            raise conformance_error(self.key, "requires region label to be a string")
+        source = value.source
+        if source is not None and (
+            not isinstance(source, SourceLocation)
+            or type(source.line) is not int
+            or type(source.column) is not int
+            or source.line < 1
+            or source.column < 1
+        ):
+            raise conformance_error(
+                self.key, "requires region source to be a SourceLocation"
+            )
+        reads = [
+            read.strip()
+            for read in value.reads
+            if read.strip() and len(read.encode("utf-8")) <= MAX_REGION_READ
+        ]
+        return replace(
+            value,
+            file=provider_path(value.file, self.key, "region file"),
+            rect=rect,
+            reads=tuple(reads[:MAX_REGION_READS]),
+            page=value.page,
+            start=None if value.start is None else number(value.start, "start"),
+            end=None if value.end is None else number(value.end, "end"),
+            source=None
+            if source is None
+            else replace(
+                source, path=provider_path(source.path, self.key, "region source")
+            ),
+            label=_label(value.label),
+        )
 
     def validate_profile(self, value: object) -> BuildProfile:
         if not isinstance(value, str) or value not in _PROFILES:

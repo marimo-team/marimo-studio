@@ -255,7 +255,19 @@ Page output hosts resolve their media types from page sites alone.
 `_views/renders.py::run_render()` renders a fresh template copy for live
 renders, static exports, and `check_provider()`. It copies exactly the files
 `RenderResult.files` lists into a destination Studio owns and returns a
-`RenderBundle` whose ID digests the files, media types, and roles.
+`RenderBundle` whose ID digests the files, media types, roles, and regions.
+
+`RenderResult.regions` ties a rectangle on a PDF page, an image, or a span of
+video frames to the reads that produced it. Conformance checks each region's
+shape and bounds. `view_providers/_regions.py::admit_regions()` then checks it
+against the published files and the render's read sites: the file and surface
+kind, the rectangle, the time span, and each read, which must name a read
+target or narrow a value or output target with selector steps. A region
+without a source takes the source of its first read's read site, so providers
+locate parts on the page and the read sites own source lines. Studio drops a
+region that fails and reports one `render-regions-invalid` warning, so lineage
+never blocks publication. Admitted regions travel in the bundle record to live
+hosts and static export indexes alike.
 
 `_server/presentation/renders.py::RenderStore` owns live render workers and
 bundles on `NotebookScope`. Two worker threads run renders in fresh template
@@ -284,8 +296,10 @@ Zero-python static export renders each render once per distinct capture
 through `_delivery/renders.py`, from each state's exported values, outputs, and
 cell snapshots bound in `ViewBindings.renders`. It stores each bundle once
 beneath `_marimo-studio/views/<view>/renders/<bundle>/` and writes
-`renders/index.json`, which maps each state fingerprint to the bundle of each
-render. The browser resolves the current state's bundle from that index.
+`renders/index.json`. Its `bundles` hold each bundle's files and regions once
+by ID, and its `states` map each state fingerprint and render to a bundle ID
+with that state's warnings and absent reads. The browser resolves the current
+state's bundle from that index with `indexedBundle()`.
 
 In the browser, `<marimo-output render>` hosts a `RenderHost`
 (`packages/presentation/src/renders/host.ts`). It requests its render after
@@ -294,9 +308,13 @@ flight, and keeps the last bundle on screen as `stale` until the next one is
 ready. Browser runtimes in edit mode read the render's inputs through their
 own value and output readers, so render reads never evict or release what the
 page's hosts show. A static export resolves the bundle for the prepared state
-the page shows. The stock presentation is the fallback content of the host's
-shadow slot, so markup the page places inside the host replaces it and reads
-`marimoRender`.
+the page shows. `RenderRegions` (`packages/presentation/src/renders/regions.ts`)
+publishes the bundle's regions as Lens targets, described in
+[Lens client metadata](marimo-integration.md#lens-client-metadata). Markup
+the page places in the host's default slot hides the stock presentation and
+reads `marimoRender`. The stock presentation sits outside the slot, so a Lens
+capture of the host draws it, and `RenderView` reports each swap between stock
+and page markup so the regions move to the surfaces now on screen.
 
 ## Publication
 

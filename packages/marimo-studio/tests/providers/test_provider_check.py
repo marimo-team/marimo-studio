@@ -314,3 +314,130 @@ def test_provider_check_runs_inside_a_running_event_loop(
     (view,) = asyncio.run(check_from_async_code())
 
     assert PurePosixPath("index.html") in view.published
+
+
+# Render the card with regions: three Studio can show, one of them without the
+# read the render does not read, and two Studio cannot.
+LOCATED = """
+from marimo_studio.view_providers import Rect, RenderRegion
+
+
+def located(self, request):
+    result = render(self, request)
+    card = PurePosixPath("card.svg")
+    at = SourceLocation(PAGE, 1, 1)
+    return replace(
+        result,
+        regions=(
+            RenderRegion(
+                card,
+                Rect(0.1, 0.2, 0.5, 0.25),
+                reads=("metric",),
+                source=at,
+                label="Metric",
+            ),
+            RenderRegion(card, Rect(0, 0, 1, 1.0004), reads=("report.rows[0]",)),
+            RenderRegion(card, Rect(0.5, 0.5, 0.6, 0.1), reads=("metric",)),
+            RenderRegion(card, Rect(0, 0, 1, 1), reads=("missing",)),
+            RenderRegion(card, Rect(0, 0, 1, 1), page=1),
+        ),
+    )
+
+
+def inspect_report(self, request):
+    inspection = inspect(self, request)
+    (page,) = inspection.renders
+    report = RenderValue("report", SourceLocation(PAGE, 2, 1))
+    return replace(inspection, renders=(replace(page, values=(*page.values, report)),))
+
+
+PageProvider.inspect = inspect_report
+PageProvider.render = located
+"""
+
+
+def test_render_regions_keep_what_studio_can_show(
+    install: Callable[[str], ViewProvider],
+) -> None:
+    (view,) = check_provider(
+        install("from dataclasses import replace\n" + RENDERED + LOCATED),
+        values={"metric": 2.0, "report": {"rows": [{"name": "north"}]}},
+    )
+
+    rendered = view.renders[PurePosixPath("page.md")]
+    # A region without a source takes the source of the first read it shows.
+    assert [region.to_dict() for region in rendered.regions] == [
+        {
+            "file": "card.svg",
+            "rect": {"x": 0.1, "y": 0.2, "width": 0.5, "height": 0.25},
+            "reads": ["metric"],
+            "page": None,
+            "start": None,
+            "end": None,
+            "source": {"path": "page.md", "line": 1, "column": 1},
+            "label": "Metric",
+        },
+        {
+            "file": "card.svg",
+            "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+            "reads": ["report.rows[0]"],
+            "page": None,
+            "start": None,
+            "end": None,
+            "source": {"path": "page.md", "line": 2, "column": 1},
+            "label": None,
+        },
+        {
+            "file": "card.svg",
+            "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+            "reads": [],
+            "page": None,
+            "start": None,
+            "end": None,
+            "source": None,
+            "label": None,
+        },
+    ]
+    (warning,) = rendered.warnings
+    assert "left out 2 regions" in warning
+    assert "inside the surface" in warning
+    assert "left out 1 read that the render does not read" in warning
+
+
+# Render the card with one region per pixel of a 70 by 60 grid.
+CROWDED = """
+from marimo_studio.view_providers import Rect, RenderRegion
+
+
+def crowded(self, request):
+    result = render(self, request)
+    card = PurePosixPath("card.svg")
+    return replace(
+        result,
+        regions=tuple(
+            RenderRegion(
+                card, Rect(column / 70, row / 60, 1 / 70, 1 / 60), reads=("metric",)
+            )
+            for row in range(60)
+            for column in range(70)
+        ),
+    )
+
+
+PageProvider.render = crowded
+"""
+
+
+def test_a_render_with_more_regions_than_studio_keeps_still_publishes(
+    install: Callable[[str], ViewProvider],
+) -> None:
+    (view,) = check_provider(
+        install("from dataclasses import replace\n" + RENDERED + CROWDED),
+        values={"metric": 2.0},
+    )
+
+    rendered = view.renders[PurePosixPath("page.md")]
+    assert rendered.main == PurePosixPath("card.svg")
+    assert len(rendered.regions) == 4_096
+    (warning,) = rendered.warnings
+    assert "kept the first 4,096 of 4,200 regions" in warning
