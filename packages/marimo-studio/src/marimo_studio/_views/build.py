@@ -144,7 +144,7 @@ def _inspect_provider(
 ) -> ProjectInspection:
     availability = provider.availability()
     if not availability.available:
-        detail = f": {availability.reason}" if availability.reason else ""
+        detail = f": {availability.reason.rstrip('.')}" if availability.reason else ""
         action = f" {availability.action}" if availability.action else ""
         message = (
             f"View provider {project.provider!r} is unavailable{detail}.{action}"
