@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://marimo-team.github.io/marimo-studio/examples/quadratic-programs">
+  <a href="https://marimo-team.github.io/marimo-studio/examples/">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/showcase/marimo-studio-fan-quadratic-programs-dark.webp">
-      <img alt="The quadratic_program.py notebook above the views built from it: a React and Reveal.js lecture deck, a Svelte lab, a Typst report, and a plain HTML explainer." src="apps/docs/public/showcase/marimo-studio-fan-quadratic-programs-light.webp" width="100%">
+      <source media="(prefers-color-scheme: dark)" srcset="apps/docs/public/showcase/marimo-studio-wall-dark.webp">
+      <img alt="Four example notebooks, each heading a column of its four views" src="apps/docs/public/showcase/marimo-studio-wall-light.webp" width="100%">
     </picture>
   </a>
 </p>
