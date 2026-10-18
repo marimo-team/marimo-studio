@@ -49,7 +49,8 @@ revisions, and starter availability with commands such as `tectonic` from that
 environment before `PATH`. They install the environment with
 `pixi install --script`, which downloads its packages on first use and updates
 an adjacent `<notebook>.pixi.lock` when one exists. The editor does the same
-when marimo runs the notebook with `--sandbox=pixi`.
+for every notebook that marimo runs with `--sandbox=pixi`, including one inside
+a Python project, because marimo's sandbox ignores the project.
 
 `validate --level runtime`, and `view preflight` or `view export` with
 `--runtime zero-python`, execute notebook Python. When the notebook declares

@@ -1,14 +1,16 @@
 """Give view providers the commands a notebook's pixi metadata declares.
 
-A standalone notebook whose PEP 723 metadata has a ``[tool.pixi]`` table
-describes a pixi script environment, the one ``marimo edit --sandbox=pixi``
-runs its kernel in. Conda packages under ``[tool.pixi.dependencies]``, such as
-``tectonic``, install their executables there. Provider calls for that
-notebook search the environment's executable directories before ``PATH``.
+A notebook whose PEP 723 metadata has a ``[tool.pixi]`` table describes a pixi
+script environment, the one ``marimo edit --sandbox=pixi`` runs its kernel in.
+Conda packages under ``[tool.pixi.dependencies]``, such as ``tectonic``,
+install their executables there. Provider calls for that notebook search the
+environment's executable directories before ``PATH``.
 
-Studio installs the environment only where the user chose it: in a process
-Marimo runs with the pixi sandbox backend, and in Studio commands, which run
-for the notebook they target.
+Studio installs the environment only where the user chose it. A process Marimo
+runs with the pixi sandbox backend uses it for every notebook, because the
+sandbox ignores an enclosing Python project. A Studio command uses it for the
+standalone notebook it targets, and runs a project's notebook in that
+project's environment.
 """
 
 from __future__ import annotations
@@ -70,13 +72,12 @@ def command_installs() -> Iterator[None]:
 
 
 def _pixi_metadata(notebook: Path) -> Mapping[str, object] | None:
-    """Return a standalone notebook's PEP 723 metadata with a ``[tool.pixi]`` table."""
+    """Return a notebook's PEP 723 metadata when it has a ``[tool.pixi]`` table."""
     try:
         document = read_notebook_metadata(notebook)
-        owned = project_environment(notebook) is not None
-    except (ConfigurationError, DependencyError, OSError):
+    except (ConfigurationError, OSError):
         return None
-    if document is None or owned:
+    if document is None:
         return None
     tool = document.get("tool")
     if not isinstance(tool, Mapping) or not isinstance(tool.get("pixi"), Mapping):
@@ -84,9 +85,17 @@ def _pixi_metadata(notebook: Path) -> Mapping[str, object] | None:
     return document.unwrap()
 
 
+def _standalone(notebook: Path) -> bool:
+    """Return whether no Python project owns the notebook's environment."""
+    try:
+        return project_environment(notebook) is None
+    except (DependencyError, OSError):
+        return False
+
+
 def declares_pixi_environment(notebook: Path) -> bool:
     """Return whether a standalone notebook's metadata describes a pixi environment."""
-    return _pixi_metadata(notebook) is not None
+    return _standalone(notebook) and _pixi_metadata(notebook) is not None
 
 
 def _revision(metadata: Mapping[str, object]) -> str:
@@ -154,15 +163,17 @@ def _install(notebook: Path) -> tuple[str, ...]:
 def notebook_provider_tools(notebook: Path) -> ProviderTools:
     """Return the tools the notebook's pixi metadata provides to provider calls.
 
-    Returns no directories for a notebook without standalone ``[tool.pixi]``
-    metadata and where the user has not chosen pixi environments. A failed
-    install leaves the directories empty and names the failure in
-    ``ProviderTools.problem``.
+    Returns no directories for a notebook without ``[tool.pixi]`` metadata and
+    where the user has not chosen its pixi environment. A failed install leaves
+    the directories empty and names the failure in ``ProviderTools.problem``.
     """
     metadata = _pixi_metadata(notebook)
     if metadata is None:
         return NO_TOOLS
-    if not _COMMAND_INSTALLS.get():
+    if _COMMAND_INSTALLS.get():
+        if not _standalone(notebook):
+            return NO_TOOLS
+    else:
         from marimo_studio._composition import create_script_environments
 
         if not create_script_environments().selected():

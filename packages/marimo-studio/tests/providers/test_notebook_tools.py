@@ -237,34 +237,68 @@ def test_a_notebook_opened_without_the_pixi_sandbox_keeps_commands_on_path(
 
 
 @posix_only
-@pytest.mark.parametrize(
-    "files",
-    (
-        {"analysis.py": '# /// script\n# dependencies = ["polars"]\n# ///\n'},
-        {
-            "analysis.py": PIXI_METADATA,
-            "pyproject.toml": '[project]\nname = "analysis"\nversion = "0.1.0"\n',
-        },
-    ),
-    ids=("without-pixi-metadata", "inside-a-project"),
-)
-def test_notebooks_without_a_pixi_script_environment_keep_commands_on_path(
+def test_a_notebook_without_pixi_metadata_keeps_commands_on_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    files: dict[str, str],
 ) -> None:
     on_path = _tectonic(tmp_path / "path")
     monkeypatch.setenv("PATH", str(on_path.parent))
     environments = _install(
         monkeypatch, _Environments((str(tmp_path / "environment"),))
     )
-    project = tmp_path / "project"
-    project.mkdir()
-    for name, content in files.items():
-        suffix = NOTEBOOK if name == "analysis.py" else ""
-        (project / name).write_text(content + suffix, encoding="utf-8")
+    notebook = _notebook(
+        tmp_path / "project", '# /// script\n# dependencies = ["polars"]\n# ///\n'
+    )
 
-    with notebook_tools(project / "analysis.py"):
+    with notebook_tools(notebook):
+        located = find_tool("tectonic")
+
+    assert environments.installed == []
+    assert located == str(on_path)
+
+
+def _project_notebook(directory: Path) -> Path:
+    notebook = _notebook(directory)
+    (directory / "pyproject.toml").write_text(
+        '[project]\nname = "analysis"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    return notebook
+
+
+@posix_only
+def test_the_pixi_sandbox_runs_a_project_notebook_with_its_script_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _tectonic(tmp_path / "path")
+    monkeypatch.setenv("PATH", str(tmp_path / "path"))
+    environment = tmp_path / "environment" / "bin"
+    tool = _tectonic(environment)
+    # marimo's sandbox runs the kernel from the script metadata and ignores the
+    # enclosing project.
+    environments = _install(monkeypatch, _Environments((str(environment),)))
+    notebook = _project_notebook(tmp_path / "project")
+
+    with notebook_tools(notebook):
+        located = find_tool("tectonic")
+
+    assert environments.installed == [notebook.resolve()]
+    assert located == str(tool)
+
+
+@posix_only
+def test_studio_commands_run_a_project_notebook_with_the_project_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    on_path = _tectonic(tmp_path / "path")
+    monkeypatch.setenv("PATH", str(on_path.parent))
+    environments = _install(
+        monkeypatch, _Environments((str(tmp_path / "environment"),), selected=False)
+    )
+    notebook = _project_notebook(tmp_path / "project")
+
+    with command_installs(), notebook_tools(notebook):
         located = find_tool("tectonic")
 
     assert environments.installed == []
@@ -439,3 +473,4 @@ def test_pixi_installs_the_tectonic_a_notebook_declares(
     assert located is not None
     assert Path(located).parent != Path(pixi).parent
     assert availability.available, availability.reason
+
