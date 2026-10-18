@@ -90,8 +90,10 @@
 }
 
 .VPFeature .icon {
-  background: var(--vp-c-bg-soft);
-  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  color: var(--vp-c-text-1);
+  background: transparent;
 }
 
 .VPFeature .title {
