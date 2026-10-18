@@ -31,7 +31,33 @@ Save an untitled notebook with **Save As** before you create the first view.
 When Studio reports an unconfigured notebook or no view, run
 `marimo-studio status --target analysis.py`.
 
+## The pixi sandbox fails to build `loro`
+
+`marimo edit --sandbox=pixi` installs the notebook's environment with
+`pixi install --script`, which picks the newest Python that the notebook's
+`requires-python` admits. marimo depends on `loro`, which publishes no wheel
+for Python 3.15, so the install stops while it builds `loro` from source:
+
+```text
+error: the configured Python interpreter version (3.15) is newer than PyO3's maximum supported version (3.14)
+```
+
+Bound `requires-python` in the notebook's `# /// script` block by the Python
+versions Studio supports, then open the notebook again:
+
+```python
+# /// script
+# requires-python = ">=3.10,<3.15"
+# ///
+```
+
+Creating a view writes the same bound into the notebook.
+
 ## `marimo run` shows the notebook instead of a view
+
+With `--sandbox`, `marimo run analysis.py` starts the server in the notebook's
+environment, so the notebook's dependencies must list `marimo-studio`.
+Creating a view adds it.
 
 Run mode serves the notebook itself while its view root holds no view, and the
 server logs a warning. `marimo-studio status` reports `needs-view` and the
@@ -118,8 +144,8 @@ fix the document.
 Inspect and build the selected view:
 
 ```console
-marimo-studio view inspect dashboard --target analysis.py
-marimo-studio view build dashboard --target analysis.py
+uvx marimo-studio view inspect dashboard --target analysis.py
+uvx marimo-studio view build dashboard --target analysis.py
 ```
 
 **Build failed** means Preview still shows the last successful artifact. Fix
@@ -140,13 +166,13 @@ tools, then inspect again.
 Validate saved source and target names:
 
 ```console
-marimo-studio validate dashboard --target analysis.py
+uvx marimo-studio validate dashboard --target analysis.py
 ```
 
 Then execute the complete notebook and check the selected projections:
 
 ```console
-marimo-studio validate dashboard \
+uvx marimo-studio validate dashboard \
   --target analysis.py \
   --level runtime
 ```
@@ -221,10 +247,10 @@ source is unbuilt or fails to build, so build the source and request a fresh URL
 Build the production profile and validate before exporting:
 
 ```console
-marimo-studio view build dashboard \
+uvx marimo-studio view build dashboard \
   --target analysis.py \
   --profile production
-marimo-studio validate dashboard --target analysis.py
+uvx marimo-studio validate dashboard --target analysis.py
 ```
 
 For a Prepared export, give every projection site finite targets and use
@@ -232,7 +258,7 @@ accepted frontend values in `states.yaml`. Raise `--prepare-timeout` past its
 30 second default when the states take longer to execute:
 
 ```console
-marimo-studio view export dashboard \
+uvx marimo-studio view export dashboard \
   --target analysis.py \
   --output dist/dashboard \
   --prepare-timeout 600
@@ -244,10 +270,10 @@ export over HTTP with its relative paths intact.
 ## Collect a diagnostic report
 
 ```console
-marimo-studio status --target analysis.py --json
-marimo-studio doctor --json
-marimo-studio view inspect dashboard --target analysis.py --json
-marimo-studio validate dashboard --target analysis.py --json
+uvx marimo-studio status --target analysis.py --json
+uvx marimo-studio doctor --json
+uvx marimo-studio view inspect dashboard --target analysis.py --json
+uvx marimo-studio validate dashboard --target analysis.py --json
 ```
 
 These reports omit notebook and view source but can contain absolute paths and

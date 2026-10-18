@@ -57,7 +57,7 @@ The CLI targets the same notebook with `--target notebook.py`. Preview URL
 lookup additionally requires the running Studio server:
 
 ```console
-marimo-studio view preview dashboard --target notebook.py \
+uvx marimo-studio view preview dashboard --target notebook.py \
   --runtime server --server http://127.0.0.1:8000
 ```
 
@@ -76,7 +76,7 @@ Inspect installed starter availability with `await workspace.starters()`.
 Use dependency diagnostics before validation or export:
 
 ```console
-marimo-studio doctor --dependencies --target notebook.py --json
+uvx marimo-studio doctor --dependencies --target notebook.py --json
 ```
 
 Read its interpreter path, declaration drift, provider requirements, and import

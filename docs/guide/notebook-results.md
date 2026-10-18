@@ -55,7 +55,7 @@ Give an unnamed cell a [cell alias](../reference/glossary.md#cell-alias) when
 renaming its function is not an option:
 
 ```console
-marimo-studio notebook bind summary --target analysis.py --cell 12
+uvx marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
 The alias belongs to the notebook, so every view can use it.
@@ -238,7 +238,7 @@ so export a view that picks targets at runtime with `--runtime wasm`.
 Check that every name a view uses exists in the notebook, without running it:
 
 ```console
-marimo-studio validate dashboard --target analysis.py
+uvx marimo-studio validate dashboard --target analysis.py
 ```
 
 Add `--level runtime` to run the notebook and check each result the view

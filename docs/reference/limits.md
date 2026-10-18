@@ -109,8 +109,8 @@ target.
 | Browser client response                           | 5,000,000 bytes | Live request failure                       |
 
 The Python and Browser runtimes enforce the value limits. A value read carries
-the values that a view projects from one producer cell, and `marimo-studio
-check` reads them the same way. Eager pandas, Polars, and PyArrow tables travel
+the values that a view projects from one producer cell, and
+`marimo-studio validate --level runtime` reads them the same way. Eager pandas, Polars, and PyArrow tables travel
 as
 [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc),
 a columnar binary format. Collect lazy dataframes in the notebook before
@@ -124,8 +124,8 @@ inline and takes longer to load.
 
 The Browser runtime passes Arrow values from its worker as base64 text, which
 caps a value read there at 64 MiB of Arrow. A 60 MB value took about 8 seconds
-to appear in Chromium on a Linux workstation. `marimo-studio check` applies the
-Python runtime budgets.
+to appear in Chromium on a Linux workstation.
+`marimo-studio validate --level runtime` applies the Python runtime budgets.
 
 The Prepared runtime stores each value as a
 [marimo-export](https://github.com/marimo-team/marimo-export) asset. One asset

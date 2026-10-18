@@ -47,7 +47,7 @@ token authorizes URL lookup. It is never embedded in the returned URL.
 Outside code mode, supply the running server URL:
 
 ```console
-marimo-studio view preview dashboard --target notebook.py \
+uvx marimo-studio view preview dashboard --target notebook.py \
   --runtime server --server http://127.0.0.1:8000
 ```
 

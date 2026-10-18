@@ -43,7 +43,7 @@ uvx --with marimo-studio marimo run notebook.py --sandbox
 Preflight the intended static runtime before publishing:
 
 ```console
-marimo-studio view preflight dashboard \
+uvx marimo-studio view preflight dashboard \
   --target notebook.py \
   --runtime zero-python \
   --json
@@ -107,7 +107,7 @@ Export the verified runtime with `marimo-studio view export`, or
 `await view.export(path, runtime="zero-python")` in code mode:
 
 ```console
-marimo-studio view export dashboard \
+uvx marimo-studio view export dashboard \
   --target notebook.py \
   --runtime zero-python \
   --output dist/dashboard

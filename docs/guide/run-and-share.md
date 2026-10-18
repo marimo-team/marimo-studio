@@ -70,13 +70,14 @@ other people.
 Check the view, then export it:
 
 ```console
-marimo-studio view preflight dashboard --target analysis.py
-marimo-studio view export dashboard --target analysis.py --output dist/dashboard
+uvx marimo-studio view preflight dashboard --target analysis.py
+uvx marimo-studio view export dashboard --target analysis.py --output dist/dashboard
 ```
 
-Both commands run the notebook. Preflight reports what will not work without
-Python, such as a widget that needs a live kernel, and writes nothing. Export
-runs the same checks on the staged site before it replaces `dist/dashboard`.
+Both commands run the notebook. Preflight builds the view, prepares the
+notebook results, and reports what will not work without Python, such as a
+widget that needs a live kernel. It leaves `dist/` untouched. Export runs the
+same checks on the staged site before it replaces `dist/dashboard`.
 Pass `--force` to replace an existing folder.
 
 ::: tip The export keeps the notebook source private
@@ -170,7 +171,7 @@ Lines progress on stderr, with a heartbeat every five seconds.
 ## Export a Browser view
 
 ```console
-marimo-studio view export dashboard --target analysis.py \
+uvx marimo-studio view export dashboard --target analysis.py \
   --output dist/dashboard --runtime wasm
 ```
 

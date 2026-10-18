@@ -48,7 +48,7 @@ rebuild the view too. Build explicitly from a terminal when a watcher may have
 missed a change:
 
 ```console
-marimo-studio view build dashboard --target analysis.py
+uvx marimo-studio view build dashboard --target analysis.py
 ```
 
 ## Edit view source in any editor
@@ -145,8 +145,9 @@ when anything in `src/` or `public/` changes, and shows its lockfile read-only.
 Ask the provider directly with:
 
 ```console
-marimo-studio view inspect dashboard --target analysis.py
+uvx marimo-studio view inspect dashboard --target analysis.py
 ```
 
 Source always shows `view.toml`, even when the provider fails, so you can
-repair a wrong provider key or option there.
+repair a provider option there. Source keeps the view's provider key, so fix a
+misspelled key in your own editor.
