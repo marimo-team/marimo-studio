@@ -19,35 +19,52 @@ hero:
       link: ./examples/
 
 features:
-  - icon:
-      src: /icons/panels-top-left.svg
-      alt: Notebook results
-      width: "24"
-      height: "24"
+  - icon: |
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M9 21V9" />
+      </svg>
     title: Building blocks
     details: Place a whole cell, one chart, or a single number wherever you need it. Each one traces back to the cell that computed it.
     link: ./guide/notebook-results
-  - icon:
-      src: /icons/gallery-vertical-end.svg
-      alt: Document formats
-      width: "24"
-      height: "24"
+  - icon: |
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 2h10" />
+        <path d="M5 6h14" />
+        <rect width="18" height="12" x="3" y="10" rx="2" />
+      </svg>
     title: Any document
     details: Start from HTML, React, Svelte, Quarto, Typst, or LaTeX. You can bring any other framework or tool with a view provider.
     link: ./guide/formats
-  - icon:
-      src: /icons/mouse-pointer-click.svg
-      alt: Coding agents and Lens
-      width: "24"
-      height: "24"
+  - icon: |
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 4.1 12 6" />
+        <path d="m5.1 8-2.9-.8" />
+        <path d="m6 12-1.9 2" />
+        <path d="M7.2 2.2 8 5.1" />
+        <path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z" />
+      </svg>
     title: Agents and Lens
     details: Ask a coding agent for a view, then point at any part of it, even a figure in a PDF, to show the agent what to change.
     link: ./guide/lens
-  - icon:
-      src: /icons/cpu.svg
-      alt: Runtimes
-      width: "24"
-      height: "24"
+  - icon: |
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20v2" />
+        <path d="M12 2v2" />
+        <path d="M17 20v2" />
+        <path d="M17 2v2" />
+        <path d="M2 12h2" />
+        <path d="M2 17h2" />
+        <path d="M2 7h2" />
+        <path d="M20 12h2" />
+        <path d="M20 17h2" />
+        <path d="M20 7h2" />
+        <path d="M7 20v2" />
+        <path d="M7 2v2" />
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <rect x="8" y="8" width="8" height="8" rx="1" />
+      </svg>
     title: Run anywhere
     details: Serve your view with live Python, run Python in your reader's browser, or export saved results to any static host.
     link: ./guide/run-and-share
