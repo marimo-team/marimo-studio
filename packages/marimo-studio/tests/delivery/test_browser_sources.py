@@ -37,6 +37,7 @@ def write_checkout(
         (root / path).write_bytes(content)
     browser = root / output
     browser.mkdir(parents=True)
+    (browser / "build-meta.json").write_text("{}", encoding="utf-8")
     (browser.parent / "build-sources.json").write_text(
         json.dumps(
             record
@@ -140,6 +141,19 @@ def test_checkout_rejects_an_invalid_source_record(
     assert "make build" in str(error.value)
 
 
+def test_checkout_without_built_assets_names_the_setup_command(
+    checkout: Path,
+) -> None:
+    (checkout / "pnpm-workspace.yaml").write_text("packages: []\n", encoding="utf-8")
+
+    with pytest.raises(ProtocolError) as error:
+        assets_module.validate_runtime_sources()
+
+    message = str(error.value)
+    assert "browser assets are not built in this checkout" in message
+    assert f"Run `make setup` in {checkout.resolve()}" in message
+
+
 def test_assets_without_a_source_record_are_served(checkout: Path) -> None:
     browser = write_checkout(checkout)
     (browser.parent / "build-sources.json").unlink()
@@ -210,6 +224,17 @@ def test_marimo_server_startup_reports_stale_assets(checkout: Path) -> None:
     assert error.startswith("click.exceptions.ClickException: ")
     assert "packages/protocol/src/projections.ts" in error
     assert f"Run `make build` in {checkout.resolve()}" in error
+
+
+def test_marimo_server_startup_reports_unbuilt_assets(checkout: Path) -> None:
+    (checkout / "pnpm-workspace.yaml").write_text("packages: []\n", encoding="utf-8")
+
+    completed = _import_in_child(checkout / OUTPUT, "import marimo_studio._entrypoints")
+
+    error = completed.stderr.strip().splitlines()[-1]
+    assert completed.returncode != 0
+    assert error.startswith("click.exceptions.ClickException: ")
+    assert f"Run `make setup` in {checkout.resolve()}" in error
 
 
 def test_kernel_lifespan_loads_beside_stale_assets(checkout: Path) -> None:
