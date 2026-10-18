@@ -225,7 +225,10 @@ const applyMarimoPatch = async (path: string) => {
 
 const installWorkspace = async (path: string) => {
   await runPnpm(["install", "--frozen-lockfile"], path);
-  await runPnpm(["--dir", "packages/llm-info", "codegen"], path);
+  // The release's codegen script passes --experimental-transform-types, which
+  // Node.js 26 rejects. The generator only needs the type stripping that every
+  // supported Node.js applies to .ts files by default.
+  await run(process.execPath, ["src/generate.ts"], join(path, "packages", "llm-info"));
 };
 
 const workspacePaths = (path: string) => [

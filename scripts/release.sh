@@ -23,13 +23,6 @@ error() {
 	printf 'ERROR: %s\n' "$1" >&2
 }
 
-require_command() {
-	if ! command -v "$1" >/dev/null 2>&1; then
-		error "Missing required command: $1"
-		exit 1
-	fi
-}
-
 DRY_RUN=0
 
 case "${1:-}" in
@@ -54,9 +47,12 @@ if [[ "$#" -gt 1 ]]; then
 	exit 1
 fi
 
-require_command gh
-require_command git
-require_command uv
+for command in gh git uv; do
+	if ! command -v "$command" >/dev/null 2>&1; then
+		error "Missing required command: $command"
+		exit 1
+	fi
+done
 
 BRANCH="$(git branch --show-current)"
 if [[ "$BRANCH" != "main" ]]; then

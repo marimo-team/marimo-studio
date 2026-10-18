@@ -73,7 +73,8 @@ make setup
 ```
 
 `corepack enable pnpm` lets Node.js provide the pnpm version that
-`package.json` pins.
+`package.json` pins. Node.js 25 and newer ship without Corepack, so install it
+there first with `npm install --global corepack`.
 
 `make setup` installs the pixi environment of system tools, the Python and
 [pnpm](https://pnpm.io/) JavaScript workspaces, prepares the pinned Marimo
@@ -257,7 +258,9 @@ Add the matching boundary checks:
 
 `make test` runs the complete Python profile for the current platform and the
 frontend package tests. `make check` adds formatting, linting, architecture,
-provider-source, and type checks. `make docs-build` owns public example exports
+provider-source, and type checks. Its shell-script lint runs
+[ShellCheck](https://www.shellcheck.net/) from `PATH`, for example after
+`pixi global install shellcheck`. `make docs-build` owns public example exports
 and VitePress verification. Live browser acceptance remains the evidence for
 cross-document behavior.
 
