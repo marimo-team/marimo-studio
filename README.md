@@ -22,20 +22,22 @@
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python 3.10 through 3.14" src="https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg"></a>
 </p>
 
-marimo-studio builds views of a [marimo](https://marimo.io/) notebook: web
-pages, slide decks, and typeset PDF documents that place the notebook's
-results by name. A view can place a cell with its controls, a rendered output
+marimo-studio turns the results of a [marimo](https://marimo.io/) notebook
+into building blocks for any document: web pages, slide decks, and typeset
+PDFs that place the notebook's results by name. A view can place a cell with its controls, a rendered output
 such as a chart, or a value such as a number or a table. The notebook keeps the
-data and the computation. Each view keeps its own source in a folder beside the
-notebook, in the format its audience needs. Studio's starters create HTML
-pages, React or Svelte apps, Reveal.js decks, Observable notebooks, Quarto
-articles, and Typst or LaTeX PDFs. A
+data, the computation, and all of the Python. Each view keeps its presentation
+in its own folder beside the notebook, an ordinary project in the format its
+audience needs, which you or a coding agent can edit with any tool. You can
+start from HTML pages, React or Svelte apps, Reveal.js decks, Observable
+notebooks, Quarto articles, and Typst or LaTeX PDFs, or bring any other
+framework, template, or build tool with a
 [view provider](https://marimo-team.github.io/marimo-studio/guide/view-providers),
-a Python package, adds any other framework, template, or build tool.
+a Python package.
 
 Pages stay live, so changing a control updates every result that depends on
-it. Documents typeset again with the new values. Every result traces back to
-the notebook cell that computed it.
+it. PDFs compile again with the new values. Every result traces back to the
+notebook cell that computed it.
 
 > [!NOTE]
 > Studio is experimental and changing rapidly. Pin `marimo-studio` in saved
@@ -87,7 +89,9 @@ The notebook computes both results, and each view shows them in its own format:
 The page shows the figure as marimo renders it. The PDF draws it as a vector
 graphic at the width the Typst source places it.
 
-[What is Studio?](https://marimo-team.github.io/marimo-studio/what-is-studio) explains the model, and the
+[What is Studio?](https://marimo-team.github.io/marimo-studio/what-is-studio) explains the model,
+[How Studio works](https://marimo-team.github.io/marimo-studio/how-studio-works)
+follows one view from its files to the browser, and the
 [Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs) example shows both
 views next to the notebook.
 
@@ -118,8 +122,10 @@ Preview.
 ![Notebook, Preview, and view source in Studio](apps/docs/public/screenshots/studio-develop.png)
 
 [Getting started](https://marimo-team.github.io/marimo-studio/guide/getting-started) walks through a first view,
-and [Author with a coding agent](https://marimo-team.github.io/marimo-studio/guide/coding-agents) covers working
-with an agent.
+[Author with a coding agent](https://marimo-team.github.io/marimo-studio/guide/coding-agents) covers working
+with an agent, and
+[Select results with Lens](https://marimo-team.github.io/marimo-studio/guide/lens) points the agent at any part
+of a view, down to a figure inside a PDF.
 
 ## Examples
 

@@ -629,7 +629,7 @@ deadline. The first compile on a machine needs network access and can take a
 few minutes. When it outlasts the build, the build reports
 `latex-compile-unfinished`, and the next build continues from the packages
 Tectonic kept. To download them without a time limit, run
-`tectonic -X compile main.tex` once in the view folder. A document that never
+`tectonic -X compile main.tex` once in the view project. A document that never
 finishes compiling, such as one with a recursive macro, reports the same code.
 A compile error fails the build at its source line and names the text where TeX
 stopped. Undefined references and citations, duplicate labels, missing

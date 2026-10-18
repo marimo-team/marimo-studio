@@ -223,15 +223,15 @@ const markViewLoaded = (): void => {
 <style scoped>
 .studio-view-stack {
   --stack-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --stack-shadow-back: 0 1px 2px rgb(20 30 25 / 5%), 0 8px 24px -12px rgb(20 30 25 / 18%);
-  --stack-shadow-front: 0 1px 2px rgb(20 30 25 / 6%), 0 24px 48px -16px rgb(20 30 25 / 26%);
+  --stack-shadow-back: var(--studio-card-shadow-low), 0 8px 24px -12px rgb(20 30 25 / 18%);
+  --stack-shadow-front: var(--studio-card-shadow);
   margin: 2.5rem 0 3rem;
   container-type: inline-size;
 }
 
 :global(.dark) .studio-view-stack {
-  --stack-shadow-back: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px -12px rgb(0 0 0 / 50%);
-  --stack-shadow-front: 0 1px 2px rgb(0 0 0 / 35%), 0 24px 48px -16px rgb(0 0 0 / 65%);
+  --stack-shadow-back: var(--studio-card-shadow-low), 0 8px 24px -12px rgb(0 0 0 / 50%);
+  --stack-shadow-front: var(--studio-card-shadow);
 }
 
 nav {
@@ -300,9 +300,9 @@ nav button[aria-selected="true"] {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
-  background: var(--vp-c-bg);
+  border: 1px solid var(--studio-card-border);
+  border-radius: var(--studio-radius-card);
+  background: var(--studio-card-bg);
   box-shadow: var(--stack-shadow-back);
   transition:
     transform 0.5s var(--stack-ease),
@@ -365,13 +365,19 @@ nav button[aria-selected="true"] {
   gap: 1rem;
   align-items: center;
   justify-content: space-between;
-  height: 2.25rem;
-  padding: 0 0.5rem 0 0.875rem;
-  border-bottom: 1px solid var(--vp-c-divider);
-  color: var(--vp-c-text-2);
-  font-size: 12px;
-  font-weight: 500;
+  height: 34px;
+  padding: 0 0.5rem 0 14px;
+  border-bottom: 1px solid var(--studio-chrome-rule);
+  background: var(--studio-chrome);
+  color: var(--studio-chrome-label);
+  font-size: 13px;
+  font-weight: 550;
   line-height: 18px;
+}
+
+.studio-view-stack__layer.is-notebook header {
+  background: var(--studio-notebook-chrome);
+  color: var(--studio-notebook-label);
 }
 
 .studio-view-stack__file {

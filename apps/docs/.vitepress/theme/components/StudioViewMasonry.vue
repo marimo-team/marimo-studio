@@ -128,8 +128,8 @@ const tiles = columns.flatMap((column) => column.tiles);
 .studio-view-masonry__frame {
   display: block;
   overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+  border: 1px solid var(--studio-card-border);
+  border-radius: var(--studio-radius-card);
   background: var(--vp-c-bg-soft);
   transition: border-color 0.2s ease;
 }
@@ -179,7 +179,7 @@ a:hover .studio-view-masonry__caption strong {
 .studio-view-masonry a:focus-visible {
   outline: 2px solid var(--vp-c-brand-1);
   outline-offset: 4px;
-  border-radius: 6px;
+  border-radius: var(--studio-radius-card);
 }
 
 /* Two narrow columns keep every poster within a few screens on a phone. */

@@ -14,8 +14,8 @@ states a small quadratic program with [CVXPY](https://www.cvxpy.org/), a Python
 library for convex optimization. It solves the program for four shapes of the
 objective and every direction of its linear term. Cell by cell, the notebook
 holds the argument of a short lesson: the standard form, why the problem
-matters, its geometry, duality, and the key ideas. One notebook backs every
-view.
+matters, its geometry, duality, and the key ideas. Every view reads its
+results from these cells.
 
 ## Compare the views
 

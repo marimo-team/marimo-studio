@@ -1,16 +1,16 @@
 ---
 title: View provider API
-description: Register a view provider that creates, inspects, and builds frontend view projects.
+description: Register a view provider that creates, inspects, builds, and renders view projects.
 ---
 
 # View provider API
 
-A view provider connects a frontend project format and its build command to
-Studio. It declares its starters, the Source documents people edit, the build
-inputs that affect the view, where the view shows notebook results, and how to
-build the page that Studio publishes. A provider can also declare renders,
-which turn notebook results into files such as a PDF or a video with the
-provider's own tools.
+A [view provider](glossary.md#view-provider) connects a
+[format](glossary.md#format) and its build command to Studio. It declares its
+starters, the Source documents people edit, the build inputs that affect the
+view, where the view shows notebook results, and how to build the page that
+Studio publishes. A provider can also declare renders, which turn notebook
+results into files such as a PDF or a video with the provider's own tools.
 
 Studio owns notebook execution, Source writes, build snapshots, artifact
 validation and publication, presentations, browser sessions, and agent
@@ -28,33 +28,36 @@ in an environment that contains credentials or private notebook source.
 
 ## Terms
 
-| Term             | Meaning                                                                        | In the API                   |
-| ---------------- | ------------------------------------------------------------------------------ | ---------------------------- |
-| View project     | The directory that holds one view's files                                      | `ViewProject`                |
-| View manifest    | `view.toml`, which records the provider key and provider options               | `ViewProject.manifest`       |
-| Provider key     | Distribution and registration name, such as `acme-views/report`                | `ViewProject.provider`       |
-| Provider options | The `[options]` table in `view.toml`                                           | `ViewProject.options`        |
-| Starter          | A template for a new view, shown in the **New view** picker                    | `ProviderStarter`            |
-| Starter key      | The starter's name within its provider, such as `default`                      | `ProviderStarter.key`        |
-| Starter ID       | Provider key and starter key, such as `acme-views/report:default`              | `CheckedView.starter`        |
-| Cell target      | The name a `<marimo-cell>` host uses: a marimo cell name or a Studio alias     | `StarterCellTarget`          |
-| Source document  | A file shown in Studio's Source panel                                          | `SourceDocument`             |
-| Build input      | A file or directory the build reads. A change rebuilds the view                | `BuildInput`                 |
-| Projection host  | `<marimo-cell>`, `<marimo-output>`, or an element with `mo-value`              |                              |
-| Projection site  | The source location, kind, and targets of one projection host                  | `ProjectionSite`             |
-| Target           | The cell name or value selector that a host shows                              | `ProjectionSite.targets`     |
-| Build snapshot   | A private copy of the build inputs with a site ID on every host                | `BuildRequest.project`       |
-| Page             | The HTML entry document a build returns                                        | `BuildResult.document`       |
-| Render           | The files the provider makes from one project file and notebook results        | `Render`                     |
-| Render template  | Private build output that renders start from                                   | `BuildRequest.template_root` |
-| Render value     | A notebook value that a render reads as JSON                                   | `RenderValue`                |
-| Render output    | A notebook value, such as a figure, that a render places as media              | `RenderOutput`               |
-| Render cell      | A named notebook cell whose output a render places as media                    | `RenderCell`                 |
-| Rendered files   | The files one render returns, with a main file and an optional preview         | `RenderResult`               |
-| Render region    | A rectangle on a page, image, or video frame and the notebook results it shows | `RenderRegion`               |
-| Render host      | `<marimo-output render="main.typ">`, which shows a render's files on the page  |                              |
-| Accept list      | The media types a host or render read can show, in preference order            | `RenderOutput.accept`        |
-| Diagnostic       | A problem with a code, message, hint, and optional source location             | `ProjectDiagnostic`          |
+The [glossary](glossary.md) defines each term. The API names it with these
+records and fields:
+
+| Term                                             | In the API                     |
+| ------------------------------------------------ | ------------------------------ |
+| [View project](glossary.md#view-project)         | `ViewProject`                  |
+| [`view.toml`](glossary.md#view-toml)             | `ViewProject.manifest`         |
+| [Provider key](glossary.md#provider-key)         | `ViewProject.provider`         |
+| [Provider options](glossary.md#provider-options) | `ViewProject.options`          |
+| [Starter](glossary.md#starter)                   | `ProviderStarter`              |
+| [Starter key](glossary.md#starter-key)           | `ProviderStarter.key`          |
+| [Starter ID](glossary.md#starter-id)             | `CheckedView.starter`          |
+| [Cell target](glossary.md#cell-target)           | `StarterCellTarget`            |
+| [Source document](glossary.md#source-document)   | `SourceDocument`               |
+| [Build input](glossary.md#build-input)           | `BuildInput`                   |
+| [Host](glossary.md#host)                         | Reported as a `ProjectionSite` |
+| [Projection site](glossary.md#projection-site)   | `ProjectionSite`               |
+| [Target](glossary.md#target)                     | `ProjectionSite.targets`       |
+| [Build snapshot](glossary.md#build-snapshot)     | `BuildRequest.project`         |
+| [Page](glossary.md#page)                         | `BuildResult.document`         |
+| [Render](glossary.md#render)                     | `Render`                       |
+| [Render template](glossary.md#render-template)   | `BuildRequest.template_root`   |
+| [Render value](glossary.md#render-value)         | `RenderValue`                  |
+| [Render output](glossary.md#render-output)       | `RenderOutput`                 |
+| [Render cell](glossary.md#render-cell)           | `RenderCell`                   |
+| [Rendered files](glossary.md#rendered-files)     | `RenderResult`                 |
+| [Render region](glossary.md#render-region)       | `RenderRegion`                 |
+| [Render host](glossary.md#render-host)           | Written by `render_page()`     |
+| [Accept list](glossary.md#accept-list)           | `RenderOutput.accept`          |
+| [Diagnostic](glossary.md#diagnostic)             | `ProjectDiagnostic`            |
 
 ## Register the provider
 
@@ -121,13 +124,13 @@ and supplies a cancellation owner and a supervised command runner. Import
 every name from `marimo_studio.view_providers`. Studio's other modules change
 without notice.
 
-`ProviderInfo` holds the title and summary shown in the view picker and in
+`ProviderInfo` holds the title and summary shown in the **New view** form and in
 diagnostics, plus `options`, the provider options the provider reads.
 
 ## Create starting files
 
 `starters()` returns `ProviderStarter` records, each with a starter key, a
-title and summary for the picker, and `documents`, the Source documents a new
+title and summary for the **New view** form, and `documents`, the Source documents a new
 view starts with. Studio prefixes the starter key with the provider key to form
 the starter ID: starter key `default` from `acme-views/report` becomes
 `acme-views/report:default`.
@@ -255,7 +258,7 @@ produce a JSON string literal that is safe inside a `<script>` element, and
 | ------------- | ------------------------------------------------------------- |
 | `documents`   | The Source documents, in tab order                            |
 | `inputs`      | The build inputs: exact files and bounded directories         |
-| `sites`       | One projection site per projection host                       |
+| `sites`       | One projection site per host                                  |
 | `diagnostics` | Problems found in the project                                 |
 | `renders`     | The renders the view declares, each with the results it reads |
 
@@ -644,7 +647,7 @@ def availability(self):
     )
 ```
 
-Studio shows `reason` and `action` in the view picker and in
+Studio shows `reason` and `action` in the **New view** form and in
 `marimo-studio doctor`. Studio records the `availability()` version with each
 build, so a tool upgrade rebuilds the views that use the provider.
 

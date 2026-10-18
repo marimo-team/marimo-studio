@@ -33,7 +33,7 @@ Build the environment ahead of time when startup cannot reach package indexes
 or policy requires a reviewed lock and image.
 
 Studio writes view build state to marimo's `__marimo__/` folder beside the
-notebook, or to `MARIMO_STUDIO_STATE_DIR` when set. Keep the view folder
+notebook, or to `MARIMO_STUDIO_STATE_DIR` when set. Keep the views folder
 writable too, for Studio's `.owners/` records and `.locks/` files. See
 [Build state location](../reference/configuration.md#build-state-location).
 

@@ -85,3 +85,4 @@ def test_guide_card_provider_renders_the_report_total() -> None:
     card = view.renders[PurePosixPath("card.svg")]
     assert card.media_types == {PurePosixPath("card.svg"): "image/svg+xml"}
     assert b"Total: 1234" in card.files[card.main]
+    assert [region.reads for region in card.regions] == [("report.total",)]

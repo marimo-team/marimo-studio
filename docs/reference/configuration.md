@@ -396,7 +396,7 @@ Provider inspection returns two separate allowlists:
 | Source documents | Ordered UTF-8 files visible in Source with `edit` or `read` access          |
 | Build inputs     | Exact files and bounded directories copied into an immutable build snapshot |
 
-The browser Source panel lists the Source documents the provider reports.
+The browser Source pane lists the Source documents the provider reports.
 Python `View.inspect()` and CLI `view inspect` also prepend editable
 `view.toml` through Studio's provider-independent manifest path. Studio adds
 that file to the build inputs, so providers leave it out of their own Source
@@ -426,7 +426,7 @@ authoring status values.
 Commit `.owners/`, `view.toml`, Source documents, build inputs, frontend
 configuration, and dependency lockfiles. Studio writes replaceable build state
 to each view's `.artifacts/` directory under `state_root`, and cross-process
-locks to `.locks/` in the view folder, such as `studio/analysis/.locks/`. Each
+locks to `.locks/` in the views folder, such as `studio/analysis/.locks/`. Each
 of those directories contains a `.gitignore` that excludes its whole content,
 so Git skips them whatever the repository's own ignore rules say.
 

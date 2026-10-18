@@ -290,8 +290,8 @@ const markLoaded = (): void => {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
+  border: 1px solid var(--studio-card-border);
+  border-radius: var(--studio-radius-card);
   background: var(--vp-c-bg);
 }
 
