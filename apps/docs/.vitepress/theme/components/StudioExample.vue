@@ -82,11 +82,12 @@ const selectFromKeyboard = (event: KeyboardEvent, key: string): void => {
   requestAnimationFrame(() => document.getElementById(tabId(next.key))?.focus());
 };
 
-// Gallery cards link to the view they were showing through `?view=KEY`. The
-// frame loads after mount so a requested view is the first document fetched.
+// Gallery cards and the landing page wall link to the tab they show through
+// `?view=KEY`, where `notebook` selects the notebook. The frame loads after
+// mount so a requested tab is the first document fetched.
 onMounted(() => {
   const requested = new URLSearchParams(window.location.search).get("view");
-  if (requested && example.views.some(({ key }) => key === requested)) {
+  if (requested && tabs.some(({ key }) => key === requested)) {
     selectedKey.value = requested;
   }
   frameSrc.value = documentHref(selectedKey.value);

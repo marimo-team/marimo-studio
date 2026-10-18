@@ -4,7 +4,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { preview } from "vite";
 
-import { documentationExampleFamilies, documentationPosterViewports } from "../examples.ts";
+import {
+  documentationExampleFamilies,
+  documentationExamplePages,
+  documentationPosterViewports,
+} from "../examples.ts";
 import { selectDocumentationExamples } from "./example-selection.ts";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
@@ -19,13 +23,14 @@ const timeoutMs = 60_000;
 
 const usage = `Usage: pnpm --filter @marimo-studio/docs thumbnails [selectors] [--base-url URL]
 
-Captures the Examples gallery image and the landing-page poster for each view
-from the exported examples in public/examples. Writes
-public/thumbnails/FAMILY/VIEW.webp and public/posters/FAMILY/VIEW.webp. Run
+Captures a thumbnail of each example notebook and view, and a landing-page
+poster of each view, from the exported examples in public/examples. Writes
+public/thumbnails/FAMILY/PAGE.webp and public/posters/FAMILY/VIEW.webp. Run
 \`make docs-thumbnails\` to export missing examples and install Chromium first.
 
-Selectors may be repeated. Without selectors every view is captured:
-  --family SLUG       Capture every view of one family
+Selectors may be repeated. Without selectors every page is captured:
+  --family SLUG       Capture the notebook and every view of one family
+  --notebook SLUG     Capture one notebook
   --view FAMILY/VIEW  Capture one view
   --base-url URL      Capture from a running docs site instead of public/`;
 
@@ -80,32 +85,43 @@ const capture = async (browser: Browser, baseUrl: string, selectors: string[]) =
   const encoder = await browser.newPage();
   const failed: string[] = [];
   try {
-    for (const { family, views } of selection.families) {
-      for (const view of views) {
-        const name = `${family.slug}/${view.key}`;
+    for (const { family, notebook, views } of selection.families) {
+      const pages = documentationExamplePages(family).filter((page) =>
+        page.notebook ? notebook : views.some(({ key }) => key === page.key),
+      );
+      for (const { key, notebook: isNotebook, path } of pages) {
+        const view = views.find((candidate) => candidate.key === key);
         const page = await context.newPage();
-        page.on("pageerror", (error) => console.warn(`  ${name} reported: ${error.message}`));
+        page.on("pageerror", (error) => console.warn(`  ${path} reported: ${error.message}`));
         try {
-          await waitForView(page, new URL(`examples/${name}/index.html`, baseUrl).href);
+          await waitForView(page, new URL(`examples/${path}/index.html`, baseUrl).href);
+          if (isNotebook) {
+            // A static notebook export opens with a toast that closes itself.
+            await page
+              .getByText("Static notebook", { exact: true })
+              .waitFor({ state: "hidden", timeout: timeoutMs });
+          }
           const thumbnail = await page.screenshot({ type: "png" });
           await write(
-            join(thumbnailRoot, family.slug, `${view.key}.webp`),
+            join(thumbnailRoot, `${path}.webp`),
             await encodeWebp(encoder, thumbnail, thumbnailWidth),
           );
-          // Posters reflow the same page at their own viewport so reports show
+          // Posters reflow the same view at their own viewport so reports show
           // more of their scroll and apps keep a single screen.
-          await page.setViewportSize(documentationPosterViewports[view.poster]);
-          await page.waitForTimeout(settleMs);
-          const poster = await page.screenshot({ type: "png" });
-          await write(
-            join(posterRoot, family.slug, `${view.key}.webp`),
-            await encodeWebp(encoder, poster, posterWidth),
-          );
-          console.log(`Captured ${name}`);
+          if (view) {
+            await page.setViewportSize(documentationPosterViewports[view.poster]);
+            await page.waitForTimeout(settleMs);
+            const poster = await page.screenshot({ type: "png" });
+            await write(
+              join(posterRoot, `${path}.webp`),
+              await encodeWebp(encoder, poster, posterWidth),
+            );
+          }
+          console.log(`Captured ${path}`);
         } catch (error) {
-          failed.push(name);
+          failed.push(path);
           console.error(
-            `Could not capture ${name}: ${error instanceof Error ? error.message : String(error)}`,
+            `Could not capture ${path}: ${error instanceof Error ? error.message : String(error)}`,
           );
         } finally {
           await page.close();

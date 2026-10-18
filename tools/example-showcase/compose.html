@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>marimo-studio views</title>
+    <title>marimo-studio example wall</title>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css"
@@ -13,14 +13,14 @@
     />
     <style>
       :root {
-        --w: 2400px;
-        --h: 1000px;
         --card-bg: #fff;
         --card-border: rgb(20 30 25 / 12%);
         --chrome: #fbfbfa;
         --chrome-rule: rgb(20 30 25 / 8%);
         --label: #3c4043;
         --muted: #8a8f94;
+        --notebook-chrome: #eef5f2;
+        --notebook-label: #1d7363;
         --shadow:
           0 0 0 1px rgb(20 30 25 / 4%), 0 2px 4px rgb(20 30 25 / 5%),
           0 18px 36px -12px rgb(20 30 25 / 18%), 0 48px 96px -32px rgb(20 30 25 / 26%);
@@ -33,6 +33,8 @@
         --chrome-rule: rgb(255 255 255 / 8%);
         --label: #e3e5e8;
         --muted: #8f959b;
+        --notebook-chrome: #1f2a26;
+        --notebook-label: #cad996;
         --shadow:
           0 0 0 1px rgb(0 0 0 / 40%), 0 2px 4px rgb(0 0 0 / 30%),
           0 18px 36px -12px rgb(0 0 0 / 55%), 0 48px 96px -32px rgb(0 0 0 / 70%);
@@ -44,38 +46,49 @@
         background: transparent;
       }
 
-      body[data-bg="light"] #canvas {
-        background: #fafaf9;
-      }
-
-      body[data-bg="dark"] #canvas {
-        background: #0d1117;
-      }
-
       #canvas {
         position: relative;
-        width: var(--w);
-        height: var(--h);
+        width: 2400px;
+        height: var(--height);
         overflow: hidden;
-        perspective: 3200px;
+        perspective: var(--perspective);
         perspective-origin: 50% 42%;
         font-family: "Inter Variable", system-ui, sans-serif;
+        /* The wall bleeds past the frame, so its edges fade out. */
+        mask-image:
+          linear-gradient(to bottom, #000 84%, transparent 100%),
+          linear-gradient(to right, transparent 0%, #000 7%, #000 93%, transparent 100%);
+        mask-composite: intersect;
       }
 
-      .card {
+      .plane {
         position: absolute;
         left: 50%;
         top: 50%;
+        display: grid;
+        grid-auto-flow: column;
+        gap: var(--gap);
+        transform-style: preserve-3d;
+        transform: translate(-50%, -50%) var(--plane);
+      }
+
+      .column {
+        display: grid;
+        gap: var(--gap);
+        align-content: start;
+      }
+
+      .card {
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
+        width: var(--card);
+        height: calc(var(--card) * var(--aspect) + 34px);
         overflow: hidden;
         border: 1px solid var(--card-border);
         border-radius: 12px;
         background: var(--card-bg);
         box-shadow: var(--shadow);
-        transform-style: preserve-3d;
-        backface-visibility: hidden;
       }
 
       .card header {
@@ -94,20 +107,15 @@
         letter-spacing: -0.005em;
       }
 
-      /* A fanned card keeps its label and detail together on its visible edge. */
-      .card[data-side="left"] header {
-        justify-content: flex-start;
-      }
-
-      .card[data-side="right"] header {
-        flex-direction: row-reverse;
-        justify-content: flex-start;
-      }
-
       .card header span:last-child {
         color: var(--muted);
         font-size: 12px;
         font-weight: 450;
+      }
+
+      .card.is-notebook header {
+        background: var(--notebook-chrome);
+        color: var(--notebook-label);
       }
 
       .card.is-notebook header span:last-child {
@@ -125,150 +133,48 @@
         object-fit: cover;
         object-position: top center;
       }
-
-      .plane {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 0;
-        height: 0;
-        transform-style: preserve-3d;
-        transform: var(--plane, translate3d(40px, 60px, -760px) rotateX(48deg) rotateZ(-36deg));
-      }
-
-      /* The wall bleeds past the frame, so its edges fade out. */
-      body[data-layout="wall"] #canvas {
-        -webkit-mask-image:
-          linear-gradient(to bottom, #000 84%, transparent 100%),
-          linear-gradient(to right, transparent 0%, #000 7%, #000 93%, transparent 100%);
-        -webkit-mask-composite: source-in;
-        mask-image:
-          linear-gradient(to bottom, #000 84%, transparent 100%),
-          linear-gradient(to right, transparent 0%, #000 7%, #000 93%, transparent 100%);
-        mask-composite: intersect;
-      }
-
-      .card.is-notebook header {
-        background: var(--notebook-chrome, #eef5f2);
-        color: var(--notebook-label, #1d7363);
-      }
-
-      body[data-theme="dark"] .card.is-notebook header {
-        --notebook-chrome: #1f2a26;
-        --notebook-label: #cad996;
-      }
     </style>
   </head>
   <body>
-    <div id="canvas"></div>
+    <div id="canvas"><div class="plane"></div></div>
     <script type="module">
-      const params = new URLSearchParams(location.search);
-      const theme = params.get("theme") ?? "light";
-      const bg = params.get("bg") ?? "transparent";
-      const layout = params.get("layout") ?? "fan";
+      // render.ts provides the theme, the canvas height, the camera, the wall
+      // geometry in card widths, and one column of cards per example family.
+      const { camera, columns, geometry, height, theme } = window.wall;
+      const card = 640;
       document.body.dataset.theme = theme;
-      document.body.dataset.bg = bg;
-      document.body.dataset.layout = layout;
-      if (params.get("plane"))
-        document.documentElement.style.setProperty("--plane", params.get("plane"));
-      if (params.get("h"))
-        document.documentElement.style.setProperty("--h", `${params.get("h")}px`);
+      Object.entries({
+        "--aspect": String(geometry.aspect),
+        "--card": `${card}px`,
+        "--gap": `${geometry.gap * card}px`,
+        "--height": `${height}px`,
+        "--perspective": `${geometry.perspective * card}px`,
+        "--plane": `translate3d(${camera.x}px, ${camera.y}px, ${camera.z}px) rotateX(${geometry.rotateX}deg) rotateZ(${geometry.rotateZ}deg)`,
+      }).forEach(([name, value]) => document.documentElement.style.setProperty(name, value));
 
-      // Notebook cards name their file. View cards name the technologies they
-      // are built with, so each frontend reads as its own app.
-      const card = (id, style, side) => {
-        const [family, view] = id.split("/");
-        const head = view === "notebook";
-        const entry = window.catalog[family];
-        const found = entry.views.find(({ key }) => key === view);
-        const [label, detail] = head
-          ? ["Notebook", entry.notebook]
-          : [found.label, found.technologies.join(" · ")];
-        const element = document.createElement("section");
-        element.className = head ? "card is-notebook" : "card";
-        element.dataset.side = side;
-        element.innerHTML = `<header><span>${label}</span><span>${detail}</span></header><img src="shots/${family}--${view}.png" alt="">`;
-        Object.assign(element.style, style);
-        document.getElementById("canvas").append(element);
-      };
-
-      // Cards are 16:10 screenshots under a 34px header.
-      const size = (width) => ({ width: `${width}px`, height: `${width * 0.625 + 34}px` });
-      const place = ({ x, y, z, ry, rz, width, depth }) => ({
-        ...size(width),
-        transform: `translate(-50%, -50%) translate3d(${x}px, ${y}px, ${z}px) rotateY(${ry}deg) rotateZ(${rz}deg)`,
-        zIndex: String(depth),
-      });
-
-      const families = Object.fromEntries(
-        Object.entries(window.catalog).map(([slug, { views }]) => [
-          slug,
-          views.map(({ key }) => key),
-        ]),
-      );
-
-      const layouts = {
-        // One notebook raised behind its views, which fan out in an arc beneath
-        // it. The inner cards sit in front, so each card's header aligns to the
-        // outer edge that stays visible.
-        fan: () => {
-          const family = params.get("family") ?? "athletes";
-          const order = (params.get("order") ?? "").split(",").filter(Boolean);
-          const views = order.length > 0 ? order : families[family];
-          const middle = (views.length - 1) / 2;
-          card(
-            `${family}/notebook`,
-            place({ x: 0, y: -250, z: -760, ry: 0, rz: 0, width: 1180, depth: 0 }),
-            "spread",
-          );
-          views
-            .map((view, index) => ({ view, offset: index - middle }))
-            .sort((left, right) => Math.abs(right.offset) - Math.abs(left.offset))
-            .forEach(({ view, offset }, depth) => {
-              const reach = Math.abs(offset);
-              card(
-                `${family}/${view}`,
-                place({
-                  x: offset * 530,
-                  y: 60 + reach * 34,
-                  z: -reach * 190,
-                  ry: -offset * 13,
-                  rz: offset * 1.6,
-                  width: 880,
-                  depth: depth + 1,
-                }),
-                offset < 0 ? "left" : "right",
-              );
-            });
-        },
-        // Every notebook heads a column, with its views stacked beneath it.
-        wall: () => {
-          const plane = document.createElement("div");
-          plane.className = "plane";
-          document.getElementById("canvas").append(plane);
-          const width = 640,
-            gap = 44,
-            height = width * 0.625 + 34;
-          const columns = Object.entries(families);
-          const rows = Math.max(...columns.map(([, views]) => views.length + 1));
-          columns.forEach(([family, views], c) =>
-            ["notebook", ...views].forEach((view, r) => {
-              card(
-                `${family}/${view}`,
-                {
-                  ...size(width),
-                  left: `${(c - (columns.length - 1) / 2) * (width + gap)}px`,
-                  top: `${(r - (rows - 1) / 2) * (height + gap)}px`,
-                  transform: "translate(-50%, -50%)",
-                },
-                "spread",
-              );
-              plane.append(document.getElementById("canvas").lastElementChild);
+      const plane = document.querySelector(".plane");
+      for (const pages of columns) {
+        const column = document.createElement("div");
+        column.className = "column";
+        for (const { detail, label, notebook, shot } of pages) {
+          const element = document.createElement("section");
+          element.className = notebook ? "card is-notebook" : "card";
+          const header = document.createElement("header");
+          header.append(
+            ...[label, detail].map((text) => {
+              const span = document.createElement("span");
+              span.textContent = text;
+              return span;
             }),
           );
-        },
-      };
-      layouts[layout]();
+          const image = document.createElement("img");
+          image.alt = "";
+          image.src = shot;
+          element.append(header, image);
+          column.append(element);
+        }
+        plane.append(column);
+      }
 
       await Promise.all([...document.images].map((image) => image.decode().catch(() => undefined)));
       await document.fonts.ready;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import DefaultTheme from "vitepress/theme";
 
-import StudioHeroShowcase from "./components/StudioHeroShowcase.vue";
+import StudioExampleWall from "./components/StudioExampleWall.vue";
 import StudioSidebarToggle from "./components/StudioSidebarToggle.vue";
 import { useSidebarCollapse } from "./sidebar-collapse.ts";
 
@@ -12,7 +12,7 @@ const { collapsed, available, toggle } = useSidebarCollapse();
 <template>
   <Layout>
     <template #home-hero-after>
-      <StudioHeroShowcase />
+      <StudioExampleWall />
     </template>
     <template #nav-bar-content-before>
       <StudioSidebarToggle v-if="available" :collapsed="collapsed" @toggle="toggle" />
