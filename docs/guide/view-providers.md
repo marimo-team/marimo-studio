@@ -658,8 +658,10 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
+    Rect,
     Render,
     RenderFile,
+    RenderRegion,
     RenderRequest,
     RenderResult,
     RenderValue,
@@ -721,7 +723,16 @@ class CardProvider:
         text = "pending" if total is None else str(total)
         card = template.replace("{{ total }}", escape(text))
         (request.output_root / CARD).write_text(card, encoding="utf-8")
-        return RenderResult((RenderFile(CARD, "image/svg+xml"),), main=CARD)
+        # The total sits across the middle of the card, so Lens can select it.
+        total_region = RenderRegion(
+            CARD,
+            Rect(x=0.05, y=0.35, width=0.7, height=0.35),
+            reads=("report.total",),
+            label="Report total",
+        )
+        return RenderResult(
+            (RenderFile(CARD, "image/svg+xml"),), main=CARD, regions=(total_region,)
+        )
 
 
 provider = CardProvider()
@@ -749,27 +760,11 @@ defines the contract, including figure sizes and preview files.
 ### Make parts of the file selectable
 
 A rendered file is a picture of results, so Studio cannot tell on its own
-which pixels show which result. Return a
+which pixels show which result. `render()` returns a
 [render region](../reference/glossary.md#render-region) for each part the
 provider placed, and [Lens](lens.md) can select that part and trace it to its
-cell. The card draws `report.total` across its middle, so `render()` ends with
-one region. Import `Rect` and `RenderRegion` from
-`marimo_studio.view_providers` beside the other names:
-
-```python
-return RenderResult(
-    (RenderFile(CARD, "image/svg+xml"),),
-    main=CARD,
-    regions=(
-        RenderRegion(
-            CARD,
-            Rect(x=0.05, y=0.35, width=0.7, height=0.35),
-            reads=("report.total",),
-            label="Report total",
-        ),
-    ),
-)
-```
+cell. `CardProvider` returns one region, `total_region`, for the total across
+the middle of the card.
 
 `Rect` measures fractions of the file's width and height from its top left
 corner. A PDF region also names its `page`, and a video region the `start` and
