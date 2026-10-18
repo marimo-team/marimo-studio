@@ -6,10 +6,13 @@ import ast
 import importlib
 import sys
 from collections.abc import Iterator
+from importlib.metadata import metadata
 from pathlib import Path, PurePosixPath
 
 import pytest
+from packaging.specifiers import SpecifierSet
 
+from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio.view_providers.testing import check_provider
 
 GUIDE = Path("docs/guide/view-providers.md")
@@ -63,6 +66,25 @@ def test_every_python_example_compiles() -> None:
             compile(block, str(path), "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
             compiled += 1
     assert compiled > 0
+
+
+@pytest.mark.parametrize(
+    "notebook", sorted(Path("examples").glob("*.py")), ids=lambda path: path.stem
+)
+def test_example_notebook_admits_only_python_versions_studio_installs_on(
+    notebook: Path,
+) -> None:
+    # A sandboxed kernel installs the running Studio, and pixi solves for the
+    # newest Python that requires-python admits.
+    studio = SpecifierSet(metadata("marimo-studio")["Requires-Python"])
+    document = read_notebook_metadata(notebook)
+    assert document is not None
+    declared = SpecifierSet(str(document["requires-python"]))
+
+    admitted = [f"3.{minor}" for minor in range(8, 30) if f"3.{minor}" in declared]
+
+    assert admitted
+    assert [version for version in admitted if version not in studio] == []
 
 
 @pytest.mark.usefixtures("acme_views")
