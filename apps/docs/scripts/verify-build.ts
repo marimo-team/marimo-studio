@@ -113,6 +113,10 @@ for (const family of documentationExampleFamilies) {
     failures.push(`Missing static notebook export: ${family.slug}`);
   }
 
+  check(
+    await isFile(join(distDir, "thumbnails", family.slug, "notebook.webp")),
+    `Missing notebook thumbnail: ${family.slug}`,
+  );
   for (const view of family.views) {
     exampleCount += 1;
     const root = join(distDir, "examples", family.slug, view.key);

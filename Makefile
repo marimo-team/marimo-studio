@@ -116,7 +116,7 @@ docs-thumbnails: _browser-ready ## Capture example thumbnails and landing poster
 	@test -d apps/docs/public/examples || $(MAKE) docs-examples
 	$(VP) run --filter @marimo-studio/docs thumbnails
 
-docs-showcase: _browser-ready ## Render example showcase images from exported examples.
+docs-showcase: _browser-ready ## Render the README example wall from exported examples.
 	@test -d apps/docs/public/examples || $(MAKE) docs-examples
 	node tools/example-showcase/capture.ts
 	node tools/example-showcase/render.ts

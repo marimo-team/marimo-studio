@@ -1,12 +1,15 @@
 // Capture each exported documentation notebook and view as a 3x PNG for the
-// showcase compositions. Usage: node tools/example-showcase/capture.ts [FAMILY/VIEW ...]
+// example wall. Usage: node tools/example-showcase/capture.ts [FAMILY/PAGE ...]
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, join, resolve, sep } from "node:path";
 
-import { documentationExampleFamilies } from "../../apps/docs/examples.ts";
+import {
+  documentationExampleFamilies,
+  documentationExamplePages,
+} from "../../apps/docs/examples.ts";
 
 const root = resolve(import.meta.dirname, "../..");
 // The docs workspace owns the Playwright dependency and its Chromium install.
@@ -36,13 +39,15 @@ const contentTypes: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-const pages = documentationExampleFamilies.flatMap(({ slug, views }) =>
-  ["notebook", ...views.map(({ key }) => key)].map((view) => `${slug}/${view}`),
+const pages = documentationExampleFamilies.flatMap((family) =>
+  documentationExamplePages(family).map(({ path }) => path),
 );
 const selected = process.argv.slice(2);
 const unknown = selected.filter((name) => !pages.includes(name));
 if (unknown.length > 0) {
-  throw new Error(`Unknown example pages: ${unknown.join(", ")}. Expected FAMILY/VIEW.`);
+  throw new Error(
+    `Unknown example pages: ${unknown.join(", ")}. Expected FAMILY/PAGE, where PAGE is notebook or a view key.`,
+  );
 }
 if (!existsSync(join(publicDir, "examples"))) {
   throw new Error("Missing apps/docs/public/examples. Run `make docs-examples` first.");

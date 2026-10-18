@@ -245,8 +245,8 @@ shows how each selection traces back.
 
 ## Next steps
 
-- [How Studio works](how-studio-works.md) follows one view from its files to
-  the browser.
+- [How Studio works](how-studio-works.md) shows what each part of Studio does
+  and which data passes between them.
 - [Getting started](guide/getting-started.md) walks you through a first view.
 - [Author with a coding agent](guide/coding-agents.md) shows how to ask an
   agent for one.

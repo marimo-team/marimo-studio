@@ -22,28 +22,29 @@
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python 3.10 through 3.14" src="https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg"></a>
 </p>
 
-marimo-studio turns the results of a [marimo](https://marimo.io/) notebook
-into building blocks for any document: web pages, slide decks, and typeset
-PDFs that place the notebook's results by name. A view can place a cell with its controls, a rendered output
-such as a chart, or a value such as a number or a table. The notebook keeps the
-data, the computation, and all of the Python. Each view keeps its presentation
-in its own folder beside the notebook, an ordinary project in the format its
-audience needs, which you or a coding agent can edit with any tool. You can
-start from HTML pages, React or Svelte apps, Reveal.js decks, Observable
-notebooks, Quarto articles, and Typst or LaTeX PDFs, or bring any other
-framework, template, or build tool with a
+**Turn your marimo notebook into any document.** Use your
+[marimo](https://marimo.io/) notebook's outputs as building blocks. Place a
+chart, a table, or a single number in a web page, a slide deck, or a paper, and
+keep all of your Python in the notebook.
+
+Each document is a view: an ordinary project in its own folder beside the
+notebook, which you or a coding agent can edit with any tool. A view places a
+whole cell with its controls, one output such as a figure, or a value that you
+format yourself. Pages stay live, so changing a control updates every result
+that reads it, and PDFs compile again with the new values. Every result traces
+back to the notebook cell that computed it.
+
+You can start from HTML, React, Svelte, Reveal.js, Observable Notebook Kit,
+Quarto, Typst, or LaTeX, and bring any other framework, template, or build tool
+with a
 [view provider](https://marimo-team.github.io/marimo-studio/guide/view-providers),
 a Python package.
 
-Pages stay live, so changing a control updates every result that depends on
-it. PDFs compile again with the new values. Every result traces back to the
-notebook cell that computed it.
-
 > [!NOTE]
-> Studio is experimental and changing rapidly. Pin `marimo-studio` in saved
-> projects.
+> Studio is experimental and changing rapidly. Pin `marimo-studio` and
+> third-party view providers in saved projects.
 
-## Example
+## Outputs as building blocks
 
 Two cells from a notebook that solves an optimization problem:
 
@@ -77,7 +78,8 @@ A Typst report places the same two results in a PDF:
 The optimal value is #marimo_value("solution.value", default: 0).
 ```
 
-The notebook computes both results, and each view shows them in its own format:
+The notebook computes both results, and each view places them in its own
+format:
 
 <p align="center">
   <picture>
@@ -89,11 +91,12 @@ The notebook computes both results, and each view shows them in its own format:
 The page shows the figure as marimo renders it. The PDF draws it as a vector
 graphic at the width the Typst source places it.
 
-[What is Studio?](https://marimo-team.github.io/marimo-studio/what-is-studio) explains the model,
+[What is Studio?](https://marimo-team.github.io/marimo-studio/what-is-studio)
+explains the model,
 [How Studio works](https://marimo-team.github.io/marimo-studio/how-studio-works)
-follows one view from its files to the browser, and the
-[Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs) example shows both
-views next to the notebook.
+shows how a page receives your notebook's results, and the
+[Quadratic programs](https://marimo-team.github.io/marimo-studio/examples/quadratic-programs)
+example shows both views next to the notebook.
 
 ## Get started
 
@@ -116,8 +119,8 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 ```
 
 Click **Add view** in the toolbar, choose **HTML document**, and create the
-view. Notebook and Preview open side by side, and saving view source rebuilds
-Preview.
+view. Notebook and Preview open side by side. Edit the view's files in Studio's
+Source pane or in your own editor, and Preview rebuilds when you save.
 
 ![Notebook, Preview, and view source in Studio](apps/docs/public/screenshots/studio-develop.png)
 
@@ -158,9 +161,9 @@ Or export the `report` view as a static site:
 uvx marimo-studio view export report --target analysis.py --output dist/report
 ```
 
-The export runs the notebook on your machine, prepares results for each input
-state the view lists, and leaves the notebook source out of the site. Views can also
-run Python in the visitor's browser.
+The export runs the notebook on your machine, saves the results for each state
+the view prepares, and leaves the notebook source out of the site. Views can
+also run Python in your reader's browser.
 [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share) compares the options.
 
 ## Documentation

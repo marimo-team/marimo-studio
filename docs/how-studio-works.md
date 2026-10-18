@@ -1,14 +1,14 @@
 ---
 title: How Studio works
-description: Follow one view from its source files to the browser, and see what the notebook, the view project, the view provider, and the session each do.
+description: See what the notebook, the view project, the view provider, and the session each do when someone opens a view, and which data passes between them.
 ---
 
 # How Studio works
 
 Studio joins two things you write: a [notebook](reference/glossary.md#notebook)
-and a [view project](reference/glossary.md#view-project). This page follows
-the view `dashboard` of `analysis.py` from its files to a reader's browser and
-names the data that passes at each step.
+and a [view project](reference/glossary.md#view-project). This page uses the
+view `dashboard` of `analysis.py` to show what each part does and which data
+passes between them.
 
 <llm-exclude>
 

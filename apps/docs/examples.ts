@@ -279,3 +279,52 @@ export const documentationExampleFamilies = [
 export const documentationDefaultExamplePaths = documentationExampleFamilies.map(
   ({ slug, views }) => `/examples/${slug}/${views[0].key}/index.html`,
 );
+
+/** One captured page of an example family: its notebook or one of its views. */
+export interface DocumentationExamplePage {
+  /** `notebook`, or the view key. */
+  key: string;
+  label: string;
+  /** The notebook's file name, or the technologies the view is built with. */
+  detail: string;
+  notebook: boolean;
+  /** `FAMILY/KEY`, the page's folder under the exported examples. */
+  path: string;
+}
+
+/** The notebook page, then every view page in catalog order. */
+export const documentationExamplePages = ({
+  notebook,
+  slug,
+  views,
+}: DocumentationExampleFamily): DocumentationExamplePage[] => [
+  {
+    detail: notebook.split("/").at(-1) ?? notebook,
+    key: "notebook",
+    label: "Notebook",
+    notebook: true,
+    path: `${slug}/notebook`,
+  },
+  ...views.map(({ key, label, technologies }) => ({
+    detail: technologies.map(({ name }) => name).join(" · "),
+    key,
+    label,
+    notebook: false,
+    path: `${slug}/${key}`,
+  })),
+];
+
+/**
+ * The example wall heads a column with each notebook and stacks its views
+ * beneath it, on a plane tilted away from the reader. tools/example-showcase
+ * renders it for the README, and the landing page hero scrolls it. Lengths
+ * are in card widths, so both keep the same proportions at any size.
+ */
+export const documentationExampleWall = {
+  /** A card shows a 16:10 page capture beneath its header. */
+  aspect: 10 / 16,
+  gap: 0.06875,
+  perspective: 5,
+  rotateX: 38,
+  rotateZ: -11,
+} as const;

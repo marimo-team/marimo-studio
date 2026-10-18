@@ -12,12 +12,12 @@ examples, and site configuration into the
 | `docs/`                                      | Public concepts, guides, examples, and reference                               |
 | `apps/docs/.vitepress/routes.ts`             | Canonical page routes, navigation, and complete route inventory                |
 | `apps/docs/.vitepress/config.mts`            | VitePress behavior, metadata, local search, theme, and base path               |
-| `apps/docs/examples.ts`                      | Documentation example families, technologies, labels, and exported paths       |
+| `apps/docs/examples.ts`                      | Example families, pages, technologies, wall geometry, and exported paths       |
 | `apps/docs/scripts/build-examples.ts`        | Notebook and view export transaction                                           |
-| `apps/docs/scripts/capture-thumbnails.ts`    | Gallery thumbnails captured from the published example views                   |
+| `apps/docs/scripts/capture-thumbnails.ts`    | Thumbnails and posters captured from the published example pages               |
 | `apps/docs/scripts/source-integrity.test.ts` | Page metadata, route inventory, and heading fragments                          |
 | `apps/docs/scripts/verify-build.ts`          | Built routes, assets, base paths, examples, and sibling links                  |
-| `tools/example-showcase/`                    | README showcase images composed from captured example views                    |
+| `tools/example-showcase/`                    | README example wall composed from captured example pages                       |
 | `scripts/example-figure/`                    | README and overview figures of one notebook rendered as a page and a PDF       |
 | `apps/docs/public/`                          | Brand, icon, screenshot, thumbnail, showcase, figure files, generated examples |
 | `development_docs/`                          | Contributor decisions, ownership, lifecycle, validation, and release workflow  |
@@ -103,9 +103,11 @@ component uses the same size to reserve the tile before the image loads.
 The Examples page renders one `StudioExampleCard` per family. Each card cycles
 through `apps/docs/public/thumbnails/FAMILY/VIEW.webp` for the views listed in
 `documentationExampleFamilies`. The landing page masonry reads
-`apps/docs/public/posters/FAMILY/VIEW.webp`. Thumbnails and posters are
-committed assets. Recapture them after a visible view change or when a view
-joins the catalog:
+`apps/docs/public/posters/FAMILY/VIEW.webp`, and the landing page wall reads
+the thumbnails of every page, including
+`apps/docs/public/thumbnails/FAMILY/notebook.webp`. Thumbnails and posters are
+committed assets. Recapture them after a visible change or when a view joins
+the catalog:
 
 ```console
 make docs-thumbnails
@@ -113,32 +115,44 @@ make docs-thumbnails
 
 The target exports the examples when `apps/docs/public/examples` is missing and
 installs Chromium. The script serves `apps/docs/public` locally, opens each
-exported view at 1440x900 and device scale 2, waits for network idle, loaded
-fonts, and a settle delay, then writes a 1600px wide WebP thumbnail. It then
-resizes the same page to the view's poster viewport, waits again, and writes a
-1024px wide WebP poster. Select views with `--family SLUG` or
-`--view FAMILY/VIEW`, or capture a deployed site with `--base-url`:
+exported notebook and view at 1440x900 and device scale 2, waits for network
+idle, loaded fonts, and a settle delay, then writes a 1600px wide WebP
+thumbnail. A notebook also waits for marimo's static notebook toast to close.
+A view's page is then resized to its poster viewport and captured again as a
+1024px wide WebP poster. Select pages with `--family SLUG`, `--notebook SLUG`,
+or `--view FAMILY/VIEW`, or capture a deployed site with `--base-url`:
 
 ```console
 pnpm --filter @marimo-studio/docs thumbnails -- --view athletes/field
 pnpm --filter @marimo-studio/docs thumbnails -- --base-url https://marimo-team.github.io/marimo-studio/
 ```
 
-A view that fails to load is reported and the remaining views are still
+A page that fails to load is reported and the remaining pages are still
 captured. Inspect the images before committing them.
 
-## Example showcase images
+## Example wall
 
-The README opens with `apps/docs/public/showcase/marimo-studio-wall-THEME.webp`,
-which places every example notebook above its views on a receding plane, one
-column per family and one row per view. Each family also has a fan,
-`marimo-studio-fan-FAMILY-THEME.webp`, with the notebook raised behind its views
-in an arc. A fan's `order` in `showcases.json` lists every view of the family
-from left to right, and the inner cards sit in front. Every image has `light` and `dark` variants for
-GitHub's color schemes and keeps a transparent background. The plain file is a
-2400px WebP at quality 0.9 for READMEs and pages, and the `@2x` file is the
-4800px lossless master. Render them again after a visible view change or when
-the catalog changes:
+The example wall heads a column with each notebook and stacks its views
+beneath it, on a plane tilted away from the reader. The README opens with a
+rendered wall, and the landing page hero scrolls a live one. Both read their
+pages from `documentationExamplePages`, which lists a family's notebook and
+then its views with each card's label and detail, and their proportions from
+`documentationExampleWall` in `apps/docs/examples.ts`. Lengths there are in
+card widths.
+
+`StudioExampleWall` renders the hero in the `home-hero-after` slot. Its middle
+four columns hold the families in catalog order, and wider screens add the
+next family in the cycle on each side. Every column scrolls slowly, in the
+opposite direction to its neighbors. It eases to a stop while the mouse is over
+the wall, and the pause button beneath it stops it for touch and keyboard
+readers. Each card links to its page on the family's example page, through
+`?view=KEY`. Reduced motion keeps the wall still.
+
+The README image is `apps/docs/public/showcase/marimo-studio-wall-THEME.webp`,
+with `light` and `dark` variants for GitHub's color schemes and a transparent
+background. The plain file is a 2400px WebP at quality 0.9 for READMEs and
+pages, and the `@2x` file is the 4800px lossless master. Render it again after
+a visible change or when the catalog changes:
 
 ```console
 make docs-showcase
@@ -148,22 +162,18 @@ The target exports the examples when `apps/docs/public/examples` is missing.
 `tools/example-showcase/capture.ts` serves `apps/docs/public`, opens each
 exported notebook and view at 1440x900 and device scale 3, waits for network
 idle, loaded fonts, and a settle delay, then writes a PNG to the ignored
-`tools/example-showcase/shots/` directory. `render.ts` composes each entry in
-`showcases.json` through `compose.html` on a 2400px canvas. It rasterizes the
-canvas at the largest output `scale` times `supersample`, then resamples it
-with Chromium's high-quality filter to each entry in `outputs`, largest first.
-`compose.html` loads Inter and JetBrains Mono from jsDelivr, so rendering needs
-network access. Card headers take notebook files, view labels, and technologies
-from `apps/docs/examples.ts`.
+`tools/example-showcase/shots/` directory. `render.ts` lays the shots out
+through `compose.html` on a 2400px canvas. It rasterizes the canvas at twice
+the largest output scale, then resamples it with Chromium's high-quality
+filter to each output, largest first. `compose.html` loads Inter and
+JetBrains Mono from jsDelivr, so rendering needs network access.
 
-Pass `FAMILY/VIEW` arguments to capture selected shots and showcase names to
-render a subset. A fan uses its family's shots and the wall uses every shot.
-`render.ts` names the capture command for any shot a selected showcase is
-missing:
+Pass `FAMILY/PAGE` arguments to capture selected shots. `render.ts` names the
+capture command for any shot the wall is missing:
 
 ```console
 node tools/example-showcase/capture.ts quadratic-programs/lab
-node tools/example-showcase/render.ts marimo-studio-fan-quadratic-programs
+node tools/example-showcase/render.ts
 ```
 
 ## Example figures
