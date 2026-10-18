@@ -66,8 +66,9 @@ Python packages:
 # tectonic = ">=0.15"
 ```
 
-From the root of a clone set up as [Run an example locally](index.md#run-an-example-locally)
-describes, open the notebook in marimo's pixi sandbox:
+From the root of a clone set up as described in
+[Run an example locally](index.md#run-an-example-locally), open the notebook in
+marimo's pixi sandbox:
 
 ```console
 uv run marimo edit examples/occupancy.py --sandbox=pixi

@@ -65,7 +65,8 @@ for each integration.
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/),
 [Node.js](https://nodejs.org/) 24.15 or newer, and
 [pixi](https://pixi.prefix.dev/latest/installation/), then the locked
-environments:
+environments. Node.js 25 and newer ship without Corepack, so install it there
+first with `npm install --global corepack`:
 
 ```console
 corepack enable pnpm
@@ -73,8 +74,7 @@ make setup
 ```
 
 `corepack enable pnpm` lets Node.js provide the pnpm version that
-`package.json` pins. Node.js 25 and newer ship without Corepack, so install it
-there first with `npm install --global corepack`.
+`package.json` pins.
 
 `make setup` installs the pixi environment of system tools, the Python and
 [pnpm](https://pnpm.io/) JavaScript workspaces, prepares the pinned Marimo

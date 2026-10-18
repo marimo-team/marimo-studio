@@ -37,8 +37,9 @@ View builds run in the process that requests them: the server, a CLI command,
 or a code-mode kernel. Provider system tools such as `tectonic` resolve from
 a notebook's pixi script environment when its PEP 723 metadata has a
 `[tool.pixi]` table, then from that process's `PATH`. marimo's
-`--sandbox=pixi` ignores an enclosing Python project, so the server uses the
-script environment for every notebook. A Studio command uses it for a
+`--sandbox=pixi` runs every sandboxed kernel in the script environment, even
+inside a Python project, so the server takes provider tools from it for every
+notebook. A Studio command uses it for a
 standalone notebook and runs a notebook in a pixi workspace or uv project in
 that project's environment. See
 [provider environments](development_docs/architecture/provider-environments.md#pixi-script-environments).

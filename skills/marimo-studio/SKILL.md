@@ -197,7 +197,7 @@ launch installs only those dependencies, and marimo records package installs
 there only in sandboxed sessions. After creating that view from an unsandboxed
 session, declare the notebook's own packages with
 `uv add --script notebook.py <package>`.
-`uvx marimo-studio doctor --dependencies --target notebook.py` lists imports the
+`marimo-studio doctor --dependencies --target notebook.py` lists imports the
 header does not cover.
 
 `show()` activates the user's Studio tab. If build or activation fails, repair

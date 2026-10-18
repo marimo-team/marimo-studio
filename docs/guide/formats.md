@@ -96,10 +96,11 @@ uvx marimo-studio view create monitor --target analysis.py \
 :::
 
 Studio adds `marimo-studio[deno]` to the notebook's inline dependencies and
-prints the command that starts marimo with Deno:
+prints the command that starts marimo with Deno. The printed command pins the
+installed Studio version:
 
 ```console
-uvx --with 'marimo-studio[deno]' marimo edit analysis.py --sandbox --watch
+uvx --with 'marimo-studio[deno]==<version>' marimo edit analysis.py --sandbox --watch
 ```
 
 In a Python project, add the extra with `uv add 'marimo-studio[deno]'` and run
@@ -165,8 +166,8 @@ uvx marimo-studio view create report --target analysis.py \
 ```
 
 Studio adds `marimo-studio[typst]` to the notebook's inline dependencies and
-prints the `uvx --with 'marimo-studio[typst]' marimo edit` command that starts
-marimo with the compiler. In a Python project, add the extra with
+prints a `uvx --with 'marimo-studio[typst]==<version>' marimo edit` command that
+starts marimo with the compiler. In a Python project, add the extra with
 `uv add 'marimo-studio[typst]'`.
 
 `main.typ` imports the starter's `marimo.typ`:

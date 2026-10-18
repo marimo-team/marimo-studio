@@ -76,7 +76,7 @@ Inspect installed starter availability with `await workspace.starters()`.
 Use dependency diagnostics before validation or export:
 
 ```console
-uvx marimo-studio doctor --dependencies --target notebook.py --json
+uv run --project . marimo-studio doctor --dependencies --target notebook.py --json
 ```
 
 Read its interpreter path, declaration drift, provider requirements, and import
