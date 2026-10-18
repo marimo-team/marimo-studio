@@ -65,8 +65,8 @@ typeset PDF:
   alt="Three notebook cells in marimo beside an HTML page and a Typst PDF. The page shows the live slider, the level curves, and the optimal value. The PDF shows the same level curves and states the optimal value."
 />
 
-[How Studio works](./how-studio-works) shows how the results get from your
-notebook to the page.
+[How Studio works](./how-studio-works) shows how a page receives your
+notebook's results.
 
 ## Examples
 
