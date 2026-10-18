@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import sys
+from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -31,10 +32,12 @@ from marimo_studio._processes.supervisor import (
 )
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._validation.runtime_protocol import (
+    RuntimeValidationRequest,
     encode_runtime_validation_request,
     load_runtime_validation_request,
 )
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.tools import command_installs, commands_install_tools
 from marimo_studio.errors import MarimoStudioError
 
 
@@ -70,6 +73,7 @@ async def check_runtime_studio_isolated(
             view_name,
             expected_revisions,
             timeout,
+            command_installs=commands_install_tools(),
         )
     except ValueError as error:
         return _process_failure(
@@ -265,10 +269,29 @@ def _run_worker(
     request_path: Path,
     response_path: Path,
 ) -> int:
+    request = load_runtime_validation_request(request_path)
+    # Source revisions include provider provenance, which names the tools of
+    # the notebook's pixi environment when the requesting command installs it.
+    with command_installs() if request.command_installs else nullcontext():
+        checks = _run_checks(request)
+    write_process_response(
+        response_path,
+        json.dumps(
+            {
+                "schema": 1,
+                "checks": [check.to_dict() for check in checks],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8"),
+    )
+    return 0
+
+
+def _run_checks(request: RuntimeValidationRequest) -> tuple[CheckResult, ...]:
     from marimo_studio._validation.static import check_runtime_studio
     from marimo_studio._workspace import load_studio
 
-    request = load_runtime_validation_request(request_path)
     path = request.notebook
     timeout = request.timeout
     studio = load_studio(path)
@@ -300,18 +323,7 @@ def _run_worker(
             )
             if expected is not None and _source_revisions(studio, views) != expected:
                 checks = (*checks, _source_changed_check(path))
-    write_process_response(
-        response_path,
-        json.dumps(
-            {
-                "schema": 1,
-                "checks": [check.to_dict() for check in checks],
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8"),
-    )
-    return 0
+    return checks
 
 
 if __name__ == "__main__":

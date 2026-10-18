@@ -69,8 +69,49 @@ def test_isolated_runtime_budget_contains_the_notebook_probe(
             "view": None,
             "expectedRevisions": None,
             "timeout": 42,
+            "commandInstalls": False,
         }
     ]
+
+
+@pytest.mark.parametrize("command", (True, False), ids=("command", "server"))
+def test_isolated_runtime_request_carries_the_command_tool_policy(
+    tmp_path,
+    monkeypatch,
+    command: bool,
+) -> None:
+    from contextlib import nullcontext
+
+    from marimo_studio._workspace.tools import command_installs
+
+    requests: list[dict[str, object]] = []
+
+    class Supervisor:
+        def run(self, command, timeout):
+            del timeout
+            requests.append(json.loads(Path(command[-2]).read_bytes()))
+            Path(command[-1]).write_bytes(b'{"schema":1,"checks":[]}')
+            return SimpleNamespace(
+                timed_out=False,
+                output_too_large=False,
+                returncode=0,
+                stdout=b"",
+                stderr=b"",
+            )
+
+        def cancel(self) -> None:
+            return
+
+    monkeypatch.setattr(async_command, "ProcessSupervisor", Supervisor)
+    studio = cast(
+        StudioWorkspace,
+        SimpleNamespace(notebook=tmp_path / "analysis.py"),
+    )
+
+    with command_installs() if command else nullcontext():
+        asyncio.run(runtime_process.check_runtime_studio_isolated(studio, timeout=42))
+
+    assert [request["commandInstalls"] for request in requests] == [command]
 
 
 @pytest.mark.parametrize(
@@ -341,6 +382,7 @@ def test_validation_worker_rejects_an_aba_startup_revision(
             "dashboard",
             expected,
             1,
+            command_installs=False,
         )
     )
     try:
@@ -393,6 +435,7 @@ def test_native_validation_worker_launches_with_many_maximum_view_names(
         None,
         revisions,
         5,
+        command_installs=False,
     )
 
     result, response = asyncio.run(

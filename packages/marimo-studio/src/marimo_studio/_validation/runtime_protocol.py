@@ -17,6 +17,7 @@ _REQUEST_FIELDS = {
     "view",
     "expectedRevisions",
     "timeout",
+    "commandInstalls",
 }
 
 
@@ -26,6 +27,7 @@ class RuntimeValidationRequest:
     view_name: str | None
     expected_revisions: dict[str, str] | None
     timeout: float
+    command_installs: bool
 
 
 def encode_runtime_validation_request(
@@ -33,6 +35,8 @@ def encode_runtime_validation_request(
     view_name: str | None,
     expected_revisions: dict[str, str] | None,
     timeout: float,
+    *,
+    command_installs: bool,
 ) -> bytes:
     """Encode one validated runtime request within the worker byte budget."""
     validate_runtime_timeout(timeout)
@@ -45,6 +49,7 @@ def encode_runtime_validation_request(
             "view": view_name,
             "expectedRevisions": expected_revisions,
             "timeout": timeout,
+            "commandInstalls": command_installs,
         },
         allow_nan=False,
         ensure_ascii=False,
@@ -87,6 +92,7 @@ def load_runtime_validation_request(path: Path) -> RuntimeValidationRequest:
     view_name = value.get("view")
     expected_revisions = value.get("expectedRevisions")
     timeout = value.get("timeout")
+    command_installs = value.get("commandInstalls")
     if not isinstance(notebook, str) or not notebook:
         raise ProtocolError("Runtime validation request has an invalid notebook")
     try:
@@ -97,12 +103,15 @@ def load_runtime_validation_request(path: Path) -> RuntimeValidationRequest:
         raise ProtocolError(
             "Runtime validation request has an invalid field"
         ) from error
+    if not isinstance(command_installs, bool):
+        raise ProtocolError("Runtime validation request has an invalid field")
     assert isinstance(timeout, (int, float)) and not isinstance(timeout, bool)
     return RuntimeValidationRequest(
         notebook=Path(notebook),
         view_name=view_name,
         expected_revisions=expected_revisions,
         timeout=float(timeout),
+        command_installs=command_installs,
     )
 
 

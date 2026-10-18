@@ -474,3 +474,37 @@ def test_pixi_installs_the_tectonic_a_notebook_declares(
     assert Path(located).parent != Path(pixi).parent
     assert availability.available, availability.reason
 
+
+@posix_only
+def test_runtime_validation_reads_revisions_with_the_command_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_studio._validation import runtime_process
+    from marimo_studio._validation.runtime_protocol import (
+        encode_runtime_validation_request,
+    )
+    from marimo_studio._views.api import prepare_view
+    from marimo_studio._views.revisions import capture_source_revisions
+    from marimo_studio._workspace import load_studio
+
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    environment = tmp_path / "environment" / "bin"
+    _tectonic(environment)
+    _install(monkeypatch, _Environments((str(environment),), selected=False))
+    notebook = _notebook(tmp_path / "project")
+    with command_installs():
+        prepare_view(notebook, "paper", starter="marimo-studio/latex:default")
+        expected = capture_source_revisions(load_studio(notebook), ("paper",))
+    request = tmp_path / "request.json"
+    request.write_bytes(
+        encode_runtime_validation_request(
+            notebook, "paper", expected, 1, command_installs=True
+        )
+    )
+    response = tmp_path / "response.json"
+
+    assert runtime_process._run_worker(request, response) == 0
+
+    checks = json.loads(response.read_bytes())["checks"]
+    assert "validation-source-changed" not in [check["code"] for check in checks]

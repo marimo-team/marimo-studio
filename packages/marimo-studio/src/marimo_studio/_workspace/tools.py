@@ -71,6 +71,11 @@ def command_installs() -> Iterator[None]:
         _COMMAND_INSTALLS.reset(token)
 
 
+def commands_install_tools() -> bool:
+    """Return whether this context runs a Studio command that installs tools."""
+    return _COMMAND_INSTALLS.get()
+
+
 def _pixi_metadata(notebook: Path) -> Mapping[str, object] | None:
     """Return a notebook's PEP 723 metadata when it has a ``[tool.pixi]`` table."""
     try:
