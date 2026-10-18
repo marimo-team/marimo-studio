@@ -44,7 +44,8 @@ that supply every view.
 
 ## Run locally
 
-From the repository root:
+From the root of a clone set up as [Run an example locally](index.md#run-an-example-locally)
+describes:
 
 ```console
 uv run marimo edit examples/earthquakes.py --sandbox

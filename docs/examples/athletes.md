@@ -45,7 +45,8 @@ analytical context.
 
 ## Run locally
 
-From the repository root:
+From the root of a clone set up as [Run an example locally](index.md#run-an-example-locally)
+describes:
 
 ```console
 uv run marimo edit examples/athletes.py --sandbox

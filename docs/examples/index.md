@@ -23,7 +23,12 @@ exports, so they run without a Python kernel.
 
 ## Run an example locally
 
-From the repository root, open one example notebook:
+The examples run with the Studio in a clone of the
+[repository](https://github.com/marimo-team/marimo-studio). Install the tools
+that [Contributing](https://github.com/marimo-team/marimo-studio/blob/main/CONTRIBUTING.md#set-up)
+lists, then run `make setup` once from the repository root. It installs the
+locked dependencies and builds Studio's browser assets. Open one example
+notebook:
 
 ```console
 uv run marimo edit examples/quadratic_program.py --sandbox
@@ -35,3 +40,12 @@ notebook. Each example page lists the tools its views need.
 [Building occupancy](occupancy.md#run-locally) declares Tectonic for its LaTeX
 paper and opens with `--sandbox=pixi`. The examples fetch pinned datasets and
 can load fonts, maps, or remote modules declared by their view source.
+
+Serve every example's views as an app, with Quarto and Tectonic from the
+repository's pixi environment:
+
+```console
+pixi run --locked uv run marimo run examples --sandbox
+```
+
+The start page lists the four notebooks, and each opens at its default view.
