@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import compileall
 import importlib
 import sys
+from importlib import resources
 from pathlib import Path, PurePosixPath
 
 import marimo
@@ -110,6 +112,39 @@ def test_builtin_starter_preserves_binary_files(
     )
 
     assert plan.files[PurePosixPath("public/mark.png")] == image
+
+
+def test_packaged_starter_preserves_authored_files_after_bytecode_compilation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = _fixture_package(
+        tmp_path,
+        monkeypatch,
+        {
+            "default/__init__.py": "",
+            "default/files/index.html": "<p>hello</p>\n",
+            "default/files/main.py": 'print("hello")\n',
+            "default/files/helpers/scene.py": "value = 1\n",
+        },
+    )
+    root = resources.files(package).joinpath("files")
+    assert compileall.compile_dir(str(root), quiet=1)
+    assert root.joinpath("__pycache__").is_dir()
+    assert root.joinpath("helpers").joinpath("__pycache__").is_dir()
+    info = _starter()
+
+    plan = create_starter(
+        (PackagedStarter(info=info, package=package),),
+        info,
+        provider_starter_context(tmp_path),
+    )
+
+    assert plan.files == {
+        PurePosixPath("index.html"): b"<p>hello</p>\n",
+        PurePosixPath("main.py"): b'print("hello")\n',
+        PurePosixPath("helpers/scene.py"): b"value = 1\n",
+    }
 
 
 def test_builtin_starter_matches_replacement_line_endings_to_its_resource(
