@@ -392,7 +392,8 @@ checkout serves its own build, `marimo edit`, `create_asgi_app`, and
 Error: Studio's browser assets do not match this checkout: packages/protocol/src/projections.ts changed since the last build. Run `make build` in /path/to/marimo-studio to rebuild them.
 ```
 
-A checkout that has never built its browser assets stops the same commands:
+In a checkout that has never built its browser assets, `view export` and the
+first Studio request of `marimo edit` or `create_asgi_app` fail with:
 
 ```text
 Error: Studio's browser assets are not built in this checkout. Run `make setup` in /path/to/marimo-studio to build them.

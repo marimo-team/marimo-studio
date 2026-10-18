@@ -144,10 +144,12 @@ def test_checkout_rejects_an_invalid_source_record(
 def test_checkout_without_built_assets_names_the_setup_command(
     checkout: Path,
 ) -> None:
+    from marimo_studio._composition import validate_packaged_browser_release
+
     (checkout / "pnpm-workspace.yaml").write_text("packages: []\n", encoding="utf-8")
 
     with pytest.raises(ProtocolError) as error:
-        assets_module.validate_runtime_sources()
+        validate_packaged_browser_release()
 
     message = str(error.value)
     assert "browser assets are not built in this checkout" in message
@@ -226,15 +228,14 @@ def test_marimo_server_startup_reports_stale_assets(checkout: Path) -> None:
     assert f"Run `make build` in {checkout.resolve()}" in error
 
 
-def test_marimo_server_startup_reports_unbuilt_assets(checkout: Path) -> None:
+def test_entry_point_loads_in_an_unbuilt_checkout(checkout: Path) -> None:
+    # Notebook inspection and validation workers load Studio's middleware
+    # through marimo without serving browser assets.
     (checkout / "pnpm-workspace.yaml").write_text("packages: []\n", encoding="utf-8")
 
     completed = _import_in_child(checkout / OUTPUT, "import marimo_studio._entrypoints")
 
-    error = completed.stderr.strip().splitlines()[-1]
-    assert completed.returncode != 0
-    assert error.startswith("click.exceptions.ClickException: ")
-    assert f"Run `make setup` in {checkout.resolve()}" in error
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_kernel_lifespan_loads_beside_stale_assets(checkout: Path) -> None:

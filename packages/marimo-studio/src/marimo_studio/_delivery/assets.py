@@ -152,7 +152,19 @@ def validate_runtime_marimo_release(
     commit: str,
     patch_sha256: str,
 ) -> None:
-    """Validate packaged browser assets against the pinned Marimo release."""
+    """Validate packaged browser assets against the pinned Marimo release.
+
+    A source checkout that has never run the browser build has no assets, and
+    the error names the command that builds them.
+    """
+    root = runtime_assets_path()
+    if not (root / _BUILD_META).is_file():
+        checkout = _source_checkout(root.resolve())
+        if checkout is not None:
+            raise ProtocolError(
+                "Studio's browser assets are not built in this checkout. "
+                f"Run `make setup` in {checkout} to build them."
+            )
     observed = _runtime_marimo_metadata()
     expected = {
         "version": version,
@@ -167,9 +179,8 @@ def validate_runtime_marimo_release(
 
 
 def validate_runtime_sources() -> None:
-    """Reject a source checkout's browser assets until built from its sources.
+    """Reject a source checkout's browser assets once their sources changed.
 
-    A checkout that has never run the browser build has no assets to serve.
     The browser build records digests of the files that shaped it in
     ``build-sources.json`` beside the served asset directory, together with
     that directory's path in the workspace. Assets elsewhere, such as an
@@ -178,13 +189,6 @@ def validate_runtime_sources() -> None:
     converted to CRLF.
     """
     root = runtime_assets_path()
-    if not (root / _BUILD_META).is_file():
-        checkout = _source_checkout(root.resolve())
-        if checkout is not None:
-            raise ProtocolError(
-                "Studio's browser assets are not built in this checkout. "
-                f"Run `make setup` in {checkout} to build them."
-            )
     path = root.parent / _BUILD_SOURCES
     invalid = ProtocolError(
         f"Invalid browser build sources at {path}. Run `make build` to rewrite them."
