@@ -109,7 +109,8 @@ lays out the page and names the notebook results it shows:
 result goes. They belong to the page. The notebook never contains them.
 
 Edit the view project in Studio's Source pane, in your own editor, or with a
-coding agent. Studio watches the folder and builds again when you save. A
+coding agent. Studio watches the folder and builds again when you save a build
+input, such as `index.html`. A
 second view, such as a Typst `report`, gets its own folder beside
 `dashboard/`.
 
@@ -158,7 +159,8 @@ shows. `quarterly_section` shows a stack with a heading, the chart, and a
 caption. `<marimo-output value="quarterly_chart">` places only the chart, while
 `<marimo-cell name="quarterly_section">` would place the whole stack.
 
-A dataframe reaches page code as an Arrow table. Python objects stay in the
+A dataframe reaches page code as a [Flechette](https://github.com/uwdata/flechette)
+`Table`, which Studio decodes from Arrow IPC. Python objects stay in the
 session.
 
 When a reader picks **South**, the browser sends the dropdown's new value to
@@ -184,7 +186,8 @@ The #marimo_value("region.value", default: "selected") region placed
 
 The provider declares this file as a [render](reference/glossary.md#render).
 When a result the render reads changes, Studio calls the provider with values
-in their JSON form and outputs as images, and the provider compiles a new PDF
+in their JSON form and outputs as media such as images, and the provider
+compiles a new PDF
 with its own tool. The view's page shows the PDF with a download link.
 
 The provider also reports where each result landed in the PDF, as

@@ -6,7 +6,7 @@ description: Compose the cells, outputs, and values of a marimo notebook into an
 
 hero:
   text: Turn your marimo notebook into any document
-  tagline: Use your notebook's outputs as building blocks. Place a chart, a control, or a single number in a web page, a slide deck, or a paper, and keep all of your Python in the notebook.
+  tagline: Use your notebook's outputs as building blocks. Place a chart, a table, or a single number in a web page, a slide deck, or a paper, and keep all of your Python in the notebook.
   actions:
     - theme: brand
       text: What is Studio?

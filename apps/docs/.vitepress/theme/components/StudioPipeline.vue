@@ -129,7 +129,7 @@ const modes: Record<
     edges: ["render", "page"],
     steps: [
       "The session recomputes `summary.orders`, which a Typst view's `main.typ` reads.",
-      "Studio calls the provider's `render()` with values as JSON and figures as images.",
+      "Studio calls the provider's `render()` with values as JSON and figures as media, such as images.",
       "The provider compiles a new `main.pdf` with its own tool.",
       "The page's render host shows the new PDF with a download link.",
     ],

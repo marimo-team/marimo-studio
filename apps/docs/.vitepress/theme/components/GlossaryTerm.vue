@@ -46,7 +46,8 @@ const show = async (): Promise<void> => {
   }
   position.value = undefined;
   open.value = true;
-  window.addEventListener("scroll", place, { passive: true });
+  // Capture catches scrolling inside tables and other containers too.
+  window.addEventListener("scroll", place, { passive: true, capture: true });
   window.addEventListener("resize", place, { passive: true });
   window.addEventListener("keydown", dismiss);
   await nextTick();
@@ -56,7 +57,7 @@ const show = async (): Promise<void> => {
 const hide = (): void => {
   clearTimeout(timer);
   open.value = false;
-  window.removeEventListener("scroll", place);
+  window.removeEventListener("scroll", place, { capture: true });
   window.removeEventListener("resize", place);
   window.removeEventListener("keydown", dismiss);
 };

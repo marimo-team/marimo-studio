@@ -467,6 +467,7 @@ elements it authors:
 | `data-marimo-lens-scope`         | `#app-shell`                           | A CSS selector list. Lens groups a click on authored content into the nearest match. Studio sets a default when the page leaves it out                                                                                              |
 | `data-marimo-lens-target`        | An authored element with a stable `id` | Makes the element a target of its own, so Lens reconnects feedback to it across rebuilds                                                                                                                                            |
 | `data-marimo-lens-render-source` | An authored target                     | JSON such as `{"path":"index.html"}` naming the source file that holds the element                                                                                                                                                  |
+| `data-marimo-lens-context`       | A chart, card, or section              | Marks the element that frames the selection image when Lens selects something inside it. Studio sets it on render region boxes                                                                                                      |
 
 `STUDIO_RESULT_SELECTOR`, from the
 [Python API](python-api.md), matches hosts, elements with

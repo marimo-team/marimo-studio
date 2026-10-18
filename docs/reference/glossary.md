@@ -60,7 +60,8 @@ need not display it.
 ### Value {#value}
 
 Notebook data, such as a number, a record, or a table, that a view formats or
-draws itself. A page receives it as JSON, or a dataframe as an Arrow table. A
+draws itself. A page receives it as JSON, or a dataframe as a Flechette `Table`
+decoded from Arrow IPC. A
 render receives its JSON form.
 
 ### Value selector {#value-selector}
@@ -196,8 +197,8 @@ because the page receives new results while it runs.
 
 ### Build input {#build-input}
 
-A file of the view project that the build reads. Saving a build input
-rebuilds the view.
+A file or bounded directory of the view project that the build reads. Saving a
+build input rebuilds the view.
 
 A file can be a [source document](#source-document), a build input, or both.
 A React view shows its lockfile in Source as read-only, and the lockfile still
@@ -273,7 +274,8 @@ such as GitHub Pages, can serve it.
 
 One combination of control values that a prepared export computes ahead of
 time. `states.yaml` in the view project lists them. Changing a control in a
-prepared export moves the page to another saved state.
+prepared export loads the matching saved state, and when no state matches, the
+page keeps the previous one.
 
 ## Selecting with Lens
 
@@ -348,11 +350,12 @@ A notebook value that a render reads in its JSON form.
 
 ### Render output {#render-output}
 
-A notebook value, such as a figure, that a render places as an image.
+A notebook value, such as a figure, that a render places as media, such as an
+image or a PDF, in the first type of its accept list.
 
 ### Render cell {#render-cell}
 
-A named notebook cell whose output a render places as an image.
+A named notebook cell whose output a render places as media, such as an image.
 
 ### Rendered files {#rendered-files}
 

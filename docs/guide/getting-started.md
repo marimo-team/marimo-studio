@@ -47,7 +47,8 @@ studio/analysis/
 
 The folder is an ordinary HTML project. Edit `index.html` in Studio's Source
 pane, which **Edit view source** opens beneath Preview, or in your own editor.
-Studio watches the folder and rebuilds Preview whenever a file is saved.
+Studio watches the folder and rebuilds Preview whenever a build input, such as
+`index.html`, is saved.
 
 Commit `studio/` with the notebook. Build output goes to
 `__marimo__/studio/analysis/`, which Git ignores. Add a `DESIGN.md` to the view

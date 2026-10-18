@@ -27,13 +27,13 @@ A provider works with the files of a
 [view project](../reference/glossary.md#view-project). Studio calls its
 methods at fixed moments and validates each record they return:
 
-| When                                                 | Studio calls                   | The provider receives                                                           | The provider returns                                                               |
-| ---------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| The **New view** form opens                          | `availability()`, `starters()` | Nothing                                                                         | Whether it can run, and its starters                                               |
-| Someone creates a view                               | `create()`                     | The chosen starter and the saved notebook's cells                               | The first files of the view project                                                |
-| Source opens, or a file in the view project changes  | `inspect()`                    | The view project                                                                | Its source documents, build inputs, hosts, and renders                             |
-| Preview, `marimo run`, or an export needs a new page | `build()`                      | A [build snapshot](../reference/glossary.md#build-snapshot) of the build inputs | A [page](../reference/glossary.md#page): an HTML entry file and the files it loads |
-| A notebook result that a render reads changes        | `render()`                     | The render template, values as JSON, and outputs and cells as images            | [Rendered files](../reference/glossary.md#rendered-files), such as a PDF           |
+| When                                                 | Studio calls                   | The provider receives                                                                       | The provider returns                                                               |
+| ---------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| The **New view** form opens                          | `availability()`, `starters()` | Nothing                                                                                     | Whether it can run, and its starters                                               |
+| Someone creates a view                               | `create()`                     | The chosen starter and the saved notebook's cells                                           | The first files of the view project                                                |
+| Source opens, or a file in the view project changes  | `inspect()`                    | The view project                                                                            | Its source documents, build inputs, hosts, and renders                             |
+| Preview, `marimo run`, or an export needs a new page | `build()`                      | A [build snapshot](../reference/glossary.md#build-snapshot) of the build inputs             | A [page](../reference/glossary.md#page): an HTML entry file and the files it loads |
+| A notebook result that a render reads changes        | `render()`                     | The render template, values as JSON, and outputs and cells as media, such as images or PDFs | [Rendered files](../reference/glossary.md#rendered-files), such as a PDF           |
 
 A provider never runs the notebook. `build()` writes a page whose hosts are
 still empty, and Studio fills them from the session while the page is open, as

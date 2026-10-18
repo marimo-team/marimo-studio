@@ -8,7 +8,7 @@ defineEmits<{ toggle: [] }>();
     type="button"
     class="studio-sidebar-toggle"
     :aria-pressed="collapsed"
-    :aria-label="collapsed ? 'Show sidebar' : 'Hide sidebar'"
+    aria-label="Collapse sidebar"
     :title="collapsed ? 'Show sidebar' : 'Hide sidebar'"
     @click="$emit('toggle')"
   >

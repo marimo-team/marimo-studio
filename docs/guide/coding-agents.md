@@ -16,8 +16,7 @@ You review each result in Preview and point at what should change with
 
 1. **It reads Studio's instructions.**
    [Agent Plugins](https://github.com/peter-gy/agent-plugins) prints the
-   instructions that the installed `marimo-studio` package ships, so they
-   match the Studio version that runs.
+   instructions that ship inside the `marimo-studio` package.
 2. **It connects to the live notebook.** A terminal agent pairs with the
    running notebook through [`marimo pair`](https://marimo.io/pair). An agent
    in marimo's AI sidebar already runs there in **Code Mode (beta)**. Either
@@ -26,13 +25,13 @@ You review each result in Preview and point at what should change with
 3. **It writes Python in the notebook and presentation in the view.** Data and
    computation go into notebook cells. Layout, wording, and page code go into
    the [view project](../reference/glossary.md#view-project), following its
-   `AGENTS.md` and `DESIGN.md`.
+   `AGENTS.md`, and its `DESIGN.md` when the view has one.
 4. **It builds and shows the view.** The agent builds the view, checks the
    names it places, and selects the view in your Studio tab, so Preview shows
    what it made.
 5. **It takes your feedback.** You review the view in Preview and select the
-   parts that should change with Lens. The agent receives each selection with
-   the notebook cells behind it.
+   parts that should change with Lens. When a selection shows a notebook
+   result, the agent receives it with the notebook cells behind it.
 
 ## Ask for a view
 

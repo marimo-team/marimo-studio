@@ -29,18 +29,20 @@ const states = [
 const runtime = ref<Runtime>("prepared");
 const position = ref(0);
 const requested = computed<Magnitude>(() => steps[position.value] ?? "2.5");
-const shown = ref<Magnitude>("2.5");
-
-// A prepared export moves only between saved states. The Python runtime
-// computes every value the slider sends.
+// A prepared export moves only between saved states, so it keeps the last
+// one it loaded. The Python runtime computes every value the slider sends.
+const lastPrepared = ref<Magnitude>("2.5");
 watch(
-  [requested, runtime],
-  ([value, mode]) => {
-    if (mode === "python" || prepared.has(value)) {
-      shown.value = value;
+  requested,
+  (value) => {
+    if (prepared.has(value)) {
+      lastPrepared.value = value;
     }
   },
   { immediate: true },
+);
+const shown = computed<Magnitude>(() =>
+  runtime.value === "python" ? requested.value : lastPrepared.value,
 );
 
 const counts = computed(() => results[shown.value]);
