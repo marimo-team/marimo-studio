@@ -75,6 +75,7 @@ from marimo_studio._workspace.project_manifest import (
     CatalogProject,
     load_view_project,
 )
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import (
     ConfigurationError,
     ViewGenerationConflictError,
@@ -144,7 +145,7 @@ def _inspect_provider(
 ) -> ProjectInspection:
     availability = provider.availability()
     if not availability.available:
-        detail = f": {availability.reason}" if availability.reason else ""
+        detail = f": {availability.reason.rstrip('.')}" if availability.reason else ""
         action = f" {availability.action}" if availability.action else ""
         message = (
             f"View provider {project.provider!r} is unavailable{detail}.{action}"
@@ -407,7 +408,10 @@ def publish_view(
         raise ConfigurationError(
             "Prepared view builds require both inspection and input_id"
         )
-    with view_build_lock(project.root.parent, project.name):
+    with (
+        notebook_tools(project.locations.notebook),
+        view_build_lock(project.root.parent, project.name),
+    ):
         current, profile, provider = _load_build_owner(project, profile)
         _require_build_generation(current, expected_generation)
         with build_lock(current) as acquired:

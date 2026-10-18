@@ -16,7 +16,10 @@ from marimo_studio._filesystem.files import Version
 from marimo_studio._notebook.ports import NotebookInspector
 from marimo_studio._notebook.records import CellRef, NotebookSpec
 from marimo_studio._views.catalog import resolve_starter
-from marimo_studio._views.inspection import inspect_view_project_sync
+from marimo_studio._views.inspection import (
+    inspect_view_project_sync,
+    project_provenance,
+)
 from marimo_studio._views.records import Starter
 from marimo_studio._views.starter_context import starter_bindings, starter_context
 from marimo_studio._workspace.bindings import cell_bindings_source
@@ -25,7 +28,10 @@ from marimo_studio._workspace.config_snapshot import WorkspaceConfigSnapshot
 from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.metadata import configured_notebook_source
 from marimo_studio._workspace.models import StudioDefinition
-from marimo_studio._workspace.project_manifest import encode_view_manifest
+from marimo_studio._workspace.project_manifest import (
+    CatalogProject,
+    encode_view_manifest,
+)
 from marimo_studio._workspace.view_owners import view_owner_transition
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
@@ -122,22 +128,22 @@ class _SelectedView:
     documents: tuple[Path, ...]
 
 
-def prepare_existing_view(project: ViewProject) -> PreparedExistingView:
+def prepare_existing_view(project: CatalogProject) -> PreparedExistingView:
     inspection = inspect_view_project_sync(project)
-    provider = provider_registry().get(project.provider)
     snapshot = project_revision_snapshot(
         project,
         inspection,
-        provider.provenance(),
+        project_provenance(project),
     )
     return PreparedExistingView(project, inspection, snapshot.state)
 
 
 def select_starter(
     value: str | Starter | None,
+    notebook: Path,
 ) -> tuple[Starter, ViewProvider, ProviderStarter]:
     identity = value.id if isinstance(value, Starter) else value or DEFAULT_STARTER_ID
-    starter, provider, provider_starter = resolve_starter(identity)
+    starter, provider, provider_starter = resolve_starter(identity, notebook)
     if starter.availability.available:
         return starter, provider, provider_starter
     reason = starter.availability.reason or "The provider is unavailable."
@@ -354,7 +360,9 @@ def _prepared_starter_for_plan(
             "The view catalog changed before starter planning completed. "
             "Run the operation again."
         )
-    selected, provider, provider_starter = select_starter(starter)
+    selected, provider, provider_starter = select_starter(
+        starter, validated.notebook_path
+    )
     return prepare_starter(
         validated.notebook_path,
         validated.saved_notebook,

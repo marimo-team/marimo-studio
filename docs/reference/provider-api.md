@@ -648,6 +648,28 @@ Studio shows `reason` and `action` in the view picker and in
 `marimo-studio doctor`. Studio records the `availability()` version with each
 build, so a tool upgrade rebuilds the views that use the provider.
 
+`find_tool()` returns the path of the executable a command name runs. It
+searches `PATH`. A provider call for a standalone notebook with a
+`[tool.pixi]` table in its `# /// script` metadata searches the executable
+directories of the notebook's [pixi](https://pixi.prefix.dev/) script
+environment first, while marimo runs the notebook with `--sandbox=pixi` or a
+`marimo-studio` command targets it. `probe_tool()` finds and runs its command
+the same way. `request.runner` puts those directories first on `PATH` for a
+command that inherits Studio's environment, and an `environment` mapping
+replaces the whole environment. A command that passes its own `environment`
+runs the path `find_tool()` returns:
+
+```python
+typst = find_tool("typst")
+if typst is None:
+    raise ProviderError("Studio cannot find the typst command.")
+request.runner.run(
+    [typst, "compile", "main.typ", str(request.work_root / "main.pdf")],
+    cwd=request.project.root,
+    environment={**os.environ, "SOURCE_DATE_EPOCH": "0"},
+)
+```
+
 ## Record reference
 
 ### Provider records
@@ -1023,6 +1045,8 @@ html_sites(
 ) -> tuple[tuple[ProjectionSite, ...], tuple[ProjectDiagnostic, ...]]
 
 parse_accept(kind: ProjectionKind, text: str | None) -> tuple[str, ...]
+
+find_tool(command: str) -> str | None
 
 probe_tool(
     command: Sequence[str],

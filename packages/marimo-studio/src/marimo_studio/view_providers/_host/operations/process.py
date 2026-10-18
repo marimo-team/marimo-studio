@@ -19,6 +19,7 @@ from marimo_studio._filesystem.errors import (
 )
 from marimo_studio._filesystem.files import FileTree
 from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessSupervisor
+from marimo_studio._processes.tools import tool_environment
 from marimo_studio.view_providers import (
     BuildRequest,
     BuildResult,
@@ -255,7 +256,7 @@ def _operation_timeout(command_timeout: float) -> float:
 
 
 def _provider_environment() -> dict[str, str]:
-    environment = os.environ.copy()
+    environment = tool_environment()
     environment.pop(_PROJECTION_AUTHORIZATION_ENV, None)
     environment[SERVER_PROCESS_ENV] = str(os.getpid())
     return environment

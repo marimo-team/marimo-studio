@@ -139,6 +139,8 @@ def _host_state_directory() -> Path | None:
 class CatalogLocations:
     """Where one notebook's view projects and their generated state live."""
 
+    notebook: Path
+    """The resolved notebook that owns the catalog."""
     view_root: Path
     """Authored view projects, one directory per view."""
     state_root: Path
@@ -169,17 +171,17 @@ class CatalogLocations:
         if directory is not None:
             base = Path(os.path.realpath(directory))
             digest = hashlib.sha256(os.fsencode(notebook)).hexdigest()[:32]
-            return cls(view_root, base / digest, base)
+            return cls(notebook, view_root, base / digest, base)
         base = notebook_output_directory(notebook)
         root = base / STUDIO_DIRECTORY / _stem(notebook)
         if os.path.realpath(root) == os.path.realpath(view_root):
-            return cls.inside_views(view_root)
-        return cls(view_root, root, base)
+            return cls.inside_views(notebook, view_root)
+        return cls(notebook, view_root, root, base)
 
     @classmethod
-    def inside_views(cls, view_root: Path) -> CatalogLocations:
+    def inside_views(cls, notebook: Path, view_root: Path) -> CatalogLocations:
         """Return locations that keep each view's state inside its project."""
-        return cls(view_root, view_root, view_root)
+        return cls(notebook, view_root, view_root, view_root)
 
     @property
     def keeps_state_in_views(self) -> bool:

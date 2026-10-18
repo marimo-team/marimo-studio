@@ -291,7 +291,9 @@ def prepare_view(
     pending_starter: Starter | None = None
     plans: dict[str, StarterPlan] = {}
     if missing:
-        pending_starter, provider, provider_starter = select_starter(starter)
+        pending_starter, provider, provider_starter = select_starter(
+            starter, notebook_path
+        )
         preplanned = prepare_starter(
             notebook_path,
             saved_notebook,

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextvars import Context, copy_context
+from pathlib import Path
 from typing import Protocol
 
 from marimo_studio._views.records import Starter
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import StarterNotFoundError
 from marimo_studio.view_providers import (
     ProviderAvailability,
@@ -81,11 +83,13 @@ def _starter_record(
     )
 
 
-def starters() -> tuple[Starter, ...]:
-    """Return every installed view starter."""
+def starters(notebook: Path | None = None) -> tuple[Starter, ...]:
+    """Return every installed view starter, available for ``notebook``."""
+    with notebook_tools(notebook):
+        records = _starter_records()
     return tuple(
         sorted(
-            (starter for starter, _provider, _provider_starter in _starter_records()),
+            (starter for starter, _provider, _provider_starter in records),
             key=lambda item: item.id,
         )
     )
@@ -114,8 +118,12 @@ def _unknown_starter(identity: str) -> StarterNotFoundError:
 
 def resolve_starter(
     identity: str,
+    notebook: Path | None = None,
 ) -> tuple[Starter, ViewProvider, ProviderStarter]:
-    """Return the public record and provider-local starter for one key."""
+    """Return the public record and provider-local starter for one key.
+
+    The record reports the provider's availability for ``notebook``.
+    """
     provider_key, separator, local_key = identity.rpartition(":")
     if not separator or not provider_key or not local_key:
         raise _unknown_starter(identity)
@@ -125,9 +133,7 @@ def resolve_starter(
     if len(matches) != 1:
         raise _unknown_starter(identity)
     provider_starter = matches[0]
-    record = _starter_record(
-        provider,
-        provider_starter,
-        provider.availability(),
-    )
+    with notebook_tools(notebook):
+        availability = provider.availability()
+    record = _starter_record(provider, provider_starter, availability)
     return record, provider, provider_starter

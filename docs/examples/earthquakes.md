@@ -53,8 +53,14 @@ uv run marimo edit examples/earthquakes.py --sandbox
 Studio opens `story`, the notebook's default view. Switch among `story`,
 `operations`, `briefing`, and `bulletin`. The Bulletin renders with the
 `quarto` command. Install [Quarto](https://quarto.org/docs/get-started/)
-1.9.38 or newer, or prefix the command with `pixi run` to use the Quarto from
-the repository's [pixi](https://pixi.prefix.dev/) environment. The notebook fetches
+1.9.38 or newer, or use the Quarto from the repository's
+[pixi](https://pixi.prefix.dev/) environment:
+
+```console
+pixi run uv run marimo edit examples/earthquakes.py --sandbox
+```
+
+The notebook fetches
 the pinned [GeoJSON](https://geojson.org/) map-data feed from
 `raw.githubusercontent.com`. [MapLibre](https://maplibre.org/) renders the
 maps, [Observable Plot](https://observablehq.com/plot/) renders the charts, and

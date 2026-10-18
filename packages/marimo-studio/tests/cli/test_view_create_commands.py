@@ -12,8 +12,10 @@ from click import unstyle
 from click.testing import CliRunner
 
 import marimo_studio._cli.environment as environment_module
+import marimo_studio._workspace.tools as workspace_tools
 from marimo_studio._cli import cli
 from marimo_studio._cli.environment import SANDBOX_ENV
+from marimo_studio._processes.tools import NO_TOOLS
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import ViewExistsError
@@ -25,7 +27,7 @@ from marimo_studio.view_providers._host.registry import ProviderRegistry
 from ..provider_test_support import ProviderStub, candidate, install_registry
 
 
-def _editor_command(notebook: Path) -> str:
+def _editor_command(notebook: Path, sandbox: str = "--sandbox") -> str:
     arguments = [
         "uvx",
         "--with",
@@ -33,7 +35,7 @@ def _editor_command(notebook: Path) -> str:
         "marimo",
         "edit",
         str(notebook),
-        "--sandbox",
+        sandbox,
         "--watch",
     ]
     return (
@@ -247,6 +249,34 @@ def test_view_create_reports_the_editor_command_in_human_and_json_output(
     assert event["code"] == "next-command"
     assert event["message"] == _editor_command(notebook_path)
     assert event["details"] == {"action": "edit"}
+
+
+def test_view_create_opens_a_notebook_with_pixi_metadata_in_a_pixi_sandbox(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The editor command follows the metadata, so pixi itself stays unused.
+    monkeypatch.setattr(
+        workspace_tools, "notebook_provider_tools", lambda _notebook: NO_TOOLS
+    )
+    notebook_path.write_text(
+        "# /// script\n"
+        "# dependencies = []\n"
+        "#\n"
+        "# [tool.pixi.dependencies]\n"
+        '# tectonic = ">=0.15"\n'
+        "# ///\n" + notebook_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["view", "create", "dashboard", "--target", str(notebook_path), "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    event = json.loads(result.stderr)
+    assert event["message"] == _editor_command(notebook_path, "--sandbox=pixi")
 
 
 def test_view_create_reports_exact_requirements_for_every_provider_distribution(

@@ -26,6 +26,7 @@ from marimo_studio._views.records import (
 )
 from marimo_studio._workspace.models import BindingResult
 from marimo_studio._workspace.python_project import project_environment
+from marimo_studio._workspace.tools import declares_pixi_environment
 
 
 def _uvx_command(
@@ -83,9 +84,14 @@ def render_view_next_command(result: ViewSetupResult) -> None:
         return
     project = project_environment(result.notebook)
     if project is None:
+        sandbox = (
+            "--sandbox=pixi"
+            if declares_pixi_environment(result.notebook)
+            else "--sandbox"
+        )
         command = _uvx_command(
             result.launch_requirements,
-            ["marimo", "edit", str(result.notebook), "--sandbox", "--watch"],
+            ["marimo", "edit", str(result.notebook), sandbox, "--watch"],
         )
     elif project.manager == "pixi":
         command = shell_command(

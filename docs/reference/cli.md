@@ -42,6 +42,15 @@ so keep the `uv` executable available. A pixi workspace runs Studio in its own
 activated environment instead, so declare Studio, its extras, and every
 provider in the workspace.
 
+A standalone notebook whose `# /// script` metadata has a `[tool.pixi]` table
+supplies provider tools from its [pixi](https://pixi.prefix.dev/) script
+environment. Commands that target the notebook run its builds, inspections,
+revisions, and starter availability with commands such as `tectonic` from that
+environment before `PATH`. They install the environment with
+`pixi install --script`, which downloads its packages on first use and updates
+an adjacent `<notebook>.pixi.lock` when one exists. The editor does the same
+when marimo runs the notebook with `--sandbox=pixi`.
+
 `validate --level runtime`, and `view preflight` or `view export` with
 `--runtime zero-python`, execute notebook Python. When the notebook declares
 dependencies, a Python version, or a project environment, these commands first
@@ -89,11 +98,13 @@ not direct `project.dependencies` declarations.
 ## `marimo-studio starters`
 
 ```text
-marimo-studio starters [--json]
+marimo-studio starters [--target PATH] [--json]
 ```
 
 Lists installed starters for new view projects. Human output includes the
-starter ID, summary, provider key, availability, and recovery action. JSON adds
+starter ID, summary, provider key, availability, and recovery action.
+`--target` reports availability for one notebook, including the tools its pixi
+metadata declares. JSON adds
 the title and `documents`, the starter's initial Source document plan. Use
 `view create --dry-run` to inspect every file the selected starter and Studio
 will write.
@@ -158,7 +169,8 @@ and JavaScript files. `--starter` selects another installed starter.
 A completed creation returns exact `launch_requirements` in JSON and prints an
 environment-aware launch command: `uv run` with `--no-sandbox` for project
 notebooks, `pixi run` with `--no-sandbox` in a pixi workspace, and `uvx` with
-`--sandbox` for standalone notebooks.
+`--sandbox` for standalone notebooks, or `--sandbox=pixi` when the notebook's
+metadata has a `[tool.pixi]` table.
 
 ## `marimo-studio view default`
 

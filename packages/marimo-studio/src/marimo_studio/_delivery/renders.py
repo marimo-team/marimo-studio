@@ -41,6 +41,7 @@ from marimo_studio._views.renders import (
     run_render,
     value_not_json,
 )
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import PublicationError
 from marimo_studio.view_providers import (
     JsonValue,
@@ -166,7 +167,10 @@ def write_static_renders(
     index: dict[str, dict[str, object]] = {fingerprint(state): {} for state in states}
     stored: dict[str, RenderBundle] = {}
     written = 0
-    with tempfile.TemporaryDirectory(prefix="marimo-studio-export-renders-") as scratch:
+    with (
+        notebook_tools(lease.project.locations.notebook),
+        tempfile.TemporaryDirectory(prefix="marimo-studio-export-renders-") as scratch,
+    ):
         # Every render of the export copies one template verified once.
         verified = Path(scratch, "template")
         lease.copy_template(verified)

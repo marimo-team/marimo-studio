@@ -209,11 +209,14 @@ def test_hold_created_by_an_exited_process_still_coordinates_publication(
             "from marimo_studio._workspace.locations import CatalogLocations\n"
             "project = load_view_project(\n"
             "    Path(sys.argv[1]),\n"
-            "    locations=CatalogLocations.inside_views(Path(sys.argv[1]).parent),\n"
+            "    locations=CatalogLocations.inside_views(\n"
+            "        Path(sys.argv[2]), Path(sys.argv[1]).parent\n"
+            "    ),\n"
             ")\n"
             "hold = acquire_publication_hold(project.root, owner='shell agent')\n"
             "print(json.dumps(hold.to_dict()))\n",
             str(project.root),
+            str(notebook_path),
         ],
         check=True,
         capture_output=True,

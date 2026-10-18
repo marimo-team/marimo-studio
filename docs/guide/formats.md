@@ -178,13 +178,37 @@ report that embeds the notebook's matplotlib figures.
 [LaTeX](https://www.latex-project.org/) typesets papers with any class and
 package, such as a journal's submission template. Studio compiles it with
 [Tectonic](https://tectonic-typesetting.github.io/), a self-contained TeX
-engine:
+engine. The notebook can declare Tectonic for
+[pixi](https://pixi.prefix.dev/), a package manager for
+[conda-forge](https://conda-forge.org/) packages, in its inline metadata:
+
+```python
+# /// script
+# requires-python = ">=3.10,<3.15"
+# dependencies = ["marimo"]
+#
+# [tool.pixi.dependencies]
+# tectonic = ">=0.15"
+# ///
+```
+
+`pixi add --script analysis.py tectonic` writes the
+`[tool.pixi.dependencies]` table into an existing block. The upper bound on
+`requires-python` keeps pixi on a Python version Studio supports. Open the
+notebook in marimo's pixi sandbox, which needs pixi 0.80 or newer, and create
+the view:
 
 ```console
-pixi global install tectonic
+uvx --with marimo-studio marimo edit analysis.py --sandbox=pixi --watch
 marimo-studio view create paper --target analysis.py \
   --starter marimo-studio/latex:default
 ```
+
+marimo runs the notebook in the environment pixi installs from the block, and
+Studio runs `tectonic` from that environment when it builds and renders the
+view. Studio commands such as `view create` install the environment for the
+notebook they target. `pixi global install tectonic` puts Tectonic on `PATH`
+for every notebook.
 
 `main.tex` loads the starter's `marimo.sty`:
 

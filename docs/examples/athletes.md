@@ -53,9 +53,14 @@ uv run marimo edit examples/athletes.py --sandbox
 
 Studio opens `overview`, the notebook's default view. Switch among `overview`,
 `explorer`, `field`, and `paper`. The Paper renders with the `quarto` command.
-Install [Quarto](https://quarto.org/docs/get-started/) 1.9.38 or newer, or
-prefix the command with `pixi run` to use the Quarto from the repository's
-[pixi](https://pixi.prefix.dev/) environment. KaTeX loads from a CDN, so the
+Install [Quarto](https://quarto.org/docs/get-started/) 1.9.38 or newer, or use
+the Quarto from the repository's [pixi](https://pixi.prefix.dev/) environment:
+
+```console
+pixi run uv run marimo edit examples/athletes.py --sandbox
+```
+
+KaTeX loads from a CDN, so the
 Paper needs no TeX installation. The notebook fetches the pinned athlete CSV from
 `raw.githubusercontent.com`. The Explorer and Field views also load the
 remote font or module origins declared by their view source.

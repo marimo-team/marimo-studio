@@ -24,8 +24,11 @@ the server starts. Install it from https://quarto.org/docs/get-started/ or with
 environment is not activated, Quarto comes from a pixi or conda environment
 that the server started without activating. Activate that environment, for
 example with `pixi shell`, then restart the server. LaTeX needs Tectonic 0.15
-or newer on `PATH`. Install it with `pixi global install tectonic`, then restart
-the server.
+or newer. Declare it in the notebook's `[tool.pixi.dependencies]` and open the
+notebook with `--sandbox=pixi`, or install it with `pixi global install
+tectonic` and restart the server. When the reason says the notebook's pixi
+environment is unavailable, the rest of the reason is pixi's error. Check the result with
+`marimo-studio starters --target notebook.py --json`.
 
 **A Studio command reports that the notebook uses a pixi workspace.**
 Studio runs inside the workspace environment and never re-enters it. Run the

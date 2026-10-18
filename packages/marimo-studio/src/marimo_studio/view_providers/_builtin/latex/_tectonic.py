@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -41,6 +40,7 @@ from marimo_studio.view_providers import (
     RenderRegion,
     Size,
     SourceLocation,
+    find_tool,
     probe_tool,
     project_path,
 )
@@ -49,9 +49,9 @@ from marimo_studio.view_providers._builtin.latex._sources import LANGUAGES
 
 TECTONIC_MIN_VERSION = "0.15"
 INSTALL_ACTION = (
-    "Install Tectonic 0.15 or newer with `pixi global install tectonic`, with "
-    "`pixi add tectonic` in a pixi workspace, or from "
-    "https://tectonic-typesetting.github.io/, then restart Studio."
+    "Declare Tectonic 0.15 or newer under [tool.pixi.dependencies] in the "
+    "notebook and open it with `marimo edit --sandbox=pixi`, or install it with "
+    "`pixi global install tectonic` and restart Studio."
 )
 _MAX_WARNINGS = 20
 _MAX_MESSAGE_CHARACTERS = 2_000
@@ -498,7 +498,7 @@ def compile_latex(
     Tectonic writes the PDF and its logs into ``output``. Relative paths in the
     document resolve from the entry document's directory.
     """
-    binary = shutil.which("tectonic")
+    binary = find_tool("tectonic")
     if binary is None:
         raise ProviderError(
             "Studio cannot find the tectonic command.", hint=INSTALL_ACTION

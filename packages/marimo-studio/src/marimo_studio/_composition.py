@@ -35,6 +35,7 @@ from marimo_studio._notebook.ports import (
     EnvironmentFlagBuilder,
     LiveNotebookRunner,
     NotebookWriteLock,
+    ScriptEnvironments,
     StaticNotebookLoader,
 )
 from marimo_studio._server.cell_alias_policy import CellAliasSourcePolicy
@@ -245,6 +246,14 @@ def create_environment_flag_builder() -> EnvironmentFlagBuilder:
     from marimo_studio._compat.environment import inline_environment_flags
 
     return inline_environment_flags
+
+
+def create_script_environments() -> ScriptEnvironments:
+    """Construct pixi script environments for the pinned Marimo release."""
+    validate_marimo_release()
+    from marimo_studio._compat.pixi_environment import PixiScriptEnvironments
+
+    return PixiScriptEnvironments()
 
 
 def create_code_mode_bridge() -> CodeModeBridge:

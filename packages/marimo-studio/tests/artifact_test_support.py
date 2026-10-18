@@ -54,7 +54,9 @@ def project(tmp_path: Path, *, state_outside: bool = False) -> CatalogProject:
     (root / "app.css").write_text("body { color: black; }\n", encoding="utf-8")
     if state_outside:
         output = tmp_path / "__marimo__"
-        locations = CatalogLocations(tmp_path, output / "studio" / "analysis", output)
+        locations = CatalogLocations(
+            tmp_path / "analysis.py", tmp_path, output / "studio" / "analysis", output
+        )
         return load_view_project(root, locations=locations)
     return load_standalone_project(root)
 

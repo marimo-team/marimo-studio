@@ -19,6 +19,7 @@ from marimo_studio._processes.provider_runner import create_provider_runner
 from marimo_studio._views.inspection_cache import inspection_cache_root
 from marimo_studio._views.records import ViewProjectState
 from marimo_studio._workspace.project_manifest import CatalogProject
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import MarimoStudioError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildProfile,
@@ -30,6 +31,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._artifact_sites import ArtifactSite, inspection_sites
 from marimo_studio.view_providers._host import provider_registry
+from marimo_studio.view_providers._host.records import ProviderProvenance
 
 DEFAULT_INSPECTION_COMMAND_TIMEOUT = 120.0
 
@@ -62,6 +64,16 @@ def inspection_request(
     )
 
 
+def project_provenance(project: CatalogProject) -> ProviderProvenance:
+    """Return the provenance of the provider that builds ``project``.
+
+    The tool version comes from the project's notebook environment, as in the
+    project's builds, so a revision computed anywhere matches the build's.
+    """
+    with notebook_tools(project.locations.notebook):
+        return provider_registry().get(project.provider).provenance()
+
+
 async def inspect_view_project(project: ViewProject) -> ProjectInspection:
     """Inspect provider-owned source through Studio's normalized record."""
     return await run_provider_operation(partial(inspect_view_project_sync, project))
@@ -75,15 +87,22 @@ def inspect_view_project_sync(
     runner: ProviderRunner | None = None,
     command_timeout: float = DEFAULT_INSPECTION_COMMAND_TIMEOUT,
 ) -> ProjectInspection:
-    """Inspect one project from a synchronous worker or process root."""
-    request = inspection_request(
-        project,
-        cache_root=cache_root,
-        cancellation=cancellation,
-        runner=runner,
-        command_timeout=command_timeout,
+    """Inspect one project from a synchronous worker or process root.
+
+    A catalog project inspects with its notebook's tools, as its builds do.
+    """
+    notebook = (
+        project.locations.notebook if isinstance(project, CatalogProject) else None
     )
-    return provider_registry().get(project.provider).inspect(request)
+    with notebook_tools(notebook):
+        request = inspection_request(
+            project,
+            cache_root=cache_root,
+            cancellation=cancellation,
+            runner=runner,
+            command_timeout=command_timeout,
+        )
+        return provider_registry().get(project.provider).inspect(request)
 
 
 def inspect_view_sites(project: ViewProject) -> tuple[ArtifactSite, ...]:
@@ -120,11 +139,10 @@ def view_project_state(
     try:
         revision = None if errors else input_id
         if revision is None and not errors:
-            provider = provider_registry().get(project.provider)
             revision = project_revision(
                 project,
                 inspection,
-                provider.provenance(),
+                project_provenance(project),
             )
     except (OSError, MarimoStudioError):
         revision = None

@@ -29,6 +29,7 @@ from marimo_studio._workspace.locations import ARTIFACT_DIRECTORY
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.project_manifest import CatalogProject
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import ConfigurationError, MarimoStudioError
 from marimo_studio.view_providers import ProjectInspection, ViewProject
 from marimo_studio.view_providers._host import provider_registry
@@ -310,7 +311,11 @@ class SourceChangeProducer:
                 (*self._scope_files, *self._roots),
                 before,
             )
-            inspection = provider.inspect(inspection_request(project))
+            # Inspection and provenance use the tools of one environment
+            # revision, as the build that consumes this input does.
+            with notebook_tools(project.locations.notebook):
+                inspection = provider.inspect(inspection_request(project))
+                provenance = provider.provenance()
             input_files, roots = _validated_inputs(project, inspection)
             document_files = _validated_document_files(project, inspection)
             scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
@@ -320,7 +325,7 @@ class SourceChangeProducer:
             input_id = project_revision(
                 project,
                 inspection,
-                provider.provenance(),
+                provenance,
                 input_paths=inputs,
             )
         except Exception as error:

@@ -20,7 +20,7 @@ from collections.abc import Iterator, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, suppress
 from contextvars import Context, copy_context
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.metadata import EntryPoint, entry_points
 from pathlib import Path
 from threading import Lock, RLock
@@ -34,6 +34,7 @@ from marimo_studio._processes.provider_operation import (
     find_process_cleanup_error,
     raise_process_cleanup,
 )
+from marimo_studio._processes.tools import current_tools
 from marimo_studio.errors import (
     ConfigurationError,
     MarimoStudioError,
@@ -45,6 +46,7 @@ from marimo_studio.view_providers import (
     BuildRequest,
     BuildResult,
     InspectionRequest,
+    ProjectDiagnostic,
     ProjectInspection,
     ProviderAvailability,
     ProviderCancellation,
@@ -178,7 +180,9 @@ class _RegisteredProvider:
         self._extension_timeout = extension_timeout
         self._starter_lock = Lock()
         self._starters: tuple[ProviderStarter, ...] | None = None
-        self._availability: ProviderAvailability | None = None
+        # Tool versions differ between notebooks whose pixi environments
+        # provide their own tools, so availability is kept per environment.
+        self._availability: dict[str, ProviderAvailability] = {}
         self._conformance = ProviderConformance(
             self.key,
             info,
@@ -233,7 +237,17 @@ class _RegisteredProvider:
                 reason=f"{type(error).__name__}: {error}",
                 action="Repair or remove the provider registration.",
             )
-        self._availability = availability
+        tools = current_tools()
+        if not availability.available and tools.problem is not None:
+            detail = f"The notebook's pixi environment is unavailable: {tools.problem}"
+            availability = replace(
+                availability,
+                reason=(
+                    f"{availability.reason} {detail}" if availability.reason else detail
+                ),
+                action="Fix the pixi error, then build the view again.",
+            )
+        self._availability[tools.identity] = availability
         return availability
 
     def starters(self) -> tuple[ProviderStarter, ...]:
@@ -301,8 +315,10 @@ class _RegisteredProvider:
         ):
             if self._process is not None:
                 result = build_in_provider_process(self._process, request)
-                return self._conformance.validate_build_result(request, result)
-            return self._conformance.build(self._local_provider(), request)
+                result = self._conformance.validate_build_result(request, result)
+            else:
+                result = self._conformance.build(self._local_provider(), request)
+        return replace(result, diagnostics=_with_tool_problem(result.diagnostics))
 
     def render(self, request: RenderRequest) -> RenderResult:
         if not self.can_render:
@@ -311,26 +327,52 @@ class _RegisteredProvider:
         with self._guard(f"render {request.source.as_posix()!r}"):
             if self._process is not None:
                 result = render_in_provider_process(self._process, request)
-                return self._conformance.validate_render_result(request, result)
-            return self._conformance.render(
-                cast(RenderProvider, self._local_provider()),
-                request,
-            )
+                result = self._conformance.validate_render_result(request, result)
+            else:
+                result = self._conformance.render(
+                    cast(RenderProvider, self._local_provider()),
+                    request,
+                )
+        return replace(result, diagnostics=_with_tool_problem(result.diagnostics))
 
     def provenance(self) -> ProviderProvenance:
         """Identify the provider and tool versions that build this provider's views.
 
-        The tool version comes from the latest availability check. Builds check
-        availability first, so a tool upgrade reaches the next build.
+        The tool version comes from the latest availability check for the
+        current tool environment. Builds check availability first, so a tool
+        upgrade reaches the next build.
         """
+        availability = self._availability.get(current_tools().identity)
         return self._conformance.provenance(
-            (self._availability or self.availability()).version
+            (availability or self.availability()).version
         )
 
     def _local_provider(self) -> ViewProvider:
         if self._provider is None:
             raise RuntimeError("Isolated provider has no in-process implementation")
         return self._provider
+
+
+def _with_tool_problem(
+    diagnostics: tuple[ProjectDiagnostic, ...],
+) -> tuple[ProjectDiagnostic, ...]:
+    """Name the notebook's failed pixi install beside a failed build or render.
+
+    A tool the environment would provide is then missing, and the provider's
+    own error names only the tool.
+    """
+    problem = current_tools().problem
+    if problem is None or not any(item.severity == "error" for item in diagnostics):
+        return diagnostics
+    return (
+        *diagnostics,
+        ProjectDiagnostic(
+            "pixi-environment-unavailable",
+            "error",
+            f"The notebook's pixi environment is unavailable: {problem}",
+            "Fix the pixi error, then build the view again.",
+        ),
+    )
 
 
 class ProviderRegistry:

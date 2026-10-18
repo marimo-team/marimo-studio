@@ -33,7 +33,10 @@ from marimo_studio._filesystem.errors import (
     UnsafePathError,
 )
 from marimo_studio._filesystem.files import ConditionalWriteError, FileTree, Version
-from marimo_studio._views.inspection import inspect_view_project_sync
+from marimo_studio._views.inspection import (
+    inspect_view_project_sync,
+    project_provenance,
+)
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace.config import (
     load_studio,
@@ -53,6 +56,7 @@ from marimo_studio._workspace.mutation_lock import (
 from marimo_studio._workspace.project_manifest import (
     VIEW_MANIFEST_DOCUMENT,
     VIEW_MANIFEST_PATH,
+    CatalogProject,
     decode_view_manifest,
     decode_view_provider,
 )
@@ -83,7 +87,7 @@ SOURCE_DOCUMENT_MAX_BYTES = BUILD_INPUT_BUDGET.max_file_bytes
 
 @dataclass(frozen=True)
 class PreparedSourceWrite:
-    project: ViewProject
+    project: CatalogProject
     inspection: ProjectInspection
     input_id: str
     spec: SourceDocumentSpec
@@ -106,7 +110,7 @@ class OwnedViewDocument:
         }
 
 
-def _view(studio: StudioWorkspace, view_name: str) -> ViewProject:
+def _view(studio: StudioWorkspace, view_name: str) -> CatalogProject:
     return studio.view(view_name)
 
 
@@ -532,7 +536,7 @@ def _current_project(
     *,
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
-) -> tuple[StudioWorkspace, ViewProject]:
+) -> tuple[StudioWorkspace, CatalogProject]:
     expected = provider_registry().validate_project(expected)
     try:
         current_studio = load_studio(studio.config_path)
@@ -640,7 +644,6 @@ def write_source(
         )
     project = _view(studio, view_name)
     inspection = inspect_view_project_sync(project)
-    provider = provider_registry().get(project.provider)
     try:
         spec = source_spec(inspection, name, project.name)
     except SourceNotFoundError:
@@ -650,13 +653,12 @@ def write_source(
         ):
             studio, project = _current_project(studio, project)
         inspection = inspect_view_project_sync(project)
-        provider = provider_registry().get(project.provider)
         spec = source_spec(inspection, name, project.name)
     try:
         snapshot = project_revision_snapshot(
             project,
             inspection,
-            provider.provenance(),
+            project_provenance(project),
         )
     except (ConfigurationError, OSError, ValueError) as error:
         with (
@@ -717,13 +719,12 @@ def write_project_source(
             f"{expected_spec.path.as_posix()} exceeds the "
             f"{SOURCE_DOCUMENT_MAX_BYTES}-byte source limit."
         )
-    provider = provider_registry().get(project.provider)
     try:
         captured = (
             project_revision_snapshot(
                 project,
                 prepared.inspection,
-                provider.provenance(),
+                project_provenance(project),
             )
             if prepared.input_state is None
             else None

@@ -30,6 +30,7 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path, PurePosixPath
 
+from marimo_studio._processes.cancellation import provider_cancellation
 from marimo_studio._server.presentation.service import (
     NotebookPresentation,
     PresentationSnapshot,
@@ -40,6 +41,7 @@ from marimo_studio._views.renders import (
     render_key,
     run_render,
 )
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import ConfigurationError, MarimoStudioError
 from marimo_studio.errors._internal import ArtifactIntegrityError
 from marimo_studio.view_providers import (
@@ -291,17 +293,21 @@ class RenderStore:
             shutil.copytree(templates[0], destination, copy_function=shutil.copyfile)
 
         try:
-            bundle = run_render(
-                provider_registry().get(artifact.provider.key),
-                copy_template,
-                source,
-                read_sites(snapshot.sites, source),
-                values,
-                outputs,
-                cells,
-                cancellation,
-                pending,
-            )
+            with (
+                provider_cancellation(cancellation),
+                notebook_tools(presentation.notebook),
+            ):
+                bundle = run_render(
+                    provider_registry().get(artifact.provider.key),
+                    copy_template,
+                    source,
+                    read_sites(snapshot.sites, source),
+                    values,
+                    outputs,
+                    cells,
+                    cancellation,
+                    pending,
+                )
         except MarimoStudioError as error:
             if cancellation.cancelled:
                 raise RenderUnavailable("The render request ended") from error
