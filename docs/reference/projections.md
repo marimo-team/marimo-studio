@@ -5,7 +5,7 @@ description: Exact cell, output, value, selector, event, state, duplication, and
 
 # Notebook result projections
 
-A projection host places one notebook result in a view. Studio resolves the
+A [host](glossary.md#host) places one notebook result in a view. Studio resolves the
 host to one producer cell, runs its dependency closure in the selected notebook
 runtime, and mounts the result in the host element.
 
@@ -340,7 +340,7 @@ headers.
 ### Select parts of rendered files
 
 A render's regions make the parts of its files selectable with
-[Lens](https://marimo-team.github.io/marimo-lens/). Select a chart inside a
+[Lens](../guide/lens.md#mark-parts-of-a-pdf). Select a chart inside a
 Typst PDF, a table cell, or a shape in a paused video, and Lens records the
 cells that produced it, the value selector it shows, such as
 `report.readings[6].occupancy`, and the source line that reads it, such as
@@ -453,153 +453,28 @@ events.
 Browser automation locates connected cell, output, and value hosts with
 [`STUDIO_RESULT_SELECTOR`](python-api.md#studio-result-selector).
 
-## Trace custom JavaScript rendering
+## Lens attributes
 
-[Select results with Lens](../guide/coding-agents.md#select-results-with-lens)
-covers point-and-note feedback with producer context.
+[Select results with Lens](../guide/lens.md) shows these attributes in use.
+Studio marks hosts and render regions itself. A page sets the others on the
+elements it authors:
 
-Use `mo-value`, `marimo-output`, and `marimo-cell` when they can render the
-result directly. A custom chart or component keeps its notebook connection
-through hidden projection hosts:
+| Attribute                        | On                                     | Value and effect                                                                                                                                                                                                                    |
+| -------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data-marimo-lens-inputs`        | An element that page code draws into   | Host IDs in the same document, separated by spaces. Declares the element's complete notebook inputs. Missing, duplicate, or unbound IDs make the element unavailable, and references cannot chain through another annotated element |
+| `data-marimo-lens-label`         | A host or an annotated element         | Plain text that replaces the label Lens shows while selecting. The selection's notebook cells stay the same                                                                                                                         |
+| `data-marimo-lens-detail`        | A host or an annotated element         | Plain text shown under the label, such as the row a selection names                                                                                                                                                                 |
+| `data-marimo-lens-scope`         | `#app-shell`                           | A CSS selector list. Lens groups a click on authored content into the nearest match. Studio sets a default when the page leaves it out                                                                                              |
+| `data-marimo-lens-target`        | An authored element with a stable `id` | Makes the element a target of its own, so Lens reconnects feedback to it across rebuilds                                                                                                                                            |
+| `data-marimo-lens-render-source` | An authored target                     | JSON such as `{"path":"index.html"}` naming the source file that holds the element                                                                                                                                                  |
 
-```html
-<span id="rows-data" hidden mo-value="rows"></span>
-<span id="summary-data" hidden mo-value="summary.total"></span>
-<section data-marimo-lens-inputs="rows-data summary-data">
-  <!-- JavaScript renders the chart here. -->
-</section>
-```
+`STUDIO_RESULT_SELECTOR`, from the
+[Python API](python-api.md), matches hosts, elements with
+`data-marimo-lens-inputs`, the parents of hidden value hosts, and elements
+with `data-marimo-lens-target`. Pass it to `Lens(dom_selector=...)` for a Lens
+that a view places.
 
-`data-marimo-lens-inputs` lists unique projection host IDs in the same
-document, separated by spaces, and declares the region's complete notebook
-input set. [Lens](https://marimo-team.github.io/marimo-lens/) reads the hosts'
-resolved symbolic selectors and producing cells, so authors copy no runtime
-metadata. References can also point to `marimo-output` or `marimo-cell` hosts.
-Missing, duplicate, or unbound references make the region unavailable, and
-references cannot chain through other annotated regions.
-
-Alternatively, put hidden `mo-value` hosts directly inside their consuming
-region. `STUDIO_RESULT_SELECTOR` matches those parents, annotated regions, and
-direct projections. Pass it to `Lens(dom_selector=STUDIO_RESULT_SELECTOR)` to
-select these results, or pass a custom CSS selector to choose other containing
-regions.
-
-Update references when JavaScript dependencies change, including transformed
-inputs and portals. Set `aria-busy="true"` during asynchronous rendering and
-clear it on completion. Lens retains value selectors and
-producer context. It does not infer arbitrary JavaScript dataflow or pin
-historical kernel values to captured pixels.
-
-### Select individual results
-
-Give each metric its own input host:
-
-```html
-<article class="metric">
-  <span hidden mo-value="summary.events"></span>
-  <span>Events</span>
-  <strong><!-- JavaScript may format the value here. --></strong>
-</article>
-```
-
-The hidden host makes the metric selectable by its exact field path. Use a
-visible `mo-value` when native formatting suffices. Hidden hosts stay hidden
-under ordinary layout styles. For dynamic rows
-or thresholds, update the selector from the state that renders the result. For
-non-JSON values, reference a hidden `marimo-output` host through
-`data-marimo-lens-inputs`.
-
-Dynamic selectors require the Python or Browser runtime, because Prepared
-exports need a finite authored target set. Use `view export --runtime wasm`
-when row or threshold selection generates paths at runtime.
-
-A Prepared view can project a collection through a fixed selector and
-reference that host from each row, with the row path in
-`data-marimo-lens-detail` and a `data-marimo-lens-label`. The path is
-descriptive context, and the resolved source selector remains the collection.
-
-Browser calculations must reference their real kernel inputs, and can be
-separate targets that share a dataframe. A canvas chart is a single surface
-unless its renderer supplies finer DOM targets. Rendered files expose their
-parts through [render regions](#select-parts-of-rendered-files).
-
-### Selection labels
-
-While selecting, Lens outlines the target element and attaches a compact label
-to its edge. Studio supplies the resolved cell or variable name and its
-producer. Custom regions inherit their source hosts' labels. Override the text
-when a region needs a more specific name:
-
-```html
-<section
-  data-marimo-lens-inputs="rows-data summary-data"
-  data-marimo-lens-label="Revenue forecast"
-  data-marimo-lens-detail="Monthly revenue · selected region"
->
-  <!-- Custom rendering -->
-</section>
-```
-
-Lens owns this plain-text label contract and its presentation. Labels leave
-source links and the selection's notebook identity unchanged. Authored labels
-on native projection hosts take precedence over Studio's defaults.
-
-### Select authored page regions
-
-Authored HTML inside `#app-shell` is selectable, including copy and layout
-with no notebook inputs. Lens groups a click into the nearest section,
-card, figure, or block and keeps the clicked child's text, path, and relative
-bounds as a compact DOM hint. Native notebook outputs keep their own targets.
-
-Set the grouping selector on the view shell:
-
-```html
-<main id="app-shell" data-marimo-lens-scope=".card, header, figure">
-  <!-- Authored regions are selectable. -->
-</main>
-```
-
-`data-marimo-lens-target` gives an authored region explicit target identity,
-and `data-marimo-lens-render-source` identifies its source file:
-
-```html
-<header
-  id="intro"
-  data-marimo-lens-target
-  data-marimo-lens-label="Introduction"
-  data-marimo-lens-render-source='{"path":"index.html"}'
->
-  <h1>Regional outlook</h1>
-</header>
-```
-
-Keep the ID stable across rebuilds so Lens can reconnect feedback. A region
-with no notebook inputs keeps its note and image with empty notebook
-provenance. Use `data-marimo-lens-inputs` when the region consumes notebook
-results.
-
-### Project an authored Lens
-
-Development previews reuse the Lens that marimo mounts in the notebook. To put
-an authored Lens in another Python runtime view, define it in the notebook:
-
-```python
-from marimo_lens import Lens
-from marimo_studio import STUDIO_RESULT_SELECTOR
-
-studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
-None
-```
-
-The final `None` leaves the cell output empty. Project the value into the view
-to place the Lens dock there:
-
-```html
-<marimo-output value="studio_lens"></marimo-output>
-```
-
-marimo skips its automatic Lens in a notebook that constructs its own, so
-`studio_lens` is the notebook's only Lens.
-
-The [Lens agent guide](https://marimo-team.github.io/marimo-lens/agents) defines
-selection inspection, feedback, and resolution.
+A selector computed from page state needs the Python or Browser runtime, because
+a Prepared export needs a finite set of authored targets. Lens keeps value
+selectors and producing cells. It follows no JavaScript dataflow and pins no
+past notebook value to captured pixels.

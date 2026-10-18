@@ -5,8 +5,11 @@ description: Place cells, outputs, and values from a marimo notebook in a web pa
 
 # Place notebook results in a view
 
-A view places notebook results by name. Every format has the same three
-kinds of result:
+A view places notebook [results](../reference/glossary.md#result) by name: a
+[cell](../reference/glossary.md#cell), an
+[output](../reference/glossary.md#output), or a
+[value](../reference/glossary.md#value). Each format writes them in its own
+syntax:
 
 ::: v-pre
 
@@ -18,13 +21,21 @@ kinds of result:
 
 :::
 
-A page is HTML that the view's provider builds. The built-in starters write
-it as plain HTML, React, Svelte, Reveal.js, or Notebook Kit source, and a
-[view provider](view-providers.md) can build it from any other framework. Write
-the hosts inside `#app-shell`, in the markup of the view's framework. Quarto
-renders a page too, and Studio supplies `#app-shell` for it. Typst and LaTeX
-render a PDF, which cannot hold controls, so a document places images and
-values.
+On a [page](../reference/glossary.md#page), each result goes in a
+[host](../reference/glossary.md#host), an element that Studio fills with the
+result while the page is open. The built-in starters write the page as plain
+HTML, React, Svelte, Reveal.js, or Notebook Kit source, and a
+[view provider](view-providers.md) can build it from any other framework.
+Write the hosts inside the page's
+[app shell](../reference/glossary.md#app-shell), the `#app-shell` element, in
+the markup of the view's framework. Quarto builds a page too, and Studio
+supplies `#app-shell` for it. Typst and LaTeX compile a PDF, a
+[render](../reference/glossary.md#render) that holds no controls, so their
+source places images and values.
+
+[How Studio works](../how-studio-works.md#hosts-receive-results-while-the-page-is-open)
+shows what each host receives while the page is open, and
+[Select results with Lens](lens.md) traces any placed result back to its cell.
 
 ## Name results in the notebook
 
@@ -32,7 +43,7 @@ A **cell** is named by its function name. Write `def sport_control(...)` in the
 notebook file, or rename the cell in the editor.
 
 An **output** or a **value** is named by a variable that a cell defines, and a
-selector can step into it:
+[value selector](../reference/glossary.md#value-selector) can step into it:
 
 ```text
 summary.total
@@ -40,7 +51,8 @@ rows[0]
 results["overview"]
 ```
 
-Give an anonymous cell an alias when renaming it is not an option:
+Give an unnamed cell a [cell alias](../reference/glossary.md#cell-alias) when
+renaming its function is not an option:
 
 ```console
 marimo-studio notebook bind summary --target analysis.py --cell 12
@@ -190,9 +202,10 @@ Typst and LaTeX renders read each value in its JSON form:
 | A step through `None`, such as `peak.label` | `null`, while `peak` is `None`               |
 | Dictionary, list, text, number, boolean     | The same value                               |
 
-The render source formats what it reads. LaTeX has `\marimonum`, `\marimodate`, and
-`\marimorows`, which repeats a table row for each row of a dataframe. Typst
-uses its own functions. A null value falls back to the render source's default.
+The Typst or LaTeX source formats what it reads. LaTeX has `\marimonum`,
+`\marimodate`, and `\marimorows`, which repeats a table row for each row of a
+dataframe. Typst uses its own functions. A null value falls back to the
+source's default.
 
 A value whose JSON form holds more than 100,000 values or 1,000,000 bytes fails
 with `value-too-large`. Filter or aggregate large tables in the notebook first.

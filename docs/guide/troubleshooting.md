@@ -41,7 +41,7 @@ at their folder. Studio 0.3 looks only in `__marimo__/studio/`, so after you
 move views out of it, update the notebook's `marimo-studio` requirement as
 [Upgrade from 0.3](../reference/compatibility.md#upgrade-from-0-3) describes.
 
-## Studio reports a view folder conflict
+## Studio reports a views folder conflict
 
 Views live in `studio/<notebook-stem>/`. Their build state lives in
 `__marimo__/studio/<notebook-stem>/<view>/.artifacts/`, or under `state_dir` or
@@ -59,7 +59,7 @@ they collide, Studio stops with one of these errors:
 | `MARIMO_STUDIO_STATE_DIR` must be an absolute path                   | Set an absolute path, or leave it empty                                                                                                           |
 | `state_dir` must be a non-empty relative path                        | Set a folder inside the project, or use `MARIMO_STUDIO_STATE_DIR`                                                                                 |
 
-For a conflict between view folders and build state, choosing another
+For a conflict between views folders and build state, choosing another
 [build state location](../reference/configuration.md#build-state-location)
 also resolves it.
 
@@ -103,7 +103,7 @@ dependencies, because Studio derives the provider requirement from each saved
 
 The first compile downloads the document's TeX packages and outlasted the
 build's 120 second budget. Build again to continue from the downloaded
-packages, or run this once from the view folder with no time limit:
+packages, or run this once from the view project with no time limit:
 
 ```console
 tectonic -X compile main.tex

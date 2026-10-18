@@ -2,11 +2,13 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type HeadConfig, type Plugin, type UserConfig } from "vitepress";
 import llmstxt from "vitepress-plugin-llms";
 
+import { glossaryLinks } from "./glossary.ts";
 import {
   authoringItems,
   deliveryItems,
   exampleItems,
   headIcons,
+  integrationItems,
   introductionItems,
   normalizeBasePath,
   projectItems,
@@ -15,12 +17,13 @@ import {
   startItems,
   withBasePath,
 } from "./routes.ts";
+import { sidebarCollapsedClass, sidebarStorageKey } from "./sidebar-state.ts";
 
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
 const socialImage = new URL("og.png", siteUrl).href;
 const socialDescription =
-  "Build web pages, slide decks, and Typst or LaTeX documents from the cells, outputs, and values of a marimo notebook.";
+  "Compose the cells, outputs, and values of a marimo notebook into any document, from web pages and slide decks to typeset papers.";
 const basePath = normalizeBasePath(process.env.BASE_PATH);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const publicPath = (path: string): string => withBasePath(basePath, path);
@@ -48,6 +51,13 @@ export default defineConfig({
   description: socialDescription,
   head: [
     [
+      "script",
+      { id: "check-sidebar" },
+      // Restores a hidden sidebar before the first paint, as the default theme's
+      // check-dark-mode script does for the appearance.
+      `try{localStorage.getItem("${sidebarStorageKey}")==="collapsed"&&document.documentElement.classList.add("${sidebarCollapsedClass}")}catch{}`,
+    ],
+    [
       "link",
       {
         href: publicPath(headIcons.light),
@@ -68,6 +78,11 @@ export default defineConfig({
   ],
   lang: "en-US",
   lastUpdated: true,
+  markdown: {
+    config: (md) => {
+      md.use(glossaryLinks);
+    },
+  },
   sitemap: { hostname: siteUrl.href },
   srcDir: "../../docs",
   title: "marimo-studio",
@@ -142,6 +157,11 @@ export default defineConfig({
           text: "Share",
           collapsed: false,
           items: deliveryItems,
+        },
+        {
+          text: "Integrations",
+          collapsed: false,
+          items: integrationItems,
         },
         { text: "Examples", link: routes.examples.index },
         { text: "Reference", link: routes.reference.index },

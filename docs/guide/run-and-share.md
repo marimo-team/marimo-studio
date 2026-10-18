@@ -5,7 +5,10 @@ description: Serve a view from Python, run it in the visitor's browser, or expor
 
 # Run or export a view
 
-A runtime decides where notebook code runs when someone opens a view:
+A [runtime](../reference/glossary.md#runtime) decides where notebook code runs
+when someone opens a view. The same view project serves all three, so you
+choose per deployment between live Python, Python in the visitor's browser, and
+a static site with saved results:
 
 | Runtime                       | Python runs                                                        | Choose it when                                                               |
 | ----------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
@@ -95,10 +98,24 @@ keep their network requirements, and the host's
 [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP)
 must allow their origins.
 
-### Prepare input states
+### Prepare states
+
+A prepared export answers each control change from a saved state. During
+export, Studio runs the notebook once for each
+[prepared state](../reference/glossary.md#prepared-state) and saves every
+result. In the browser, a control change loads the saved state that matches
+the page's control values, so the visitor sees the notebook's own results and
+no Python runs. A value the export did not prepare has no saved state, so the
+page keeps showing the previous one:
+
+<llm-exclude>
+
+<StudioPreparedStates />
+
+</llm-exclude>
 
 By default the export prepares one state: the notebook's initial control
-values. To let visitors change controls, add `states.yaml` to the view folder.
+values. To let visitors change controls, add `states.yaml` to the view project.
 A `matrix` prepares every combination of the listed values:
 
 ```yaml
@@ -128,8 +145,7 @@ states:
 ```
 
 A control change loads a complete prepared state, so its values and results
-change together. A combination that was not prepared keeps the previous
-display. Export and preflight warn with `prepared-states-skip-control-values`
+change together. Export and preflight warn with `prepared-states-skip-control-values`
 when the prepared values skip a value that a slider, number, dropdown, radio,
 checkbox, or switch on the page can send, such as a slider step between two
 listed values. Filtering a table that is already in the browser needs no
@@ -159,7 +175,7 @@ marimo-studio view export dashboard --target analysis.py \
 ```
 
 The site contains the notebook source and starts Python in each visitor's
-browser, so visitors can reach any input state. Its packages, data, and
+browser, so visitors can reach any combination of control values. Its packages, data, and
 remote assets must be reachable from the browser.
 
 ::: warning Review browser code before you publish

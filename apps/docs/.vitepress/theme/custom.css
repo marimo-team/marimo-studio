@@ -45,8 +45,16 @@
   height: auto;
 }
 
+/* The hero centers its text over the showcase that StudioLayout places under
+   it, which shows what the text describes. */
+.VPHomeHero .container {
+  text-align: center;
+}
+
 .VPHomeHero .text {
-  max-width: 620px;
+  max-width: 720px;
+  margin-inline: auto;
+  text-wrap: balance;
   font-size: clamp(36px, 4vw, 52px);
   font-weight: 500;
   line-height: 1.13;
@@ -54,19 +62,16 @@
 }
 
 .VPHomeHero .tagline {
-  max-width: 550px;
+  max-width: 600px;
+  margin-inline: auto;
+  text-wrap: balance;
   padding-top: 22px;
   font-size: 18px;
   line-height: 1.65;
 }
 
-.VPHomeHero .image-bg {
-  display: none;
-}
-
-.VPHomeHero .image-src {
-  max-width: 240px;
-  max-height: 240px;
+.VPHomeHero .actions {
+  justify-content: center;
 }
 
 .VPButton {
@@ -110,17 +115,21 @@
   text-underline-offset: 3px;
 }
 
-.vp-doc div[class*="language-"],
-.vp-doc p > img {
+.vp-doc div[class*="language-"] {
   border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+  border-radius: var(--studio-radius-inner);
 }
 
 .vp-doc img {
   max-width: 100%;
   height: auto;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+}
+
+/* Markdown screenshots are figures too, so they take the card frame. Rendered
+   figures and gallery thumbnails draw their own frames. */
+.vp-doc p > img {
+  border: 1px solid var(--studio-card-border);
+  border-radius: var(--studio-radius-card);
 }
 
 .VPFooter .message a {
@@ -133,11 +142,6 @@
 @media (max-width: 639px) {
   .VPHomeHero .tagline {
     font-size: 16px;
-  }
-
-  .VPHomeHero .image-src {
-    max-width: 160px;
-    max-height: 160px;
   }
 }
 
@@ -215,5 +219,18 @@
   *::before,
   *::after {
     scroll-behavior: auto !important;
+  }
+}
+
+/* The sidebar toggle in StudioLayout.vue hides the desktop sidebar. Scoping
+   the default theme's --vp-sidebar-width to the content and the local nav
+   moves the page into the freed space and leaves the navbar as it is. */
+@media (min-width: 960px) {
+  html.studio-sidebar-collapsed .VPSidebar {
+    display: none;
+  }
+
+  html.studio-sidebar-collapsed :is(.VPContent, .VPLocalNav) {
+    --vp-sidebar-width: 0px;
   }
 }

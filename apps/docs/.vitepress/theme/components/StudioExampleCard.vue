@@ -266,8 +266,8 @@ button[aria-selected="true"]::before {
   display: block;
   overflow: hidden;
   aspect-ratio: 16 / 10;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
+  border: 1px solid var(--studio-card-border);
+  border-radius: var(--studio-radius-card);
   background: var(--vp-c-bg-soft);
   transition: border-color 0.2s ease;
 }

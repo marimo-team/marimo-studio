@@ -705,11 +705,12 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
 
 ### `STUDIO_RESULT_SELECTOR`
 
-CSS selector for connected cell, output, and value hosts, parents containing
-hidden value hosts, custom regions annotated with `data-marimo-lens-inputs`,
-and authored regions marked with `data-marimo-lens-target`. Pass it to
-[Lens](https://marimo-team.github.io/marimo-lens/) to collect feedback from
-native projections and custom rendered regions:
+CSS selector that matches the [Lens targets](glossary.md#lens-target) a view
+declares: cell, output, and value hosts, parents of hidden value hosts,
+elements with `data-marimo-lens-inputs`, explicit authored targets with
+`data-marimo-lens-target`, and render region boxes.
+Pass it to [Lens](https://marimo-team.github.io/marimo-lens/) for a Lens that
+a view places:
 
 ```python
 from marimo_lens import Lens
@@ -718,16 +719,11 @@ from marimo_studio import STUDIO_RESULT_SELECTOR
 studio_lens = Lens(dom_selector=STUDIO_RESULT_SELECTOR)
 ```
 
-Render `studio_lens` through `<marimo-output value="studio_lens">` in the view.
-Lens reads resolved producer and value-selector metadata from the linked hosts.
-Studio publishes a document-local `data-marimo-lens-scope` on `#app-shell` so
-unannotated HTML can receive feedback. Its value is a CSS selector for
-preferred grouping regions, with the nearest block as a fallback, and a view's
-source can set its own. `data-marimo-lens-target` makes an explicit parent take
-precedence over smaller targets inside it. Stable region IDs preserve feedback
-across rebuilds. See
-[custom JavaScript rendering](projections.md#trace-custom-javascript-rendering)
-for the authoring contract.
+Place it with `<marimo-output value="studio_lens">`.
+[Put a Lens dock in a live view](../guide/lens.md#put-a-lens-dock-in-a-live-view)
+shows the workflow, and
+[Lens attributes](projections.md#lens-attributes) lists the attributes a view
+can set.
 
 ### `ASGIApp`
 

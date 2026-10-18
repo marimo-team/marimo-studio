@@ -5,8 +5,10 @@ description: Pick a starter for a view, from a plain HTML page or a React or Sve
 
 # Choose a format
 
-Every view starts from a starter, which sets its format and its first files.
-Pick one in **Add view**, or pass `--starter` to `marimo-studio view create`.
+Every view starts from a [starter](../reference/glossary.md#starter), which
+sets its [format](../reference/glossary.md#format) and writes the first files
+of its [view project](../reference/glossary.md#view-project). Pick one in the
+**New view** form, or pass `--starter` to `marimo-studio view create`.
 
 | Starter                              | The view is                                                | Setup                  |
 | ------------------------------------ | ---------------------------------------------------------- | ---------------------- |
@@ -19,23 +21,23 @@ Pick one in **Add view**, or pass `--starter` to `marimo-studio view create`.
 | `marimo-studio/typst:default`        | A PDF typeset with [Typst](https://typst.app/)             | `marimo-studio[typst]` |
 | `marimo-studio/latex:default`        | A PDF typeset with [LaTeX](https://www.latex-project.org/) | Tectonic 0.15 or newer |
 
-The first six are pages, so their controls stay live in the browser. Typst
-and LaTeX views render a PDF: Studio compiles it from the notebook's results
-on the server and compiles it again when a result it reads changes. Their page
-shows the PDF with a download link.
+The first six build a [page](../reference/glossary.md#page) from their own
+source, so their controls stay live in the browser. Typst and LaTeX views
+compile a PDF, a [render](../reference/glossary.md#render): Studio compiles it
+from the notebook's results on the server and compiles it again when a result
+it reads changes. Their page shows the PDF with a download link.
 
 Start with the HTML page when you are unsure. Move to React or Svelte when
 components, imported assets, or npm packages make the view easier to
 maintain. Choose Typst or LaTeX when the result is a paper or a report to
 print or send.
 
-A starter writes a view's first files, and you edit the view project from
-there. A page can draw notebook values with any JavaScript library: reference a
-script from an HTML page, or add an npm package to a React, Svelte, or Notebook
-Kit view.
-For a framework, template, or build tool outside this table, install or write a
-[view provider](view-providers.md). Its starters appear in **Add view** next to
-these.
+A starter writes a view's first files, and from there the view project is
+yours to edit. Your page can draw notebook values with any JavaScript library:
+reference a script from an HTML page, or add an npm package to a React,
+Svelte, or Notebook Kit view. For a framework, template, or build tool outside
+this table, you can install or write a [view provider](view-providers.md), and
+its starters appear in the **New view** form next to these.
 
 ## HTML
 
@@ -109,7 +111,7 @@ uv run marimo-studio view create monitor --target analysis.py \
   cells in `src/index.html`. Place hosts inside `type="text/html"` cells, and
   read values into Observable's reactive graph with `marimoValue(host)`.
 
-Add an npm package from the view folder, with the same Deno that Studio uses:
+Add an npm package from the view project, with the same Deno that Studio uses:
 
 ```console
 uv run -- deno add --frozen=false --save-exact npm:d3@7
@@ -141,7 +143,9 @@ Rooms in use today: {{< marimo value="summary.rooms" >}}.
 {{< marimo cell="occupancy_chart" >}}
 ```
 
-Studio renders with `--no-execute`, so the computation stays in the notebook.
+Studio renders with `--no-execute`, so the computation stays in the notebook
+and Python code blocks in `index.qmd` never run. Put Python in a notebook cell
+and place its result.
 The **Bulletin** view of [Earthquake watch](../examples/earthquakes.md) is a
 Quarto article with citations, callouts, and notebook figures.
 
@@ -233,13 +237,13 @@ few minutes. The **Journal paper** view of
 [Building occupancy](../examples/occupancy.md) is a paper in the IEEE TVCG
 journal template with the notebook's figures and tables.
 
-## When documents render
+## When PDFs render
 
 | Where the view runs                                       | Typst and LaTeX views show                          |
 | --------------------------------------------------------- | --------------------------------------------------- |
 | Studio editor, in any runtime                             | A PDF compiled again when a result it reads changes |
 | `marimo run` with the Python runtime                      | A PDF compiled again when a result it reads changes |
-| Prepared export                                           | One PDF for each prepared input state               |
+| Prepared export                                           | One PDF for each prepared state                     |
 | `marimo run` with the Browser runtime, or a `wasm` export | A `render-results-unavailable` error                |
 
 A page can also draw a PDF in the browser from `mo-value` data with a

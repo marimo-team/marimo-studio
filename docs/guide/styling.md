@@ -5,7 +5,7 @@ description: Style a view page with your own CSS, theme the notebook cells and o
 
 # Style a page
 
-A page view owns its layout and styling. Write CSS inline in an HTML page, or
+A [page](../reference/glossary.md#page) owns its layout and styling. Write CSS inline in an HTML page, or
 import a stylesheet from a React or Svelte entry point. Define page colors and
 fonts on `:root`. marimo's theme tokens apply inside placed cells and outputs
 and do not reach the rest of the page.

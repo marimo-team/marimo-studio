@@ -5,8 +5,11 @@ description: Link a notebook's views, share state through query parameters and f
 
 # Link views and keep state
 
-Each view has a stable URL. The default view opens at `/`, and a view named
-`report` opens at `/report/`.
+A notebook's views can work as one site. Each view has a stable URL, so a
+dashboard can link to its report, and a link can carry query parameters that
+the notebook reads, so the report opens filtered to the region the reader
+picked. The default view opens at
+`/`, and a view named `report` opens at `/report/`.
 
 ## Link views
 

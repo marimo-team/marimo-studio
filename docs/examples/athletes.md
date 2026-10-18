@@ -12,8 +12,8 @@ pageClass: studio-example-page
 [`athletes.py`](https://github.com/marimo-team/marimo-studio/blob/main/examples/athletes.py)
 loads the Rio 2016 roster with [Polars](https://pola.rs/), a dataframe library
 for Python. It calculates age, medal awards, sport participation, and athlete
-profiles, and fits how body mass scales with height. One notebook backs
-every view.
+profiles, and fits how body mass scales with height. Every view reads its
+results from these cells.
 
 ## Compare the views
 

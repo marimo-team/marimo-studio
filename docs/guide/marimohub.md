@@ -6,9 +6,10 @@ description: Add Studio to a marimohub notebook, create a view in the hub editor
 # Use Studio in marimohub
 
 [marimohub](https://marimohub.docs.marimo.io/) is a self-hosted platform that
-stores marimo notebooks and runs each session in a sandbox. When a notebook
-declares `marimo-studio`, the notebook page opens the Studio workspace and
-**Run as app** serves the view the editor shows.
+stores marimo notebooks and runs each session in a sandbox. With Studio, a
+team builds views in the hub's editor and shares a view as the notebook's app.
+When a notebook declares `marimo-studio`, the notebook page opens the Studio
+workspace and **Run as app** serves the view the editor shows.
 
 ![A marimohub notebook page with the notebook beside a live dashboard Preview](/screenshots/marimohub/studio-workspace.png)
 
@@ -32,7 +33,7 @@ with read access can download. Keep credentials in the hub's
 Git-synced notebooks, temporary editors, and previews save nothing from the
 session, and **Add view** warns about them. For a Git-synced notebook, follow the hub's
 [marimo-studio steps](https://marimohub.docs.marimo.io/apps#use-marimo-studio)
-and commit `notebook.py` and the view folder before you stop the session.
+and commit `notebook.py` and its views folder before you stop the session.
 
 The saved workspace leaves out `__marimo__/`, where Studio keeps build state by
 default, so each new session rebuilds every view.

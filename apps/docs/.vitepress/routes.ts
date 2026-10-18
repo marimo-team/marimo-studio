@@ -1,6 +1,7 @@
 export const routes = {
   home: "/",
   whatIsStudio: "/what-is-studio",
+  howStudioWorks: "/how-studio-works",
   examplesRoot: "/examples/",
   examples: {
     index: "/examples/",
@@ -14,6 +15,7 @@ export const routes = {
     index: "/guide/",
     gettingStarted: "/guide/getting-started",
     codingAgents: "/guide/coding-agents",
+    lens: "/guide/lens",
     notebookResults: "/guide/notebook-results",
     formats: "/guide/formats",
     workInStudio: "/guide/work-in-studio",
@@ -28,6 +30,7 @@ export const routes = {
   referenceRoot: "/reference/",
   reference: {
     index: "/reference/",
+    glossary: "/reference/glossary",
     cli: "/reference/cli",
     compatibility: "/reference/compatibility",
     configuration: "/reference/configuration",
@@ -49,12 +52,14 @@ export const exampleItems = [
   { text: "Building occupancy", link: routes.examples.occupancy },
 ];
 
-export const introductionItems = [{ text: "What is Studio?", link: routes.whatIsStudio }];
+export const introductionItems = [
+  { text: "What is Studio?", link: routes.whatIsStudio },
+  { text: "How Studio works", link: routes.howStudioWorks },
+];
 
 export const startItems = [
   { text: "Guide overview", link: routes.guide.index },
   { text: "Getting started", link: routes.guide.gettingStarted },
-  { text: "Author with a coding agent", link: routes.guide.codingAgents },
 ];
 
 export const authoringItems = [
@@ -69,14 +74,20 @@ export const deliveryItems = [
   { text: "Run or export a view", link: routes.guide.runAndShare },
   { text: "Link views and keep state", link: routes.guide.navigationAndSessions },
   { text: "Deploy a live Python view", link: routes.guide.deploy },
-  { text: "Use Studio in marimohub", link: routes.guide.marimohub },
   { text: "Troubleshoot Studio", link: routes.guide.troubleshooting },
 ];
 
-export const guideItems = [...startItems, ...authoringItems, ...deliveryItems];
+export const integrationItems = [
+  { text: "Author with a coding agent", link: routes.guide.codingAgents },
+  { text: "Select results with Lens", link: routes.guide.lens },
+  { text: "Use Studio in marimohub", link: routes.guide.marimohub },
+];
+
+export const guideItems = [...startItems, ...authoringItems, ...deliveryItems, ...integrationItems];
 
 export const referenceItems = [
   { text: "Overview", link: routes.reference.index },
+  { text: "Glossary", link: routes.reference.glossary },
   { text: "CLI", link: routes.reference.cli },
   { text: "Python API", link: routes.reference.pythonApi },
   { text: "Configuration", link: routes.reference.configuration },

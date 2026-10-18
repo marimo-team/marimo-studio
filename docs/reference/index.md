@@ -1,6 +1,6 @@
 ---
 title: Reference
-description: Exact commands, configuration, projection, Python, provider, compatibility, limit, identity, and error contracts.
+description: Terms and exact commands, configuration, projection, Python, provider, compatibility, limit, identity, and error contracts.
 ---
 
 # Reference
@@ -12,6 +12,7 @@ owns task workflows and developed examples.
 
 | Contract                                                        | Reference                                        |
 | --------------------------------------------------------------- | ------------------------------------------------ |
+| Terms used across the documentation                             | [Glossary](glossary.md)                          |
 | Commands, output, and exit status                               | [CLI](cli.md)                                    |
 | Server entry, notebook settings, view projects, and saved files | [Configuration](configuration.md)                |
 | Cells, outputs, values, DOM events, and rendered files          | [Notebook result projections](projections.md)    |
@@ -28,5 +29,4 @@ owns task workflows and developed examples.
 | Saved-workspace, code-mode, inspection, and ASGI APIs             | [Python API](python-api.md)          |
 | Third-party provider registration, inspection, and build protocol | [View provider API](provider-api.md) |
 
-[Identities and state](identities.md#product-terms) defines the product terms
-used across these pages.
+The [glossary](glossary.md) defines the terms used across these pages.

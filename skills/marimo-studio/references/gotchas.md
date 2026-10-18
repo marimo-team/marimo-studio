@@ -54,7 +54,7 @@ needs no output settings or page widths.
 Tectonic downloads the TeX packages a document uses on its first compile, and
 that compile outlasted the build. Build the view again. Tectonic keeps what it
 downloaded, so the next build continues. Run `tectonic -X compile main.tex` in
-the view folder to download them without a time limit. When that command
+the view project to download them without a time limit. When that command
 runs past 120 seconds with the packages downloaded, the document is too slow
 for a build or never finishes, for example because of a recursive macro, so
 fix the document.

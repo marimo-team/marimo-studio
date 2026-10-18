@@ -1,17 +1,18 @@
 ---
 title: Add a view provider
-description: Bring your own frontend framework or build tool to the New view picker with a Python package.
+description: Write a Python package that teaches Studio a new view format, from a frontend framework to a typesetting tool.
 ---
 
 # Add a view provider
 
-A view provider is a Python package that adds starters to Studio's **New
-view** picker. Install one in the notebook's environment, and its starters
-appear beside the built-in ones:
+A [view provider](../reference/glossary.md#view-provider) is a Python package
+that teaches Studio one [format](../reference/glossary.md#format). Install one
+in the notebook's environment, and its starters appear in the **New view**
+form beside the built-in ones:
 
-![The New view picker lists Acme report and Acme dashboard under From acme-views, above the built-in starters from marimo-studio](/screenshots/provider-new-view.png){width=448}
+![The New view form lists Acme report and Acme dashboard under From acme-views, above the built-in starters from marimo-studio](/screenshots/provider-new-view.png){width=448}
 
-This page builds `acme-views`, the package in that picker. **Acme report**
+This page builds `acme-views`, the package in that form. **Acme report**
 starts a plain HTML page and needs only Python. **Acme dashboard** adds a
 [Lit](https://lit.dev/) component bundled by Vite.
 
@@ -19,6 +20,26 @@ starts a plain HTML page and needs only Python. **Acme dashboard** adds a
 The view provider API is an advanced extension point. Pin `marimo-studio` to
 the minor line you test, such as `marimo-studio>=0.4,<0.5`.
 :::
+
+## What a provider receives and returns
+
+A provider works with the files of a
+[view project](../reference/glossary.md#view-project). Studio calls its
+methods at fixed moments and validates each record they return:
+
+| When                                                 | Studio calls                   | The provider receives                                                           | The provider returns                                                               |
+| ---------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| The **New view** form opens                          | `availability()`, `starters()` | Nothing                                                                         | Whether it can run, and its starters                                               |
+| Someone creates a view                               | `create()`                     | The chosen starter and the saved notebook's cells                               | The first files of the view project                                                |
+| Source opens, or a file in the view project changes  | `inspect()`                    | The view project                                                                | Its source documents, build inputs, hosts, and renders                             |
+| Preview, `marimo run`, or an export needs a new page | `build()`                      | A [build snapshot](../reference/glossary.md#build-snapshot) of the build inputs | A [page](../reference/glossary.md#page): an HTML entry file and the files it loads |
+| A notebook result that a render reads changes        | `render()`                     | The render template, values as JSON, and outputs and cells as images            | [Rendered files](../reference/glossary.md#rendered-files), such as a PDF           |
+
+A provider never runs the notebook. `build()` writes a page whose hosts are
+still empty, and Studio fills them from the session while the page is open, as
+[How Studio works](../how-studio-works.md#hosts-receive-results-while-the-page-is-open)
+describes. `render()` is the one method that receives notebook results, and
+they arrive already converted to JSON and images.
 
 ## Choose a pattern
 
@@ -57,10 +78,12 @@ For another framework, replace `Lit` with its name, and see
 [Swap Lit for a JSX framework](#swap-lit-for-a-jsx-framework). The rest of the
 page builds the same package by hand.
 
-## What a provider decides
+## Files in a view project
 
 Pick **Acme report** and name the view `briefing`. Studio creates the view
-project in the notebook's view folder, `studio/analysis/` by default:
+project in the notebook's
+[views folder](../reference/glossary.md#views-folder), `studio/analysis/` by
+default:
 
 ```text
 studio/analysis/briefing/
@@ -70,8 +93,10 @@ studio/analysis/briefing/
 ```
 
 The provider writes every file except `view.toml` and decides how Studio treats
-it. A **Source document** appears in Studio's Source panel for editing. A
-**build input** rebuilds the page when it changes.
+it. A [source document](../reference/glossary.md#source-document) appears in
+Studio's Source pane for editing. A
+[build input](../reference/glossary.md#build-input) rebuilds the page when it
+changes.
 
 | File         | Written by                  | Source document     | Build input |
 | ------------ | --------------------------- | ------------------- | ----------- |
@@ -86,16 +111,6 @@ agent skill reads it before editing a view, so ship one written for your
 framework. `DESIGN.md` records lasting decisions such as audience, visual
 direction, and interaction priorities once the view has a direction. Editing
 either file never rebuilds the page.
-
-Studio calls the provider at these moments:
-
-| When                                            | Studio calls                   |
-| ----------------------------------------------- | ------------------------------ |
-| Someone opens the **New view** picker           | `availability()`, `starters()` |
-| Someone creates a view                          | `create()`                     |
-| Source opens, or a watched file changes         | `inspect()`                    |
-| Preview, run mode, or export needs a fresh page | `build()`                      |
-| The notebook results a render reads change      | `render()`                     |
 
 ## How Studio finds the provider
 
@@ -230,9 +245,9 @@ provider = ReportProvider()
 ```
 
 Each method answers one moment from
-[What a provider decides](#what-a-provider-decides).
+[What a provider receives and returns](#what-a-provider-receives-and-returns).
 
-### `availability()` and `starters()`: fill the picker
+### `availability()` and `starters()`: fill the New view form
 
 `ReportProvider` needs only Python, so `availability()` always returns
 `ProviderAvailability(True)`. A provider that runs an installed tool returns
@@ -240,7 +255,7 @@ Each method answers one moment from
 missing or outdated tool with your install instructions.
 
 `starters()` returns one `ProviderStarter`. Its `title` and `summary` fill the
-picker card, and `documents` fills the **Files created** list. Studio keeps the
+starter card, and `documents` fills the **Files created** list. Studio keeps the
 starter list for the life of the process.
 
 ### `create()`: write the starting files
@@ -324,7 +339,7 @@ Lead with the threshold control, then its result.
 Studio lists `DESIGN.md` at its next inspection, such as after the next save of
 `index.html`:
 
-![Source panel for the briefing view with index.html, AGENTS.md, and DESIGN.md tabs, showing marimo-cell hosts named cell-2 and summary](/screenshots/provider-source.png){width=696}
+![Source pane for the briefing view with index.html, AGENTS.md, and DESIGN.md tabs, showing marimo-cell hosts named cell-2 and summary](/screenshots/provider-source.png){width=696}
 
 Every environment that edits, builds, or exports the view needs the provider
 package. Publish it to a package index, or declare it as a path or Git source
@@ -549,8 +564,8 @@ provider = ViteProvider()
 
 `ViteProvider` reuses the report provider and changes four methods:
 
-- `availability()` checks for the `deno` binary, so the picker disables the
-  starter with a recovery action when it is missing.
+- `availability()` checks for the `deno` binary, so the **New view** form
+  disables the starter with a recovery action when it is missing.
 - `create()` copies `main.js`, `deno.json`, and `deno.lock` into the new view,
   and adds an `<acme-header>` element and a `<script>` tag to `index.html`.
 - `inspect()` adds the three files to Source and to the build inputs.
@@ -719,7 +734,7 @@ dataframe arrives as a list of row objects and a date as ISO 8601 text.
 `build()` copies the declared build inputs into `request.template_root`, which
 Studio keeps private, and writes a page with one `<marimo-output render="card.svg">` host
 with `render_page()`. A provider that builds its own page places the host beside
-its other content and projection hosts.
+its other content and hosts.
 
 Studio calls `render()` with a writable copy of the template in
 `request.template_root`, the file to render in `request.source`, an empty
@@ -730,6 +745,38 @@ media types and names the main file. A render that places figures or named
 cell outputs reads them with `RenderOutput` or `RenderCell`.
 [Render files from notebook results](../reference/provider-api.md#render-files-from-notebook-results)
 defines the contract, including figure sizes and preview files.
+
+### Make parts of the file selectable
+
+A rendered file is a picture of results, so Studio cannot tell on its own
+which pixels show which result. Return a
+[render region](../reference/glossary.md#render-region) for each part the
+provider placed, and [Lens](lens.md) can select that part and trace it to its
+cell. The card draws `report.total` across its middle, so `render()` ends with
+one region. Import `Rect` and `RenderRegion` from
+`marimo_studio.view_providers` beside the other names:
+
+```python
+return RenderResult(
+    (RenderFile(CARD, "image/svg+xml"),),
+    main=CARD,
+    regions=(
+        RenderRegion(
+            CARD,
+            Rect(x=0.05, y=0.35, width=0.7, height=0.35),
+            reads=("report.total",),
+            label="Report total",
+        ),
+    ),
+)
+```
+
+`Rect` measures fractions of the file's width and height from its top left
+corner. A PDF region also names its `page`, and a video region the `start` and
+`end` seconds of the frames that show the part. Studio drops a region that
+leaves its file or names no result the render reads, and warns once.
+[Locate parts of rendered files](../reference/provider-api.md#locate-parts-of-rendered-files)
+defines every field.
 
 ## Provider rules
 
