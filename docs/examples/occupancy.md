@@ -66,8 +66,9 @@ Python packages:
 # tectonic = ">=0.15"
 ```
 
-With uv and pixi installed, run from the repository root. The repository's
-pixi workspace, which the TeX cache step uses, needs pixi 0.81 or newer:
+From the root of a clone set up as described in
+[Run an example locally](index.md#run-an-example-locally), open the notebook in
+marimo's pixi sandbox:
 
 ```console
 uv run marimo edit examples/occupancy.py --sandbox=pixi

@@ -59,17 +59,17 @@ you keep into the folder Studio uses, then remove the old folder.
 
 ## Supported environment
 
-| Component                                           | Contract                                                                                  |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Python                                              | 3.10 through 3.14                                                                         |
-| marimo                                              | 0.25.1                                                                                    |
-| [Deno](https://docs.deno.com/)                      | 2.9.5 from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring      |
-| [uv](https://docs.astral.sh/uv/)                    | Required when the CLI must prepare or re-enter a notebook or provider environment         |
-| [pixi](https://pixi.prefix.dev/)                    | Optional. 0.80 or newer runs pixi workspaces, `--sandbox=pixi` notebooks, and their tools |
-| [Quarto](https://quarto.org/)                       | 1.9.38 or newer for the Quarto provider                                                   |
-| [Typst](https://typst.app/)                         | The `typst` Python package 0.15 or newer, from the `typst` extra, for the Typst provider  |
-| [Tectonic](https://tectonic-typesetting.github.io/) | 0.15 or newer for the LaTeX provider                                                      |
-| Browser acceptance                                  | Current Chromium on Linux and Windows                                                     |
+| Component                                           | Contract                                                                                      |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Python                                              | 3.10 through 3.14                                                                             |
+| marimo                                              | 0.25.1                                                                                        |
+| [Deno](https://docs.deno.com/)                      | 2.9.5 or newer from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring |
+| [uv](https://docs.astral.sh/uv/)                    | Required when the CLI must prepare or re-enter a notebook or provider environment             |
+| [pixi](https://pixi.prefix.dev/)                    | Optional. 0.80 or newer runs pixi workspaces, `--sandbox=pixi` notebooks, and their tools     |
+| [Quarto](https://quarto.org/)                       | 1.9.38 or newer for the Quarto provider                                                       |
+| [Typst](https://typst.app/)                         | The `typst` Python package 0.15 or newer, from the `typst` extra, for the Typst provider      |
+| [Tectonic](https://tectonic-typesetting.github.io/) | 0.15 or newer for the LaTeX provider                                                          |
+| Browser acceptance                                  | Current Chromium on Linux and Windows                                                         |
 
 Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),
 which let Python create staging files beyond the default 260-character path

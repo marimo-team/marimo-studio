@@ -42,7 +42,7 @@ its starters appear in the **New view** form next to these.
 ## HTML
 
 ```console
-marimo-studio view create report --target analysis.py
+uvx marimo-studio view create report --target analysis.py
 ```
 
 The starter writes `index.html` and `AGENTS.md`. The page already places every
@@ -68,37 +68,43 @@ bundler, so switch to React or Svelte when a page grows them. Leave
 ## React, Svelte, and Notebook Kit
 
 These starters build with [Deno](https://docs.deno.com/), a JavaScript
-toolchain that ships on PyPI. Install it in the notebook's Python project:
-
-```console
-uv add 'marimo-studio[deno]'
-```
-
-Then create the view:
+toolchain that ships on PyPI as the `marimo-studio[deno]` extra. Create the
+view:
 
 ::: code-group
 
 ```console [React]
-uv run marimo-studio view create operations --target analysis.py \
+uvx marimo-studio view create operations --target analysis.py \
   --starter marimo-studio/react:default
 ```
 
 ```console [Reveal.js]
-uv run marimo-studio view create briefing --target analysis.py \
+uvx marimo-studio view create briefing --target analysis.py \
   --starter marimo-studio/react:reveal
 ```
 
 ```console [Svelte]
-uv run marimo-studio view create explorer --target analysis.py \
+uvx marimo-studio view create explorer --target analysis.py \
   --starter marimo-studio/svelte:default
 ```
 
 ```console [Notebook Kit]
-uv run marimo-studio view create monitor --target analysis.py \
+uvx marimo-studio view create monitor --target analysis.py \
   --starter marimo-studio/notebook-kit:default
 ```
 
 :::
+
+Studio adds `marimo-studio[deno]` to the notebook's inline dependencies and
+prints the command that starts marimo with Deno. The printed command pins the
+installed Studio version:
+
+```console
+uvx --with 'marimo-studio[deno]==<version>' marimo edit analysis.py --sandbox --watch
+```
+
+In a Python project, add the extra with `uv add 'marimo-studio[deno]'` and run
+Studio and marimo through `uv run`.
 
 - **React** writes TypeScript and JSX, a `useMarimoValue` hook, `deno.json`,
   and a frozen lockfile. Its build type-checks before it bundles.
@@ -129,7 +135,7 @@ page. Install Quarto 1.9.38 or newer, for example with
 `pixi global install quarto`, then create a view:
 
 ```console
-marimo-studio view create article --target analysis.py \
+uvx marimo-studio view create article --target analysis.py \
   --starter marimo-studio/quarto:default
 ```
 
@@ -152,13 +158,17 @@ Quarto article with citations, callouts, and notebook figures.
 ## Typst
 
 [Typst](https://typst.app/docs/) typesets papers and reports from markup.
-Install the compiler in the notebook's Python project, then create a view:
+The compiler ships on PyPI as the `marimo-studio[typst]` extra. Create a view:
 
 ```console
-uv add 'marimo-studio[typst]'
-uv run marimo-studio view create report --target analysis.py \
+uvx marimo-studio view create report --target analysis.py \
   --starter marimo-studio/typst:default
 ```
+
+Studio adds `marimo-studio[typst]` to the notebook's inline dependencies and
+prints a `uvx --with 'marimo-studio[typst]==<version>' marimo edit` command that
+starts marimo with the compiler. In a Python project, add the extra with
+`uv add 'marimo-studio[typst]'`.
 
 `main.typ` imports the starter's `marimo.typ`:
 
@@ -172,8 +182,9 @@ Rooms in use: #marimo_value("summary.rooms", default: 0)
 
 Until the notebook supplies a value, `marimo_value()` returns its `default`, so
 give each one a default the surrounding markup can format. `marimo_output()`
-places nothing until its figure exists. The same file compiles with
-`typst compile main.typ` outside Studio, using every default. The **Report**
+places nothing until its figure exists. The
+[Typst CLI](https://github.com/typst/typst#installation) compiles the same file
+outside Studio with `typst compile main.typ`, using every default. The **Report**
 view of [Quadratic programs](../examples/quadratic-programs.md) is a Typst
 report that embeds the notebook's matplotlib figures.
 
@@ -198,14 +209,14 @@ engine. The notebook can declare Tectonic for
 
 `pixi add --script analysis.py tectonic` writes the
 `[tool.pixi.dependencies]` table into an existing block. The upper bound on
-`requires-python` keeps pixi on a Python version Studio supports. Open the
-notebook in marimo's pixi sandbox, which needs pixi 0.80 or newer, and create
-the view:
+`requires-python` keeps pixi on a Python version Studio supports. Create the
+view, then open the notebook in marimo's pixi sandbox, which needs pixi 0.80 or
+newer:
 
 ```console
-uvx --with marimo-studio marimo edit analysis.py --sandbox=pixi --watch
-marimo-studio view create paper --target analysis.py \
+uvx marimo-studio view create paper --target analysis.py \
   --starter marimo-studio/latex:default
+uvx --with marimo-studio marimo edit analysis.py --sandbox=pixi --watch
 ```
 
 marimo runs the notebook in the environment pixi installs from the block, and
@@ -254,7 +265,7 @@ of [Building occupancy](../examples/occupancy.md) does this with
 ## List installed starters
 
 ```console
-marimo-studio starters
+uvx marimo-studio starters
 ```
 
 The list shows each starter's ID, provider, availability, and the setup it

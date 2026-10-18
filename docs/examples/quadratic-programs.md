@@ -51,7 +51,8 @@ Open **Notebook** to read the analysis the views share.
 
 ## Run locally
 
-From the repository root:
+From the root of a clone set up as described in
+[Run an example locally](index.md#run-an-example-locally):
 
 ```console
 uv run marimo edit examples/quadratic_program.py --sandbox

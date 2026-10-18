@@ -128,7 +128,7 @@ A view provider is Python code that knows one format. For each
 [build inputs](reference/glossary.md#build-input) and writes a
 [page](reference/glossary.md#page): an HTML entry
 file and the files it loads. The HTML provider copies the page. The React
-provider bundles the app with Vite. The Typst provider prepares a document to
+provider type-checks and bundles the app with Deno. The Typst provider prepares a document to
 compile.
 
 A build never runs the notebook, so the page it writes holds empty hosts. A

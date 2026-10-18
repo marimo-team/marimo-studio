@@ -16,14 +16,16 @@ The repository uses Python, `uv`, Node.js, pnpm, Deno, Chromium, and
 [pixi](https://pixi.prefix.dev/). Their supported versions are declared in
 `pyproject.toml`, `package.json`, `pixi.toml`, and the lockfiles. Install uv,
 Node.js, and pixi first, then run `corepack enable pnpm` so Node.js provides the
-pnpm version that `package.json` pins.
+pnpm version that `package.json` pins. Node.js 25 and newer ship without
+Corepack, so install it there with `npm install --global corepack`.
 
 ```console
 make setup
 ```
 
 Use focused package tests while working. Run the repository gates before asking
-for review:
+for review. `make check` also runs [ShellCheck](https://www.shellcheck.net/),
+which you install separately, for example with `pixi global install shellcheck`:
 
 ```console
 make check

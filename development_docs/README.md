@@ -65,7 +65,8 @@ for each integration.
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/),
 [Node.js](https://nodejs.org/) 24.15 or newer, and
 [pixi](https://pixi.prefix.dev/latest/installation/), then the locked
-environments:
+environments. Node.js 25 and newer ship without Corepack, so install it there
+first with `npm install --global corepack`:
 
 ```console
 corepack enable pnpm
@@ -257,7 +258,9 @@ Add the matching boundary checks:
 
 `make test` runs the complete Python profile for the current platform and the
 frontend package tests. `make check` adds formatting, linting, architecture,
-provider-source, and type checks. `make docs-build` owns public example exports
+provider-source, and type checks. Its shell-script lint runs
+[ShellCheck](https://www.shellcheck.net/) from `PATH`, for example after
+`pixi global install shellcheck`. `make docs-build` owns public example exports
 and VitePress verification. Live browser acceptance remains the evidence for
 cross-document behavior.
 

@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.12"
+# requires-python = ">=3.12,<3.15"
 # dependencies = [
 #     "clarabel>=0.11.1",
 #     "cvxpy-base>=1.8.2",

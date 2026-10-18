@@ -338,11 +338,12 @@ pixi global install quarto
 
 `pixi global` puts `quarto` on `PATH` for every way of starting marimo. A pixi
 workspace keeps Quarto, Python, and Studio in one project environment, and
-`pixi run` starts marimo with that environment activated:
+`pixi run` starts marimo with that environment activated. The bound on Python
+keeps pixi on a version Studio supports:
 
 ```console
 pixi init
-pixi add python quarto
+pixi add "python>=3.10,<3.15" quarto
 pixi add --pypi marimo-studio
 pixi run marimo edit analysis.py --no-sandbox --watch
 ```
@@ -479,9 +480,11 @@ values produce the same PDF on every machine. Pass dates from the notebook in
 place of `datetime.today()`. Imports of `@preview` packages download them on
 first use and need network access.
 
-`typst compile main.typ` compiles the project outside Studio, where every
+The [Typst CLI](https://github.com/typst/typst#installation) compiles the
+project outside Studio with `typst compile main.typ`, where every
 `marimo_value()`, `marimo_output()`, and `marimo_cell()` call returns its
-default.
+default. The `marimo-studio[typst]` extra installs the Python compiler that
+Studio calls, which has no `typst` command.
 
 Install the Typst compiler with `pip install "marimo-studio[typst]"` in the
 environment that runs Studio, or with `pixi add --pypi "marimo-studio[typst]"`
@@ -640,16 +643,18 @@ warnings above the PDF.
 LaTeX build driver, compiles the project outside Studio, where every read
 typesets its fallback.
 
-The provider runs Tectonic 0.15 or newer. A standalone notebook can declare it
-for [pixi](https://pixi.prefix.dev/) in its `# /// script` metadata:
+The provider runs Tectonic 0.15 or newer. A notebook can declare it for
+[pixi](https://pixi.prefix.dev/) in its `# /// script` metadata:
 
 ```console
 pixi add --script analysis.py tectonic
 ```
 
-Studio then runs the `tectonic` in the notebook's pixi script environment,
-before any on `PATH`, when marimo runs the notebook with `--sandbox=pixi` and
-in Studio commands that target the notebook. Studio installs that environment
+Keep `requires-python` below 3.15 in the same block, so pixi installs a Python
+version Studio supports. Studio then runs the `tectonic` in the notebook's pixi
+script environment, before any on `PATH`, when marimo runs the notebook with
+`--sandbox=pixi` and in Studio commands that target a notebook outside a
+Python project. Studio installs that environment
 with `pixi install --script`, the command marimo runs before it starts the
 kernel, and installs it again after the notebook's dependencies change. When
 pixi cannot install it, availability names pixi's error.
@@ -668,10 +673,10 @@ well.
 ## Deno availability
 
 React, Svelte, and Notebook Kit require the Deno executable that
-`marimo-studio[deno]` packages, at the pinned version listed in
+`marimo-studio[deno]` packages, at the minimum version listed in
 [Compatibility and support](compatibility.md). When the executable is missing
-or has another version, `doctor` and `starters` report the provider as
-unavailable with its recovery action.
+or older, `doctor` and `starters` report the provider as unavailable with its
+recovery action.
 
 Provider builds run trusted frontend tooling with the current user's
 filesystem, environment, and network authority. Review view source and locked

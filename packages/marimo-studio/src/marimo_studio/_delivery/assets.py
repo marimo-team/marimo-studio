@@ -13,9 +13,13 @@ from typing import TypeGuard
 from marimo_studio.errors import ProtocolError
 from marimo_studio.errors._internal import CompatibilityError
 
+_BUILD_META = "build-meta.json"
 _BUILD_SOURCES = "build-sources.json"
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _ENTRY_CLOSURES = "entry-closures.json"
+_SOURCE_OUTPUT = PurePosixPath(
+    "packages/marimo-studio/src/marimo_studio/_static/browser"
+)
 _FORBIDDEN_ZERO_PYTHON_PART = re.compile(
     r"(?:^|[^a-z0-9])"
     r"(code-source|notebook(?:-code|-source)?|pyodide|server|source-code|wasm|websocket|worker)"
@@ -148,7 +152,19 @@ def validate_runtime_marimo_release(
     commit: str,
     patch_sha256: str,
 ) -> None:
-    """Validate packaged browser assets against the pinned Marimo release."""
+    """Validate packaged browser assets against the pinned Marimo release.
+
+    A source checkout that has never run the browser build has no assets, and
+    the error names the command that builds them.
+    """
+    root = runtime_assets_path()
+    if not (root / _BUILD_META).is_file():
+        checkout = _source_checkout(root.resolve())
+        if checkout is not None:
+            raise ProtocolError(
+                "Studio's browser assets are not built in this checkout. "
+                f"Run `make setup` in {checkout} to build them."
+            )
     observed = _runtime_marimo_metadata()
     expected = {
         "version": version,
@@ -225,6 +241,15 @@ def validate_runtime_sources() -> None:
         )
 
 
+def _source_checkout(browser: Path) -> Path | None:
+    """Return the workspace whose browser build writes to ``browser``."""
+    parts = _SOURCE_OUTPUT.parts
+    if browser.parts[-len(parts) :] != parts:
+        return None
+    workspace = browser.parents[len(parts) - 1]
+    return workspace if (workspace / "pnpm-workspace.yaml").is_file() else None
+
+
 def _is_relative_posix(value: object) -> TypeGuard[str]:
     if not isinstance(value, str) or not value or "\\" in value:
         return False
@@ -250,7 +275,7 @@ def runtime_marimo_version() -> str:
 
 
 def _runtime_marimo_metadata() -> dict[str, str]:
-    path = runtime_assets_path() / "build-meta.json"
+    path = runtime_assets_path() / _BUILD_META
     try:
         marimo = json.loads(path.read_text(encoding="utf-8"))["marimo"]
         metadata = {key: marimo[key] for key in ("version", "commit", "patchSha256")}

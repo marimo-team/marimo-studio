@@ -32,6 +32,7 @@ def test_runtime_validation_request_round_trips_many_maximum_view_names(
         None,
         revisions,
         42,
+        command_installs=True,
     )
     request_path = tmp_path / "request.json"
     request_path.write_bytes(encoded)
@@ -43,6 +44,7 @@ def test_runtime_validation_request_round_trips_many_maximum_view_names(
     assert request.view_name is None
     assert request.expected_revisions == revisions
     assert request.timeout == 42
+    assert request.command_installs is True
 
 
 def test_runtime_validation_request_rejects_an_oversized_mapping(
@@ -54,6 +56,7 @@ def test_runtime_validation_request_rejects_an_oversized_mapping(
             None,
             _long_revisions(2_000),
             42,
+            command_installs=False,
         )
 
 
@@ -78,6 +81,17 @@ def test_runtime_validation_request_rejects_an_oversized_mapping(
                 "view": None,
                 "expectedRevisions": {"dashboard": "not-a-revision"},
                 "timeout": 42,
+                "commandInstalls": False,
+            }
+        ).encode(),
+        json.dumps(
+            {
+                "schema": 1,
+                "notebook": "analysis.py",
+                "view": None,
+                "expectedRevisions": None,
+                "timeout": 42,
+                "commandInstalls": "yes",
             }
         ).encode(),
     ),

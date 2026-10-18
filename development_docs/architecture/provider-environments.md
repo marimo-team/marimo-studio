@@ -89,10 +89,10 @@ activated environment.
 
 ## Pixi script environments
 
-A standalone notebook whose PEP 723 metadata has a `[tool.pixi]` table
-describes a pixi script environment. `marimo edit --sandbox=pixi` runs the
-kernel there, while the server, and every Studio build, stays in the invoking
-environment. Conda packages under `[tool.pixi.dependencies]`, such as
+A notebook whose PEP 723 metadata has a `[tool.pixi]` table describes a pixi
+script environment. `marimo edit --sandbox=pixi` runs the kernel there, even
+inside a pixi workspace or uv project, while the server, and every Studio
+build, stays in the invoking environment. Conda packages under `[tool.pixi.dependencies]`, such as
 `tectonic`, therefore reach provider commands through Studio:
 
 ```text
@@ -106,9 +106,10 @@ CatalogLocations.notebook, NotebookPresentation.notebook, or a starter target
 ```
 
 Studio installs the environment only where the user chose it: in a process
-marimo runs with the pixi sandbox backend, and inside a `marimo-studio`
-command, whose group callback enters `command_installs()`. A notebook owned by
-a pixi workspace or uv project keeps that project's environment.
+marimo runs with the pixi sandbox backend, for every notebook, and inside a
+`marimo-studio` command, whose group callback enters `command_installs()`, for
+a standalone notebook. A Studio command runs a notebook owned by a pixi
+workspace or uv project in that project's environment.
 
 `publish_view`, inspection, server and export renders, starter availability,
 and `_views.inspection.project_provenance(project)` install the context for
