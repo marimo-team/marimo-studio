@@ -98,7 +98,8 @@ def _tree_files(
         for child in sorted(node.iterdir(), key=lambda item: item.name):
             relative = prefix / child.name
             if child.is_dir():
-                visit(child, relative)
+                if child.name != "__pycache__":
+                    visit(child, relative)
                 continue
             payload = child.read_bytes()
             try:
