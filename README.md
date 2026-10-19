@@ -155,10 +155,10 @@ Serve the notebook's views as a live Python app:
 uvx --with marimo-studio marimo run analysis.py --sandbox
 ```
 
-Or export the `report` view as a static site:
+Or export the `dashboard` view as a static site:
 
 ```console
-uvx marimo-studio view export report --target analysis.py --output dist/report
+uvx marimo-studio view export dashboard --target analysis.py --output dist/dashboard
 ```
 
 The export runs the notebook on your machine, saves the results for each state
