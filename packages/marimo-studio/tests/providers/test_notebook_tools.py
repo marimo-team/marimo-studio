@@ -386,7 +386,7 @@ def test_starters_command_rejects_a_missing_target_notebook(tmp_path: Path) -> N
     )
 
     assert isinstance(result.exception, ConfigurationError)
-    assert str(result.exception).startswith("Notebook does not exist")
+    assert str(result.exception).startswith("Target does not exist")
 
 
 def test_missing_pixi_is_retried_after_the_metadata_changes(

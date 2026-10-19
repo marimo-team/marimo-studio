@@ -30,7 +30,10 @@ def resolve_notebook(target: str | Path | None) -> Path:
     path = Path(target).expanduser()
     if path.is_dir() or path.suffix == ".toml":
         return load_studio_definition(path).notebook
-    return path.resolve()
+    notebook = path.resolve()
+    if not notebook.exists():
+        raise ConfigurationError(f"Target does not exist: {notebook}")
+    return notebook
 
 
 def resolve_environment_target(

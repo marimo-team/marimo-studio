@@ -770,3 +770,30 @@ def test_unauthenticated_server_request_names_the_access_token_variable(
     assert raised.value.code == 5
     assert event["code"] == "authentication-required"
     assert "MARIMO_STUDIO_ACCESS_TOKEN" in event["details"]["hint"]
+
+
+def test_dependency_doctor_reports_a_missing_target_as_a_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "doctor",
+            "--dependencies",
+            "--target",
+            "missing.py",
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert event["code"] == "configuration-error"
+    assert event["message"].startswith("Target does not exist:")
