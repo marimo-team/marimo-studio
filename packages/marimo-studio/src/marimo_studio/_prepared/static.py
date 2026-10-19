@@ -119,7 +119,9 @@ class _PreparedPublicationSource:
             if prepared is not None:
                 attempt_cleanup(error, prepared.close)
             if isinstance(error, MarimoExportError):
-                raise publication_error(error, compiled, snapshot) from error
+                raise publication_error(
+                    error, compiled, snapshot, prepare_timeout=timeout
+                ) from error
             if isinstance(error, PublicationError):
                 raise
             if isinstance(error, OSError):
