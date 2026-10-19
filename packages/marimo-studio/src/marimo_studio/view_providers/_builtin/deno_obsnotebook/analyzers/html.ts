@@ -1,4 +1,7 @@
-import { parseTemplate } from "npm:@observablehq/notebook-kit@2.6.4";
+import {
+  parseJavaScript,
+  parseTemplate,
+} from "npm:@observablehq/notebook-kit@2.6.4";
 import { type DefaultTreeAdapterMap, parse } from "npm:parse5@7.3.0";
 
 export type Element = DefaultTreeAdapterMap["element"];
@@ -68,9 +71,36 @@ export function* htmlSources(
           "Compute shared data in Marimo and project it with mo-value, or use a local FileAttachment.",
       });
     }
-    if (mode !== "text/html") continue;
     const offset = location.startTag.endOffset;
     const text = source.slice(offset, location.endTag.startOffset);
+    if (!mode || mode === "module" || mode === "text/x-typescript") {
+      // Notebook Kit unescapes closing script tags before parsing cell values.
+      const scriptEscapes: number[] = [];
+      const input = text.replace(
+        /<\\(?=\\*\/script(?:\s|>))/gi,
+        (_, index: number) => {
+          scriptEscapes.push(index + 1);
+          return "<";
+        },
+      );
+      try {
+        parseJavaScript(input, mode === "text/x-typescript" ? "ts" : "js");
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        let position = "pos" in error && typeof error.pos === "number"
+          ? error.pos
+          : 0;
+        for (const escape of scriptEscapes) {
+          if (escape <= position) position++;
+        }
+        const id = attrs.get("id");
+        const message = error.message.replace(/ \(\d+:\d+\)$/, "");
+        report(offset + position, "notebook-source-invalid", {
+          message: `SyntaxError: ${message}${id ? ` (script ${id})` : ""}`,
+        });
+      }
+    }
+    if (mode !== "text/html") continue;
     try {
       const template = parseTemplate(text);
       yield {

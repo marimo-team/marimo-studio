@@ -176,6 +176,54 @@ def test_notebook_failed_build_retains_publication_and_recovers(tmp_path: Path) 
         assert first.read_text(first.artifact.document) == document
 
 
+@pytest.mark.parametrize(
+    ("cell", "line", "column"),
+    [
+        ('  <script id="99" type="module">const x = ;</script>', 5, 43),
+        ('  <script id="99">const x = ;</script>', 5, 29),
+        ('  <script id="99" type="text/x-typescript">const x = ;</script>', 5, 54),
+        (
+            r'  <script id="99" type="module">const tag = /<\\/script>/; '
+            "const x = ;</script>",
+            5,
+            70,
+        ),
+        (
+            '  <script id="99" type="module">\n'
+            "    const good = 1;\n"
+            "    const x = ;\n"
+            "  </script>",
+            7,
+            15,
+        ),
+    ],
+)
+def test_notebook_build_locates_javascript_syntax_errors_in_the_document(
+    tmp_path: Path, cell: str, line: int, column: int
+) -> None:
+    root, view = project(tmp_path, provider, "marimo-studio/notebook-kit")
+    source = root / "src/index.html"
+    source.write_text(
+        "<!doctype html>\n"
+        "<notebook>\n"
+        "  <title>Unicode 🌍</title>\n"
+        '  <script id="1" type="module">({value: 42})</script>\n'
+        f"{cell}\n"
+        "</notebook>\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ViewProjectError) as raised:
+        build_view_project_sync(view)
+
+    error = raised.value
+    assert error.source == source
+    assert (error.line, error.column) == (line, column)
+    assert str(error) == (
+        f"{source}:{line}:{column}: SyntaxError: Unexpected token (script 99)"
+    )
+
+
 def test_notebook_build_time_execution_reports_the_source_cell(tmp_path: Path) -> None:
     root, view = project(tmp_path, provider, "marimo-studio/notebook-kit")
     (root / "src/index.html").write_text(
