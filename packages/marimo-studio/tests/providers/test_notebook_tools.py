@@ -168,6 +168,27 @@ def test_starters_command_reports_availability_for_a_target_notebook(
 
 
 @posix_only
+def test_doctor_reports_provider_availability_for_a_target_notebook(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    environment = tmp_path / "environment" / "bin"
+    _tectonic(environment)
+    _install(monkeypatch, _Environments((str(environment),), selected=False))
+    notebook = _notebook(tmp_path / "project")
+
+    result = CliRunner().invoke(
+        cli, ["doctor", "marimo-studio/latex", "--target", str(notebook), "--json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    [record] = json.loads(result.stdout)["providers"]
+    assert record["availability"]["available"] is True
+    assert record["availability"]["version"] == "0.17.0"
+
+
+@posix_only
 def test_provider_commands_run_with_the_notebook_tools_first_on_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

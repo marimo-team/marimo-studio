@@ -65,7 +65,7 @@ is unavailable or its content needs repair.
 ## `marimo-studio doctor`
 
 ```text
-marimo-studio doctor [PROVIDER] [--json]
+marimo-studio doctor [PROVIDER] [--target PATH] [--json]
 marimo-studio doctor --dependencies --target notebook.py [--json]
 ```
 
@@ -74,6 +74,13 @@ availability, and starter IDs. The full inventory stays available when an
 optional provider is unavailable. A named provider exits with status `1` when
 it cannot load or reports unavailable. `doctor` does not inspect a view project
 or run a provider build.
+
+With `--target`, availability includes the tools that the notebook's pixi
+metadata declares, as `starters --target` reports them:
+
+```console
+marimo-studio doctor marimo-studio/latex --target notebook.py
+```
 
 `--dependencies` compares active PEP 723 and owning project dependencies,
 configured provider requirements, installed versions and extras, and resolution

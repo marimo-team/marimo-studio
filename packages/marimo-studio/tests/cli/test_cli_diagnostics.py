@@ -874,3 +874,24 @@ def test_view_build_names_the_view_root_that_refuses_its_locks(
         f"Make {view_root} writable for the user running Studio."
     )
 
+
+def test_doctor_rejects_a_project_whose_notebook_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.marimo-studio]\nnotebook = "missing.py"\ndefault = "dashboard"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["marimo-studio", "doctor", "--target", str(tmp_path), "--json"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert event["message"].startswith("Configured notebook does not exist:")

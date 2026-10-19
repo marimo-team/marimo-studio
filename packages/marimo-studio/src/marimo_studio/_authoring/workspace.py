@@ -32,6 +32,7 @@ from marimo_studio._views.records import (
 )
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import BindingResult
+from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.registry import ProviderDiagnostic
@@ -149,9 +150,20 @@ async def bind_cell(
     return await run_provider_operation(operation)
 
 
-async def diagnose_providers(provider: str | None = None) -> ProviderReport:
-    """Return finalized provider diagnostics, optionally for one key."""
-    records = await run_provider_operation(provider_registry().diagnostics)
+def _provider_diagnostics(notebook: Path | None) -> tuple[ProviderDiagnostic, ...]:
+    with notebook_tools(notebook):
+        return provider_registry().diagnostics()
+
+
+async def diagnose_providers(
+    provider: str | None = None, notebook: Path | None = None
+) -> ProviderReport:
+    """Return finalized provider diagnostics, optionally for one key.
+
+    With ``notebook``, availability includes the tools its pixi metadata
+    declares.
+    """
+    records = await run_provider_operation(partial(_provider_diagnostics, notebook))
     selected = tuple(
         record
         for record in records
