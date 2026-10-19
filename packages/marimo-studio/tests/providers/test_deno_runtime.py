@@ -71,7 +71,7 @@ def test_provider_inspection_selects_cache_without_mutating_the_project(
 
     assert request.cache_root == inspection_request(project).cache_root
     assert project.root not in request.cache_root.parents
-    assert not request.cache_root.exists()
+    assert list(root.iterdir()) == []
     assert not project_artifacts(project).exists()
 
 

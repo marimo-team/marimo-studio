@@ -144,6 +144,10 @@ describes their defaults.
 `MARIMO_STUDIO_STATE_DIR` moves view build state for every notebook the process
 opens. See [Build state location](#build-state-location).
 
+`MARIMO_STUDIO_CACHE_DIR` moves the per-user cache that provider inspection
+reuses across processes. It takes an absolute path. See
+[Inspection caches](provider-api.md#inspection-caches).
+
 `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` controls which cross-origin parent
 documents may frame the Studio edit workspace. Pass a comma-separated list of
 exact HTTP or HTTPS origins. When the variable is unset or empty, the Content
