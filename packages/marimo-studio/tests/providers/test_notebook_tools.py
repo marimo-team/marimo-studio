@@ -342,18 +342,21 @@ def test_failed_pixi_install_names_its_cause_in_availability(
     )
     notebook = _notebook(tmp_path / "project")
 
+    latex = provider_registry().get("marimo-studio/latex")
+    without_notebook = latex.availability()
     with (
         caplog.at_level(logging.WARNING, logger="marimo.studio"),
         notebook_tools(notebook),
     ):
-        availability = provider_registry().get("marimo-studio/latex").availability()
+        availability = latex.availability()
 
     assert not availability.available
     assert availability.reason is not None
     assert availability.reason.endswith(
         "The notebook's pixi environment is unavailable: solve failed"
     )
-    assert availability.action == "Fix the pixi error, then build the view again."
+    assert availability.action is not None
+    assert availability.action == without_notebook.action
     assert "solve failed" in caplog.text
 
 

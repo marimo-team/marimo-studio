@@ -239,13 +239,16 @@ class _RegisteredProvider:
             )
         tools = current_tools()
         if not availability.available and tools.problem is not None:
+            # The pixi failure may be unrelated to this provider's requirement,
+            # so it adds context and keeps the provider's own recovery action.
             detail = f"The notebook's pixi environment is unavailable: {tools.problem}"
             availability = replace(
                 availability,
                 reason=(
                     f"{availability.reason} {detail}" if availability.reason else detail
                 ),
-                action="Fix the pixi error, then build the view again.",
+                action=availability.action
+                or "Fix the error in the notebook's pixi metadata.",
             )
         self._availability[tools.identity] = availability
         return availability
