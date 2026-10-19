@@ -782,3 +782,69 @@ def test_creating_a_view_from_an_unknown_starter_is_a_client_error(
     assert created.status_code == 404
     assert created.json()["error"] == "starter-not-found"
     assert "marimo-studio/vanilla:default" in created.json()["available_starters"]
+
+
+@pytest.mark.parametrize(
+    ("changes", "error"),
+    [
+        ({"settings": {"paper": ["a4"]}}, "invalid-view-settings"),
+        ({"settings": ["paper"]}, "invalid-view-settings"),
+        ({"title": 3}, "invalid-view-title"),
+        ({"make_default": "yes"}, "invalid-view-create-request"),
+    ],
+)
+def test_view_creation_rejects_malformed_choices(
+    notebook_path: Path, changes: dict[str, object], error: str
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        generation = client.get("/_marimo-studio/views").json()["generation"]
+        created = client.post(
+            "/_marimo-studio/views",
+            headers=headers,
+            json={
+                "catalog_generation": generation,
+                "name": "report",
+                "starter": "marimo-studio/vanilla:default",
+                "title": None,
+                "settings": {},
+                "make_default": False,
+                **changes,
+            },
+        )
+
+    assert created.status_code == 400
+    assert created.json()["error"] == error
+
+
+def test_view_creation_can_make_the_new_view_the_default(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        generation = client.get("/_marimo-studio/views").json()["generation"]
+        created = client.post(
+            "/_marimo-studio/views",
+            headers=headers,
+            json={
+                "catalog_generation": generation,
+                "name": "report",
+                "starter": "marimo-studio/vanilla:default",
+                "title": "Quarterly report",
+                "settings": {},
+                "make_default": True,
+            },
+        )
+        inventory = client.get("/_marimo-studio/views").json()
+
+    assert created.status_code == 201
+    assert inventory["default_view"] == "report"
+    assert "Quarterly report" in (
+        load_studio(notebook_path).views["report"].root / "index.html"
+    ).read_text(encoding="utf-8")

@@ -48,7 +48,10 @@ _MAX_STARTER_CELLS = 4_096
 _MAX_STARTER_SOURCE_BYTES = BUILD_INPUT_BUDGET.max_file_bytes
 _MAX_STARTER_METADATA_RECORDS = 1_000_000
 _MAX_STARTER_CONTEXT_BYTES = 96 * 1024 * 1024
-MAX_STARTER_PREVIEW_BYTES = 2 * 1024 * 1024
+MAX_STARTER_PREVIEW_BYTES = 1024 * 1024
+# Starters cross the provider process boundary as base64 JSON, so one
+# provider's previews stay well inside the 16 MiB operation result limit.
+MAX_PROVIDER_PREVIEW_BYTES = 6 * 1024 * 1024
 _MAX_STARTER_HOMEPAGE_BYTES = 2_048
 MAX_STARTER_ICON_BYTES = 16 * 1024
 _MAX_STARTER_FORMAT_CHARACTERS = 40
@@ -116,7 +119,7 @@ def _validate_settings(
         if isinstance(item.default, bool):
             if choices:
                 raise conformance_error(
-                    provider, f"requires {label} to offer choices for a text default"
+                    provider, f"requires {label} to declare no choices for a switch"
                 )
             continue
         if not isinstance(item.default, str) or not item.default.isprintable():
@@ -145,8 +148,8 @@ def _validate_settings(
 
 
 def view_title(view_name: str) -> str:
-    """Return the display title Studio derives from a view name."""
-    return view_name.replace("-", " ").title()
+    """Return the view title Studio makes from a view name."""
+    return " ".join(view_name.replace("-", " ").split()).title()
 
 
 def validate_view_title(value: object) -> str:
@@ -184,7 +187,9 @@ def resolve_starter_settings(
         if setting.kind == "boolean":
             valid = isinstance(value, bool)
         elif setting.kind == "choice":
-            valid = value in {choice.value for choice in setting.choices}
+            valid = isinstance(value, str) and value in {
+                choice.value for choice in setting.choices
+            }
         else:
             valid = (
                 isinstance(value, str)
@@ -240,10 +245,13 @@ def _validate_homepage(provider: str, key: str, homepage: object) -> None:
     if homepage is None:
         return
     text = checked_text(homepage, provider, f"starter {key!r} homepage")
-    parts = urlsplit(text)
+    try:
+        parts = urlsplit(text)
+        secure = parts.scheme == "https" and parts.hostname is not None
+    except ValueError:
+        secure = False
     if (
-        parts.scheme != "https"
-        or not parts.hostname
+        not secure
         or len(text.encode("utf-8")) > _MAX_STARTER_HOMEPAGE_BYTES
         or any(character.isspace() for character in text)
     ):
@@ -289,6 +297,13 @@ def validate_starters(provider: str, value: object) -> tuple[ProviderStarter, ..
         keys.append(key)
         starters.append(item)
     require_unique(tuple(keys), provider, "starter keys")
+    previews = sum(len(item.preview or b"") for item in starters)
+    if previews > MAX_PROVIDER_PREVIEW_BYTES:
+        raise conformance_error(
+            provider,
+            "limits its starter previews to "
+            f"{MAX_PROVIDER_PREVIEW_BYTES} bytes in total",
+        )
     return tuple(starters)
 
 

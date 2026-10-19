@@ -421,8 +421,8 @@ class StarterCellTarget:
 class StarterContext:
     """Describe the saved notebook revision used to create a view project.
 
-    ``title`` is the view's display title, and ``settings`` holds a value for
-    every setting the starter declares.
+    ``title`` is the title the starter writes into the view, and ``settings``
+    holds a value for every setting the starter declares.
     """
 
     view_name: str

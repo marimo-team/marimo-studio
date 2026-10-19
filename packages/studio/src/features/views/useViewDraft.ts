@@ -9,7 +9,7 @@ import { preferredStarterId } from "./starters.ts";
 export interface ViewDraft {
   name: string;
   starter: string;
-  /** The display title, or an empty string to derive it from the name. */
+  /** The title the starter writes into the view, or empty to make one from the name. */
   title: string;
   makeDefault: boolean;
   /** Setting values a person changed, kept per starter so switching back restores them. */
@@ -28,7 +28,9 @@ export interface ViewDraftModel {
 /** Return the title Studio derives from a view name, matching Python's `str.title()`. */
 export const viewTitle = (name: string): string =>
   name
-    .replaceAll("-", " ")
+    .split("-")
+    .filter(Boolean)
+    .join(" ")
     .replace(/[a-z]+/gi, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
 
 export const settingValue = (
@@ -93,12 +95,9 @@ export const useViewDraft = ({
     }),
     [value],
   );
-  return {
-    value,
-    selected: starters.find((candidate) => candidate.id === value.starter),
-    update,
-    setSetting,
-    reset,
-    request,
-  };
+  const selected = starters.find((candidate) => candidate.id === value.starter);
+  return useMemo(
+    () => ({ value, selected, update, setSetting, reset, request }),
+    [value, selected, update, setSetting, reset, request],
+  );
 };

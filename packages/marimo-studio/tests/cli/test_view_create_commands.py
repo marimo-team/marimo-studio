@@ -478,3 +478,25 @@ def test_view_create_rejects_a_setting_without_a_value(notebook_path: Path) -> N
 
     assert result.exit_code == 2
     assert "expected KEY=VALUE" in unstyle(result.output)
+
+
+def test_view_create_accepts_only_true_or_false_for_a_switch(
+    notebook_path: Path,
+) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "report",
+            "--target",
+            str(notebook_path),
+            "--starter",
+            "marimo-studio/quarto:default",
+            "--setting",
+            "toc=yes",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "toc is a switch" in unstyle(result.output)

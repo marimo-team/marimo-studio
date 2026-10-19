@@ -27,7 +27,9 @@ from marimo_studio._cli.output import (
     render_view_setup,
 )
 from marimo_studio._cli.targets import resolve_environment_target, resolve_notebook
+from marimo_studio._views.catalog import starter_settings
 from marimo_studio._views.records import ViewChoices
+from marimo_studio.view_providers._host.package_policy import DEFAULT_STARTER_ID
 
 
 def _stdin_is_interactive() -> bool:
@@ -50,7 +52,18 @@ def _starter_provider_id(starter: str | None) -> str | None:
     return provider_id
 
 
-def _setting_values(values: tuple[str, ...]) -> dict[str, str | bool]:
+def _setting_values(
+    values: tuple[str, ...], starter: str | None
+) -> dict[str, str | bool]:
+    switches = (
+        {
+            setting.key
+            for setting in starter_settings(starter or DEFAULT_STARTER_ID)
+            if setting.kind == "boolean"
+        }
+        if values
+        else set()
+    )
     settings: dict[str, str | bool] = {}
     for value in values:
         key, separator, text = value.partition("=")
@@ -58,7 +71,15 @@ def _setting_values(values: tuple[str, ...]) -> dict[str, str | bool]:
             raise click.BadParameter(
                 f"expected KEY=VALUE, got {value!r}", param_hint="--setting"
             )
-        settings[key] = {"true": True, "false": False}.get(text, text)
+        if key not in switches:
+            settings[key] = text
+        elif text in {"true", "false"}:
+            settings[key] = text == "true"
+        else:
+            raise click.BadParameter(
+                f"{key} is a switch, so write {key}=true or {key}=false",
+                param_hint="--setting",
+            )
     return settings
 
 
@@ -74,7 +95,10 @@ def _setting_values(values: tuple[str, ...]) -> dict[str, str | bool]:
 @click.option(
     "--title",
     default=None,
-    help="Set the view's display title. Defaults to a title made from its name.",
+    help=(
+        "Set the title the starter writes into the view. Defaults to one made "
+        "from its name."
+    ),
 )
 @click.option(
     "--setting",
@@ -122,7 +146,9 @@ def create(
             notebook,
             view_name,
             starter=starter,
-            choices=ViewChoices(title=title, settings=_setting_values(settings)),
+            choices=ViewChoices(
+                title=title, settings=_setting_values(settings, starter)
+            ),
             make_default=make_default,
             dry_run=dry_run,
         )

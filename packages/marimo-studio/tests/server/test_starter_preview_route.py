@@ -28,6 +28,11 @@ def test_starter_preview_serves_the_image_its_catalog_record_names(
             PREVIEW, params={"starter": typst["id"], "revision": typst["preview"]}
         )
         unpinned = client.get(PREVIEW, params={"starter": typst["id"]})
+        revalidated = client.get(
+            PREVIEW,
+            params={"starter": typst["id"]},
+            headers={"If-None-Match": current.headers["etag"]},
+        )
 
     assert current.status_code == 200
     assert current.headers["content-type"] == "image/webp"
@@ -37,6 +42,8 @@ def test_starter_preview_serves_the_image_its_catalog_record_names(
     assert current.headers["content-security-policy"] == "default-src 'none'"
     assert unpinned.content == current.content
     assert unpinned.headers["cache-control"] == "no-cache"
+    assert revalidated.status_code == 304
+    assert revalidated.content == b""
 
 
 def test_starter_preview_is_missing_for_unknown_starters_and_providers(

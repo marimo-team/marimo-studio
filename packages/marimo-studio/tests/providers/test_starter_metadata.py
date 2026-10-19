@@ -142,11 +142,12 @@ def test_valid_starter_metadata_passes_validation() -> None:
         ({"icon": f"<svg>{'x' * 20_000}</svg>"}, "at most"),
         ({"homepage": "http://typst.app"}, "https URL"),
         ({"homepage": "javascript:alert(1)"}, "https URL"),
+        ({"homepage": "https://["}, "https URL"),
         ({"format": "x" * 41}, "limits starter"),
         ({"settings": (PAPER, PAPER)}, "setting keys"),
         ({"settings": (replace(PAPER, key="Paper"),)}, "invalid starter setting key"),
         ({"settings": (replace(PAPER, default="legal"),)}, "name one of its choices"),
-        ({"settings": (replace(TOC, choices=PAPER.choices),)}, "offer choices"),
+        ({"settings": (replace(TOC, choices=PAPER.choices),)}, "no choices"),
         ({"settings": (replace(SUBTITLE, default="two\nlines"),)}, "one-line"),
     ],
 )
@@ -155,6 +156,16 @@ def test_invalid_starter_metadata_is_a_provider_conformance_error(
 ) -> None:
     with pytest.raises(ConfigurationError, match=message):
         validate_starters("acme/report", (_starter(**changes),))
+
+
+def test_a_provider_keeps_its_previews_within_one_budget() -> None:
+    starters = tuple(
+        _starter(key=f"report-{index}", preview=PNG + b"\x00" * (1024 * 1024 - 64))
+        for index in range(7)
+    )
+
+    with pytest.raises(ConfigurationError, match=r"previews to \d+ bytes in total"):
+        validate_starters("acme/report", starters)
 
 
 def test_requested_settings_replace_defaults() -> None:
@@ -170,6 +181,7 @@ def test_requested_settings_replace_defaults() -> None:
     [
         ({"columns": 2}, "has no setting 'columns'"),
         ({"paper": "legal"}, "does not accept 'legal'"),
+        ({"paper": ["a4"]}, "does not accept"),
         ({"toc": "yes"}, "does not accept 'yes'"),
         ({"subtitle": "two\nlines"}, "does not accept"),
     ],

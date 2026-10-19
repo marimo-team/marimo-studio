@@ -352,7 +352,7 @@ def test_builtin_starters_describe_themselves_in_the_catalog(starter_id: str) ->
     ("module", "settings", "document", "expected"),
     [
         ("typst", {"paper": "us-letter"}, "main.typ", 'paper: "us-letter",'),
-        ("latex", {"paper": "letterpaper"}, "main.tex", r"\usepackage[letterpaper,"),
+        ("latex", {"paper": "us-letter"}, "main.tex", r"\usepackage[letterpaper,"),
         ("quarto", {"toc": True}, "index.qmd", "toc: true"),
     ],
 )

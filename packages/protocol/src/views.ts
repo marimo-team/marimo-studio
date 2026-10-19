@@ -72,10 +72,10 @@ export const createViewRequestSchema = z
     catalog_generation: ownerGenerationSchema,
     name: viewNameSchema,
     starter: starterIdSchema,
-    /** The view's display title, or null to derive it from the name. */
-    title: z.string().trim().min(1).nullable(),
+    /** The title the starter writes into the view, or null to make one from the name. */
+    title: z.string().trim().min(1).max(200).nullable(),
     /** Values for the starter's settings. A missing key keeps its default. */
-    settings: z.record(z.string(), settingValueSchema),
+    settings: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,63}$/), settingValueSchema),
     /** Serve the new view at the notebook's main route. */
     make_default: z.boolean(),
   })

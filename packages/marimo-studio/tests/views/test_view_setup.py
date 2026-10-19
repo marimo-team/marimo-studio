@@ -34,6 +34,7 @@ from marimo_studio._workspace.config import (
 )
 from marimo_studio._workspace.locations import default_view_root
 from marimo_studio._workspace.metadata import (
+    configured_notebook_source,
     read_notebook_metadata,
 )
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
@@ -1150,6 +1151,17 @@ def test_view_without_a_title_takes_one_from_its_name(notebook_path: Path) -> No
     assert re.search(r"<h1[^>]*>\s*Quarterly Report\s*</h1>", document)
 
 
+def test_a_view_name_ending_in_a_hyphen_takes_a_trimmed_title(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+
+    result = create_view(notebook_path, "quarterly-")
+
+    document = result.root.joinpath("index.html").read_text(encoding="utf-8")
+    assert re.search(r"<h1[^>]*>\s*Quarterly\s*</h1>", document)
+
+
 def test_make_default_serves_the_new_view_at_the_main_route(
     notebook_path: Path,
 ) -> None:
@@ -1159,7 +1171,47 @@ def test_make_default_serves_the_new_view_at_the_main_route(
 
     assert result.workspace is not None
     assert result.workspace.default_view == "report"
+    assert notebook_path in result.updated
     assert load_studio(notebook_path).default_view == "report"
+
+
+def test_make_default_dry_run_reports_the_configuration_change(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    before = notebook_path.read_text(encoding="utf-8")
+
+    result = create_view(notebook_path, "report", make_default=True, dry_run=True)
+
+    assert notebook_path in result.updated
+    assert notebook_path.read_text(encoding="utf-8") == before
+    assert load_studio(notebook_path).default_view == "dashboard"
+
+
+def test_make_default_selects_the_view_in_project_configuration(
+    notebook_path: Path,
+) -> None:
+    pyproject = _project_configuration(notebook_path)
+    prepare_view(notebook_path)
+
+    create_view(notebook_path, "report", make_default=True)
+
+    assert 'default = "report"' in pyproject.read_text(encoding="utf-8")
+    assert load_studio(notebook_path).default_view == "report"
+
+
+def test_make_default_leaves_a_missing_configured_default_uncreated(
+    notebook_path: Path,
+) -> None:
+    notebook_path.write_text(
+        configured_notebook_source(notebook_path, "dashboard"), encoding="utf-8"
+    )
+
+    create_view(notebook_path, "report", make_default=True)
+
+    studio = load_studio(notebook_path)
+    assert studio.default_view == "report"
+    assert tuple(studio.views) == ("report",)
 
 
 @pytest.mark.parametrize(

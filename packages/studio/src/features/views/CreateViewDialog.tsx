@@ -56,6 +56,7 @@ export const CreateViewDialog = ({
 }: CreateViewDialogProps) => {
   const dialog = useRef<HTMLDialogElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
+  const pressedBackdrop = useRef(false);
   const selected = draft.selected;
   const folder = `${viewRoot || "views"}/${viewNameError(draft.value.name) ? "…" : draft.value.name}/`;
 
@@ -100,8 +101,26 @@ export const CreateViewDialog = ({
           onCancel();
         }
       }}
+      onClose={(event) => {
+        // The browser can close a modal dialog without a cancelable event, such
+        // as on a repeated Escape. Keep a pending creation visible, and treat
+        // any other native close as a cancel so the owner's state follows.
+        if (!open) {
+          return;
+        }
+        if (busy) {
+          event.currentTarget.showModal();
+        } else {
+          onCancel();
+        }
+      }}
+      onPointerDown={(event) => {
+        pressedBackdrop.current = event.target === event.currentTarget;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget && !busy) {
+        const fromBackdrop = pressedBackdrop.current && event.target === event.currentTarget;
+        pressedBackdrop.current = false;
+        if (fromBackdrop && !busy) {
           onCancel();
         }
       }}
@@ -173,6 +192,7 @@ export const CreateViewDialog = ({
                   aria-describedby="studio-view-name-hint"
                   pattern={VIEW_NAME_PATTERN}
                   placeholder="executive-report"
+                  maxLength={240}
                   required
                   disabled={busy}
                   value={draft.value.name}

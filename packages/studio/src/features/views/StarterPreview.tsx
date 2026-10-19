@@ -79,7 +79,7 @@ export const StarterMark = ({ starter, url }: { starter: Starter; url: string | 
     const mask = `url("data:image/svg+xml,${encodeURIComponent(starter.icon)}")`;
     return (
       <span className="studio-starter-mark" data-kind="icon" aria-hidden="true">
-        <span style={{ maskImage: mask, WebkitMaskImage: mask }} />
+        <span style={{ maskImage: mask }} />
       </span>
     );
   }
@@ -92,7 +92,7 @@ export const StarterMark = ({ starter, url }: { starter: Starter; url: string | 
       {image.url ? (
         <img src={image.url} alt="" decoding="async" loading="lazy" onError={image.onError} />
       ) : (
-        <span>{starter.title.charAt(0)}</span>
+        <span>{Array.from(starter.title)[0]}</span>
       )}
     </span>
   );

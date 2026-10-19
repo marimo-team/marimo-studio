@@ -302,13 +302,16 @@ async def _starter_preview_response(request: Request) -> Response:
         if request.query_params.get("revision") == preview.digest
         else {"Cache-Control": "no-cache"}
     )
+    etag = f'"{preview.digest}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={**cache, "ETag": etag})
     return Response(
         preview.content,
         media_type=preview.media_type,
         headers={
             **cache,
             "Content-Security-Policy": "default-src 'none'",
-            "ETag": f'"{preview.digest}"',
+            "ETag": etag,
             "X-Content-Type-Options": "nosniff",
         },
     )

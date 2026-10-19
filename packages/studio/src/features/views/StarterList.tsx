@@ -81,6 +81,11 @@ export const StarterList = ({
           spellCheck={false}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+            }
+          }}
         />
       </label>
       <fieldset className="studio-starter-groups">

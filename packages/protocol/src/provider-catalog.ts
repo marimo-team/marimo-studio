@@ -77,7 +77,7 @@ export const starterSchema = z
     documents: z.array(sourceDocumentPathSchema).min(1),
     availability: providerAvailabilitySchema,
     /** A short label for what the starter makes, such as "Web app" or "PDF". */
-    format: z.string().min(1).max(40).nullable(),
+    format: z.string().min(1).nullable(),
     /** SVG markup of the technology's mark, painted in the theme's text color. */
     icon: z.string().min(1).max(16_384).nullable(),
     /** SHA-256 digest of the starter's preview image, or null without one. */
@@ -99,6 +99,24 @@ export const starterSchema = z
         message: "Starter documents must be unique",
       });
     }
+    const keys = starter.settings.map((setting) => setting.key);
+    if (new Set(keys).size !== keys.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["settings"],
+        message: "Starter setting keys must be unique",
+      });
+    }
+    starter.settings.forEach((setting, index) => {
+      const values = setting.choices.map((choice) => choice.value);
+      if (new Set(values).size !== values.length) {
+        context.addIssue({
+          code: "custom",
+          path: ["settings", index, "choices"],
+          message: "Setting choice values must be unique",
+        });
+      }
+    });
   });
 
 export type Starter = z.infer<typeof starterSchema>;

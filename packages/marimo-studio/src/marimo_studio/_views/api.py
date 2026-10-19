@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 from marimo_studio._composition import create_notebook_write_lock
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._notebook.records import CellSelector
 from marimo_studio._views.create import prepare_view as _prepare_view
-from marimo_studio._views.default_view import set_default_view
 from marimo_studio._views.records import (
     DEFAULT_VIEW_CHOICES,
     Starter,
@@ -20,12 +18,10 @@ from marimo_studio._views.resolve import resolve_studio as resolve_studio
 from marimo_studio._workspace.bindings import (
     bind_cell as _bind_cell,
 )
-from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.models import (
     BindingResult,
     StudioWorkspace,
 )
-from marimo_studio._workspace.ownership import PresentViewOwner
 
 
 def bind_cell(
@@ -79,28 +75,17 @@ def create_view(
 ) -> ViewSetupResult:
     """Create one new view and reject an existing name.
 
-    ``make_default`` then serves the new view at the notebook's main route.
-    The first view of a notebook always becomes its default.
+    ``make_default`` also serves the new view at the notebook's main route,
+    in the same commit. The first view of a notebook always becomes its default.
     """
-    result = _prepare_view(
+    return _prepare_view(
         notebook,
         name,
         starter=starter,
         choices=choices,
+        make_default=make_default,
         inspect_notebook=inspect_notebook,
         dry_run=dry_run,
         fail_if_exists=True,
         expected_catalog_generation=expected_catalog_generation,
-    )
-    workspace = result.workspace
-    if not make_default or workspace is None or workspace.default_view == result.name:
-        return result
-    owner = PresentViewOwner(
-        workspace.catalog_generation, workspace.view_generations[result.name]
-    )
-    return replace(
-        result,
-        workspace=set_default_view(
-            load_studio_definition(result.notebook), result.name, owner=owner
-        ),
     )

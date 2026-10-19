@@ -15,6 +15,7 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderInfo,
     ProviderStarter,
+    StarterSetting,
     ViewProvider,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -139,6 +140,11 @@ def _provider_starter(identity: str) -> tuple[_CatalogProvider, ProviderStarter]
     if len(matches) != 1:
         raise _unknown_starter(identity)
     return provider, matches[0]
+
+
+def starter_settings(identity: str) -> tuple[StarterSetting, ...]:
+    """Return the settings one installed starter declares."""
+    return _provider_starter(identity)[1].settings
 
 
 def starter_preview(identity: str) -> StarterPreview | None:

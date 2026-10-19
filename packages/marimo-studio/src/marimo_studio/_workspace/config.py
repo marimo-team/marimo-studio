@@ -701,6 +701,19 @@ def updated_studio_config_source(
     return tomlkit.dumps(document)
 
 
+def default_view_source(
+    studio: StudioDefinition,
+    source: str,
+    default_view: str,
+) -> str:
+    """Return configuration source that selects one default view."""
+
+    def select(config: MutableMapping[str, Any]) -> None:
+        config["default"] = default_view
+
+    return updated_studio_config_source(studio, source, select)
+
+
 def default_view_writes(
     studio: StudioDefinition,
     source: str,
@@ -709,8 +722,4 @@ def default_view_writes(
     """Return the configuration write that selects one default view."""
     if studio.default_view == default_view:
         return {}
-
-    def select(config: MutableMapping[str, Any]) -> None:
-        config["default"] = default_view
-
-    return {studio.config_path: updated_studio_config_source(studio, source, select)}
+    return {studio.config_path: default_view_source(studio, source, default_view)}

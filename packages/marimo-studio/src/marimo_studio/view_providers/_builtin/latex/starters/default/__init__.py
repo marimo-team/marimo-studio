@@ -15,13 +15,16 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._builtin.latex._inputs import latex_text
 
+# The geometry package's names for the paper sizes the starter offers.
+_GEOMETRY_PAPER = {"a4": "a4paper", "us-letter": "letterpaper"}
+
 
 def _markers(context: StarterContext) -> StarterMarkers:
     return StarterMarkers(
         values={
             "__NOTEBOOK_LABEL_TEX__": latex_text(context.notebook_label),
             "__VIEW_TITLE_TEX__": latex_text(context.title),
-            "__PAPER_TEX__": str(context.settings["paper"]),
+            "__PAPER_TEX__": _GEOMETRY_PAPER[str(context.settings["paper"])],
         },
         cell_targets=(),
     )
@@ -49,10 +52,10 @@ starter = PackagedStarter(
                     "The page size of the PDF. main.tex passes it to the "
                     "geometry package."
                 ),
-                default="a4paper",
+                default="a4",
                 choices=(
-                    SettingChoice("a4paper", "A4"),
-                    SettingChoice("letterpaper", "US Letter"),
+                    SettingChoice("a4", "A4"),
+                    SettingChoice("us-letter", "US Letter"),
                 ),
             ),
         ),

@@ -172,6 +172,7 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
       void controller.create(draft.request(catalogGeneration)).then((created) => {
         if (created) {
           finishCreate();
+          focusNextFrame(() => trigger.current);
         }
       });
     },

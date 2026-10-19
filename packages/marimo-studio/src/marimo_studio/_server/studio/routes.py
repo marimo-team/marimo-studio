@@ -150,9 +150,12 @@ async def create_view_response(
         return _invalid_request("invalid-view-starter", "starter must be a string.")
     if title is not None and not isinstance(title, str):
         return _invalid_request("invalid-view-title", "title must be a string or null.")
-    if not isinstance(settings, dict):
+    if not isinstance(settings, dict) or not all(
+        isinstance(value, (str, bool)) for value in settings.values()
+    ):
         return _invalid_request(
-            "invalid-view-settings", "settings must map setting keys to values."
+            "invalid-view-settings",
+            "settings must map setting keys to text or boolean values.",
         )
     if type(make_default) is not bool:
         return _invalid_request(

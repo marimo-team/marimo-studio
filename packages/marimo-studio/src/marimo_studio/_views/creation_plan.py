@@ -23,7 +23,7 @@ from marimo_studio._views.inspection import (
 from marimo_studio._views.records import DEFAULT_VIEW_CHOICES, Starter, ViewChoices
 from marimo_studio._views.starter_context import starter_bindings, starter_context
 from marimo_studio._workspace.bindings import cell_bindings_source
-from marimo_studio._workspace.config import discover_views
+from marimo_studio._workspace.config import default_view_source, discover_views
 from marimo_studio._workspace.config_snapshot import WorkspaceConfigSnapshot
 from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.metadata import configured_notebook_source
@@ -460,6 +460,8 @@ def _configuration_transition(
     assert snapshot is not None
     expected.update(snapshot.expected_identities)
     configured = cell_bindings_source(studio, bindings, source=snapshot.source)
+    if validated.default_view != studio.default_view:
+        configured = default_view_source(studio, configured, validated.default_view)
     write = (studio.config_path, configured) if configured != snapshot.source else None
     return _ConfigurationTransition(
         studio.root,

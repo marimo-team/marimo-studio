@@ -348,7 +348,9 @@ export const StudioHost = ({
       let view = createdView;
       if (!view) {
         try {
-          view = (await views.create(draft.request(catalogSnapshot.generation))).name;
+          // The notebook's first view always becomes its default.
+          const request = { ...draft.request(catalogSnapshot.generation), make_default: true };
+          view = (await views.create(request)).name;
         } catch (cause) {
           catalog.invalidate();
           await catalog.refresh();

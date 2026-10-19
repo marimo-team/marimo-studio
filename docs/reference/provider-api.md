@@ -200,12 +200,15 @@ selected starter's preview, summary, website, and documents:
 
 ```python
 from importlib import resources
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import ProviderStarter
 
 STARTER = ProviderStarter(
     key="default",
     title="Report",
     summary="A paged report that lays out one notebook value.",
-    documents=(PurePosixPath("index.html"),),
+    documents=(PurePosixPath("main.typ"),),
     format="PDF",
     icon=resources.files(__name__).joinpath("icon.svg").read_text("utf-8"),
     preview=resources.files(__name__).joinpath("preview.webp").read_bytes(),
@@ -217,7 +220,7 @@ STARTER = ProviderStarter(
 | ---------- | ------------------------------------------------------------------------------------------------------------- |
 | `format`   | One line of at most 40 characters that names what the starter makes, such as `"Web app"`, `"Slides"`, `"PDF"` |
 | `icon`     | SVG markup of at most 16 KiB with an `<svg>` root and no document type declaration                            |
-| `preview`  | PNG, JPEG, or WebP bytes of at most 2 MiB                                                                     |
+| `preview`  | PNG, JPEG, or WebP bytes of at most 1 MiB, and 6 MiB across a provider's starters                             |
 | `homepage` | An `https` URL for the technology the starter builds with                                                     |
 
 Studio paints the icon's shapes as a mask in the theme's text color, so a
@@ -262,7 +265,7 @@ match `[a-z][a-z0-9_]{0,63}`, and a starter declares at most 32 settings.
 `create()` reads `StarterContext.settings`, which holds a value for every
 declared setting: the person's choice or the default. Studio rejects an
 undeclared key or a value that does not fit its setting before it calls
-`create()`. `StarterContext.title` holds the view's display title, which a
+`create()`. `StarterContext.title` holds the title the starter writes into the view, which a
 person can set in the dialog, with `--title`, or with `create_view(title=...)`.
 Without one, Studio makes a title from the view name, so `quarterly-report`
 becomes `Quarterly Report`.

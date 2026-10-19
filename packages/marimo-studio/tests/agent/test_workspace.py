@@ -883,3 +883,26 @@ def test_view_captures_configuration_created_after_opening_the_workspace(
         return (await workspace.view("dashboard").read("index.html")).content
 
     assert "Dashboard" in asyncio.run(exercise())
+
+
+def test_workspace_creates_a_view_with_a_title_settings_and_default(
+    notebook_path: Path,
+) -> None:
+    workspace = studio_authoring.open_workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+
+    view = asyncio.run(
+        workspace.create_view(
+            "report",
+            starter="marimo-studio/typst:default",
+            title="Quarterly report",
+            settings={"paper": "us-letter"},
+            make_default=True,
+        )
+    )
+
+    studio = load_studio(notebook_path)
+    main = studio.views[view.name].root.joinpath("main.typ").read_text(encoding="utf-8")
+    assert studio.default_view == "report"
+    assert '#let title = "Quarterly report"' in main
+    assert 'paper: "us-letter",' in main

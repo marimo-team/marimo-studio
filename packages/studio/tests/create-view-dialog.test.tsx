@@ -172,3 +172,63 @@ it("ignores Escape while a create is pending and closes on Escape otherwise", as
   expect(dialog).not.toHaveAttribute("open");
   controller.dispose();
 });
+
+it("names a choice setting with many values after its label", async () => {
+  const theme: Starter = {
+    ...report,
+    settings: [
+      {
+        key: "theme",
+        label: "Theme",
+        help: "The document's color theme.",
+        kind: "choice",
+        default: "cosmo",
+        choices: ["cosmo", "flatly", "litera", "lux"].map((value) => ({ value, label: value })),
+      },
+    ],
+  };
+  const { controller } = await openDialog([theme]);
+
+  expect(screen.getByRole("combobox", { name: "Theme" })).toHaveValue("cosmo");
+  controller.dispose();
+});
+
+it("keeps Enter in the starter search from creating a view", async () => {
+  const create = vi.fn<ViewRemote["create"]>();
+  const { controller, user } = await openDialog([report, starter], create);
+
+  await user.type(screen.getByLabelText("Name"), "quarterly");
+  await user.type(screen.getByRole("searchbox", { name: "Search starters" }), "html{Enter}");
+
+  expect(create).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog", { name: "New view" })).toHaveAttribute("open");
+  controller.dispose();
+});
+
+it("keeps a pending creation open when the browser closes the dialog", async () => {
+  const create = vi.fn<ViewRemote["create"]>(() => new Promise(() => {}));
+  const { controller, user } = await openDialog([starter], create);
+  const dialog = screen.getByRole<HTMLDialogElement>("dialog", { name: "New view" });
+
+  await user.type(screen.getByLabelText("Name"), "pending");
+  await user.click(screen.getByRole("button", { name: "Create view" }));
+  await screen.findByRole("button", { name: "Creating…" });
+  dialog.close();
+
+  expect(dialog).toHaveAttribute("open");
+  controller.dispose();
+});
+
+it("keeps the dialog open when a drag inside it ends over the backdrop", async () => {
+  const { controller } = await openDialog([starter]);
+  const dialog = screen.getByRole("dialog", { name: "New view" });
+
+  fireEvent.pointerDown(screen.getByLabelText("Name"));
+  fireEvent.click(dialog);
+  expect(dialog).toHaveAttribute("open");
+
+  fireEvent.pointerDown(dialog);
+  fireEvent.click(dialog);
+  expect(dialog).not.toHaveAttribute("open");
+  controller.dispose();
+});

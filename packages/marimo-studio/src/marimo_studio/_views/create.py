@@ -157,6 +157,7 @@ def _validate_view_creation(
     *,
     inspect_notebook: NotebookInspector,
     fail_if_exists: bool = False,
+    make_default: bool = False,
 ) -> ValidatedViewCreation:
     notebook_path = Path(notebook).expanduser().resolve()
     if not notebook_path.is_file():
@@ -186,7 +187,9 @@ def _validate_view_creation(
     view_root = locations.view_root
     if fail_if_exists and (view_root / selected / "view.toml").is_file():
         raise ViewExistsError(selected)
-    default_view = studio.default_view if studio is not None else selected
+    default_view = (
+        studio.default_view if studio is not None and not make_default else selected
+    )
     workspace_root = studio.root if studio is not None else notebook_path.parent
     # stat refuses a view root reached through a link before plain path checks.
     FileTree(workspace_root).stat(view_root)
@@ -261,17 +264,22 @@ def prepare_view(
     *,
     starter: str | Starter | None = None,
     choices: ViewChoices = DEFAULT_VIEW_CHOICES,
+    make_default: bool = False,
     inspect_notebook: NotebookInspector,
     dry_run: bool = False,
     fail_if_exists: bool = False,
     expected_catalog_generation: str | None = None,
 ) -> ViewSetupResult:
-    """Configure a notebook when needed and create a named view."""
+    """Configure a notebook when needed and create a named view.
+
+    ``make_default`` selects the view as the default in the same commit.
+    """
     validated = _validate_view_creation(
         notebook,
         name,
         inspect_notebook=inspect_notebook,
         fail_if_exists=fail_if_exists,
+        make_default=make_default,
     )
     if dry_run:
         plan = build_view_creation_plan(
@@ -364,7 +372,9 @@ def prepare_view(
         )
         validate_view_name(locked_selected)
         locked_default = (
-            locked_studio.default_view if locked_studio is not None else locked_selected
+            locked_studio.default_view
+            if locked_studio is not None and not make_default
+            else locked_selected
         )
         _reject_manifestless_view_directories(
             view_root,
@@ -380,6 +390,7 @@ def prepare_view(
                 name,
                 inspect_notebook=inspect_notebook,
                 fail_if_exists=fail_if_exists,
+                make_default=make_default,
             )
             if locked.locations != locations:
                 raise WorkspaceGenerationConflictError()

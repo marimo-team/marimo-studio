@@ -556,6 +556,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
         const body = createViewRequestSchema.parse(await new Request(url, init).json());
         expect(body.catalog_generation).toBe(host.generation);
         expect(body.name).toBe("dashboard");
+        expect(body.make_default).toBe(true);
         createdStarter = body.starter;
         return Response.json(
           {
