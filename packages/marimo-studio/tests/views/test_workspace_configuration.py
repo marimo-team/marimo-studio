@@ -86,7 +86,7 @@ def test_directory_discovery_requires_an_explicit_notebook_on_conflict(
 ) -> None:
     inline = notebook_path.with_name("inline.py")
     inline.write_text(notebook_path.read_text(encoding="utf-8"), encoding="utf-8")
-    prepare_view(inline)
+    setup = prepare_view(inline)
     (notebook_path.parent / "pyproject.toml").write_text(
         f"""\
 [tool.marimo-studio]
@@ -98,8 +98,18 @@ default = "dashboard"
 
     with pytest.raises(ConfigurationError, match="Pass a notebook path"):
         load_studio_definition(notebook_path.parent)
+    with pytest.raises(ConfigurationError, match="Pass a notebook path"):
+        load_studio_definition(setup.root)
 
     assert load_studio_definition(inline).notebook == inline
+
+
+def test_directory_discovery_finds_a_notebook_configured_in_a_parent(
+    notebook_path: Path,
+) -> None:
+    setup = prepare_view(notebook_path, "dashboard")
+
+    assert load_studio_definition(setup.root).notebook == notebook_path.resolve()
 
 
 def test_one_notebook_cannot_use_inline_and_project_configuration(
