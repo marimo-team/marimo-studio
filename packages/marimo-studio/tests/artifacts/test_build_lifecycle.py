@@ -48,6 +48,7 @@ from marimo_studio.view_providers import (
     BuildRequest,
     BuildResult,
     ProjectDiagnostic,
+    ProviderAvailability,
     SourceLocation,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -542,6 +543,64 @@ def test_prepared_cache_rechecks_source_before_reporting_success(
     assert state.phase == "published"
     assert state.project_revision == published.project_revision
     assert state.diagnostics == ()
+
+
+def test_prepared_build_reports_an_unavailable_provider_before_building(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    provider = provider_registry().get(project.provider)
+    inspection = provider.inspect(inspection_request(project))
+    input_id = project_revision(project, inspection, provider.provenance())
+    builds = 0
+
+    def build(_request: BuildRequest) -> BuildResult:
+        nonlocal builds
+        builds += 1
+        return BuildResult(PurePosixPath("index.html"), ())
+
+    monkeypatch.setattr(
+        provider,
+        "availability",
+        lambda: ProviderAvailability(
+            False,
+            reason="The deno Python package is not installed.",
+            action="Install marimo-studio[deno].",
+        ),
+    )
+    monkeypatch.setattr(provider, "build", build)
+
+    with pytest.raises(ViewProjectError, match="is unavailable") as captured:
+        publish_artifact_lease(
+            project, "development", inspection=inspection, input_id=input_id
+        )
+
+    assert builds == 0
+    assert captured.value.public_hint == "Install marimo-studio[deno]."
+    assert [
+        item.code for item in read_build_state(project, "development").diagnostics
+    ] == ["provider-unavailable"]
+
+
+def test_prepared_build_serves_a_current_artifact_without_its_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    provider = provider_registry().get(project.provider)
+    with publish_artifact_lease(project, "development") as lease:
+        published = lease.artifact
+    inspection = provider.inspect(inspection_request(project))
+    input_id = project_revision(project, inspection, provider.provenance())
+    monkeypatch.setattr(
+        provider, "availability", lambda: ProviderAvailability(False, reason="Gone.")
+    )
+
+    with publish_artifact_lease(
+        project, "development", inspection=inspection, input_id=input_id
+    ) as lease:
+        assert lease.artifact.artifact_revision == published.artifact_revision
 
 
 def test_prepared_build_uses_snapshot_mount_declarations(tmp_path: Path) -> None:
