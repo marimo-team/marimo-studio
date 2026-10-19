@@ -729,3 +729,44 @@ def test_status_without_configuration_names_the_create_command(
         "marimo-studio view create dashboard --target notebook.py"
         in capsys.readouterr().err
     )
+
+
+def test_unauthenticated_server_request_names_the_access_token_variable(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def unauthenticated(*_args: object, **_kwargs: object) -> str:
+        raise AgentRequestError(
+            "authentication-required",
+            "The Studio server requires authentication.",
+            status_code=401,
+        )
+
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view_delivery.preview_url", unauthenticated
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "view",
+            "preview",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--server",
+            "http://127.0.0.1:2718",
+            "--runtime",
+            "server",
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 5
+    assert event["code"] == "authentication-required"
+    assert "MARIMO_STUDIO_ACCESS_TOKEN" in event["details"]["hint"]

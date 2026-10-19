@@ -155,6 +155,8 @@ class _HttpExchange:
                 raise ProtocolError("The Studio server response exceeded 5 MB.")
             if response.status >= 400:
                 _raise_response_error(response.status, raw)
+            if response.status >= 300:
+                _raise_redirect_error(response.getheader("Location") or "")
             return raw
         except AgentRequestError:
             raise
@@ -325,6 +327,22 @@ def _finish_exchange(
     else:
         assert result is not None
         future.set_result(result)
+
+
+def _raise_redirect_error(location: str) -> None:
+    # Studio's API answers directly. Marimo redirects requests without a valid
+    # access token to its login page, so a redirect never carries a result.
+    try:
+        path = urlsplit(location).path
+    except ValueError:
+        path = ""
+    if "auth/login" in path:
+        raise AgentRequestError(
+            "authentication-required",
+            "The Studio server requires authentication.",
+            status_code=401,
+        )
+    raise ProtocolError("The Studio server redirected the request.")
 
 
 def _raise_response_error(status: int, raw: bytes) -> None:

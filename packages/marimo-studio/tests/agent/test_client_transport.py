@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import http.server
 import threading
 
 import pytest
 
 import marimo_studio._browser_client.transport as browser_transport
+from marimo_studio.errors import MarimoStudioError
 
 
 def test_cancelled_server_request_closes_its_exchange(
@@ -421,3 +423,44 @@ def test_timed_out_connection_close_responses_release_their_workers(
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@pytest.mark.parametrize(
+    ("location", "code"),
+    [
+        ("../../auth/login?next=..%2Fviews", "authentication-required"),
+        ("/elsewhere", "protocol-error"),
+        ("http://[not-ipv6", "protocol-error"),
+    ],
+)
+def test_server_redirects_fail_instead_of_returning_an_empty_body(
+    location: str, code: str
+) -> None:
+    class Redirect(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(303)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Redirect)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = browser_transport.StudioServerConnection(
+            f"http://127.0.0.1:{server.server_address[1]}"
+        )
+        with pytest.raises(MarimoStudioError) as raised:
+            asyncio.run(
+                browser_transport.request_text(
+                    connection, "/_marimo-studio/views/report/preview"
+                )
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert raised.value.code == code
