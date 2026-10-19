@@ -8,7 +8,7 @@ description: Pick a starter for a view, from a plain HTML page or a React or Sve
 Every view starts from a [starter](../reference/glossary.md#starter), which
 sets its [format](../reference/glossary.md#format) and writes the first files
 of its [view project](../reference/glossary.md#view-project). Pick one in the
-**New view** form, or pass `--starter` to `marimo-studio view create`.
+**New view** dialog, or pass `--starter` to `marimo-studio view create`.
 
 | Starter                              | The view is                                                | Setup                  |
 | ------------------------------------ | ---------------------------------------------------------- | ---------------------- |
@@ -37,7 +37,7 @@ yours to edit. Your page can draw notebook values with any JavaScript library:
 reference a script from an HTML page, or add an npm package to a React,
 Svelte, or Notebook Kit view. For a framework, template, or build tool outside
 this table, you can install or write a [view provider](view-providers.md), and
-its starters appear in the **New view** form next to these.
+its starters appear in the **New view** dialog next to these.
 
 ## HTML
 

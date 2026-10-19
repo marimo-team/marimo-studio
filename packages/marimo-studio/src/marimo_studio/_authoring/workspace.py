@@ -23,7 +23,13 @@ from marimo_studio._views.api import bind_cell as bind_cell_operation
 from marimo_studio._views.api import create_view as create_view_operation
 from marimo_studio._views.catalog import starters as installed_starters
 from marimo_studio._views.overview import overview
-from marimo_studio._views.records import Starter, StudioOverview, ViewSetupResult
+from marimo_studio._views.records import (
+    DEFAULT_VIEW_CHOICES,
+    Starter,
+    StudioOverview,
+    ViewChoices,
+    ViewSetupResult,
+)
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import BindingResult
 from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
@@ -94,6 +100,8 @@ async def create_view(
     name: str,
     *,
     starter: str | Starter | None = None,
+    choices: ViewChoices = DEFAULT_VIEW_CHOICES,
+    make_default: bool = False,
     dry_run: bool = False,
     expected_catalog_generation: str | None = None,
 ) -> ViewSetupResult:
@@ -104,6 +112,8 @@ async def create_view(
             notebook,
             name,
             starter=starter,
+            choices=choices,
+            make_default=make_default,
             dry_run=dry_run,
             expected_catalog_generation=expected_catalog_generation,
         )

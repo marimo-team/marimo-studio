@@ -24,6 +24,7 @@ from marimo_studio._filesystem.errors import UnsafePathError
 from marimo_studio._filesystem.files import Expectation, FileTree, Version
 from marimo_studio._views.api import create_view, prepare_view
 from marimo_studio._views.inspection import inspect_view_project_sync
+from marimo_studio._views.records import ViewChoices
 from marimo_studio._views.remove import delete_view
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
@@ -1123,3 +1124,65 @@ def test_view_lock_refuses_an_ancestor_swapped_after_validation(
     _refused_view_lock(root)
     assert swapped
     assert not (redirected / ".locks").exists()
+
+
+def test_view_choices_set_the_title_and_starter_settings(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+
+    result = create_view(
+        notebook_path,
+        "report",
+        starter="marimo-studio/typst:default",
+        choices=ViewChoices(title="Quarterly report", settings={"paper": "us-letter"}),
+    )
+
+    main = result.root.joinpath("main.typ").read_text(encoding="utf-8")
+    assert '#let title = "Quarterly report"' in main
+    assert 'paper: "us-letter",' in main
+
+
+def test_view_without_a_title_takes_one_from_its_name(notebook_path: Path) -> None:
+    prepare_view(notebook_path)
+
+    result = create_view(notebook_path, "quarterly-report")
+
+    document = result.root.joinpath("index.html").read_text(encoding="utf-8")
+    assert re.search(r"<h1[^>]*>\s*Quarterly Report\s*</h1>", document)
+
+
+def test_make_default_serves_the_new_view_at_the_main_route(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+
+    result = create_view(notebook_path, "report", make_default=True)
+
+    assert result.workspace is not None
+    assert result.workspace.default_view == "report"
+    assert load_studio(notebook_path).default_view == "report"
+
+
+@pytest.mark.parametrize(
+    ("choices", "message"),
+    [
+        (ViewChoices(settings={"columns": 2}), "has no setting 'columns'"),
+        (ViewChoices(settings={"paper": "legal"}), "does not accept 'legal'"),
+        (ViewChoices(title="two\nlines"), "title"),
+    ],
+)
+def test_invalid_view_choices_create_nothing(
+    notebook_path: Path, choices: ViewChoices, message: str
+) -> None:
+    prepare_view(notebook_path)
+    before = load_studio(notebook_path)
+
+    with pytest.raises(ConfigurationError, match=message):
+        create_view(
+            notebook_path,
+            "report",
+            starter="marimo-studio/typst:default",
+            choices=choices,
+        )
+
+    assert load_studio(notebook_path).catalog_generation == before.catalog_generation
+    assert not before.view_root.joinpath("report").exists()

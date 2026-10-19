@@ -1,8 +1,10 @@
+import type { CreateViewRequest } from "@marimo-studio/protocol/views";
+
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import { PreviewControlController } from "../src/features/preview/control-controller.ts";
 import { ViewController } from "../src/features/views/controller.ts";
-import { starter, viewList } from "./fixtures.ts";
+import { createViewRequest, starter, viewList } from "./fixtures.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 import {
   cachedFrames,
@@ -256,7 +258,7 @@ it("keeps the prior document warm after creation and evicts it at the cache boun
     ["dashboard"],
     {
       list: vi.fn(async () => viewList(["dashboard", "report"])),
-      create: vi.fn(async (name: string, _starter: string) => ({
+      create: vi.fn(async ({ name }: CreateViewRequest) => ({
         schema: 1 as const,
         name,
       })),
@@ -276,7 +278,9 @@ it("keeps the prior document warm after creation and evicts it at the cache boun
 
   await controller.refreshInventory();
   await expect(
-    controller.create("report", starter.id, controller.getSnapshot().catalogGeneration!),
+    controller.create(
+      createViewRequest("report", starter.id, controller.getSnapshot().catalogGeneration!),
+    ),
   ).resolves.toBe(true);
   viewUrl.mockClear();
   await expect(controller.choose("dashboard")).resolves.toBe(true);

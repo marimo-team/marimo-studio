@@ -1252,6 +1252,7 @@ def test_starter_output_cells_follow_awaited_local_coroutines(
             cell.ref: StarterCellTarget(cell.ref, cell.name or f"cell_{cell.index}")
             for cell in spec.cells
         },
+        title="Dashboard",
     )
     assert [cell.target for cell in context.output_cells] == (
         ["summary"] if expected else []

@@ -50,8 +50,8 @@ test("refreshes a projected cached view after the view catalog changes", async (
   await page.getByLabel("Switch view").click();
   await page.getByRole("button", { name: "New view" }).click();
   await page.getByRole("radio", { name: /HTML document/ }).check();
-  await page.getByLabel("New view").fill("catalog-view");
-  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("catalog-view");
+  await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page.getByLabel("Switch view")).toContainText("catalog-view");
   await expect(
     (await waitForPreview(page)).getByRole("heading", { name: "Catalog View" }),

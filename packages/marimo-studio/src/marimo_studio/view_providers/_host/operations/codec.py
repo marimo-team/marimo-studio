@@ -7,6 +7,7 @@ import hashlib
 import os
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Literal, cast
 
 from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET, FileBudgetTracker
@@ -41,6 +42,8 @@ from marimo_studio.view_providers import (
     RenderResult,
     RenderValue,
     Representation,
+    SettingChoice,
+    SettingValue,
     Size,
     SourceDocument,
     SourceLocation,
@@ -48,6 +51,7 @@ from marimo_studio.view_providers import (
     StarterCellTarget,
     StarterContext,
     StarterPlan,
+    StarterSetting,
     ViewProject,
 )
 
@@ -82,7 +86,7 @@ def provider_description_from_payload(value: object) -> tuple[ProviderInfo, bool
 def _provider_info(value: object) -> ProviderInfo:
     data = _record(
         value,
-        {"schema", "title", "summary", "options"},
+        {"schema", "title", "summary", "options", "requirement"},
         "provider info",
     )
     if data["schema"] != 1:
@@ -91,6 +95,7 @@ def _provider_info(value: object) -> ProviderInfo:
         _text(data["title"], "provider title"),
         _text(data["summary"], "provider summary"),
         frozenset(_text(item, "provider option") for item in _items(data["options"])),
+        _optional_text(data["requirement"], "provider requirement"),
     )
 
 
@@ -121,11 +126,23 @@ def starter_payload(value: ProviderStarter) -> dict[str, object]:
 def starter_from_payload(value: object) -> ProviderStarter:
     data = _record(
         value,
-        {"schema", "key", "title", "summary", "documents"},
+        {
+            "schema",
+            "key",
+            "title",
+            "summary",
+            "documents",
+            "format",
+            "icon",
+            "preview",
+            "homepage",
+            "settings",
+        },
         "provider starter",
     )
     if data["schema"] != 1:
         raise ValueError("Provider starter schema is unsupported")
+    preview = _optional_text(data["preview"], "provider starter preview")
     return ProviderStarter(
         _text(data["key"], "provider starter key"),
         _text(data["title"], "provider starter title"),
@@ -134,6 +151,41 @@ def starter_from_payload(value: object) -> ProviderStarter:
             PurePosixPath(_text(item, "provider starter document"))
             for item in _items(data["documents"])
         ),
+        format=_optional_text(data["format"], "provider starter format"),
+        icon=_optional_text(data["icon"], "provider starter icon"),
+        preview=(
+            base64.b64decode(preview, validate=True) if preview is not None else None
+        ),
+        homepage=_optional_text(data["homepage"], "provider starter homepage"),
+        settings=tuple(_starter_setting(item) for item in _items(data["settings"])),
+    )
+
+
+def _starter_setting(value: object) -> StarterSetting:
+    data = _record(
+        value,
+        {"key", "label", "help", "kind", "default", "choices"},
+        "starter setting",
+    )
+    default = data["default"]
+    if not isinstance(default, (str, bool)):
+        raise ValueError("Starter setting default must be text or a boolean")
+    choices = tuple(
+        SettingChoice(
+            _text(choice["value"], "setting choice value"),
+            _text(choice["label"], "setting choice label"),
+        )
+        for choice in (
+            _record(item, {"value", "label"}, "setting choice")
+            for item in _items(data["choices"])
+        )
+    )
+    return StarterSetting(
+        _text(data["key"], "starter setting key"),
+        _text(data["label"], "starter setting label"),
+        _text(data["help"], "starter setting help"),
+        default,
+        choices,
     )
 
 
@@ -149,6 +201,8 @@ def starter_context_payload(value: StarterContext) -> dict[str, object]:
     return {
         "view_name": value.view_name,
         "notebook_name": value.notebook_name,
+        "title": value.title,
+        "settings": dict(value.settings),
         "notebook": value.notebook.to_dict(),
         "cell_targets": [
             value.cell_targets[cell.ref].to_dict()
@@ -161,18 +215,25 @@ def starter_context_payload(value: StarterContext) -> dict[str, object]:
 def starter_context_from_payload(value: object) -> StarterContext:
     data = _record(
         value,
-        {"view_name", "notebook_name", "notebook", "cell_targets"},
+        {"view_name", "notebook_name", "title", "settings", "notebook", "cell_targets"},
         "starter context",
     )
     notebook = _notebook(data["notebook"])
     cell_targets = tuple(
         _starter_cell_target(item) for item in _items(data["cell_targets"])
     )
+    settings = data["settings"]
+    if not isinstance(settings, dict) or not all(
+        isinstance(item, (str, bool)) for item in settings.values()
+    ):
+        raise ValueError("Starter settings must map names to text or booleans")
     return StarterContext(
         _text(data["view_name"], "starter view name"),
         _text(data["notebook_name"], "starter notebook name"),
         notebook,
         {target.cell: target for target in cell_targets},
+        title=_text(data["title"], "starter view title"),
+        settings=MappingProxyType(cast(dict[str, SettingValue], settings)),
     )
 
 

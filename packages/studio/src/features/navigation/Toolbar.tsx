@@ -32,7 +32,7 @@ export const Toolbar = (props: ToolbarProps) => {
       <div className="studio-title">
         <span className="studio-notebook">{model.notebookName}</span>
         <span className="studio-title-separator">/</span>
-        <ViewMenu controller={props.views} />
+        <ViewMenu controller={props.views} starterPreview={props.bootstrap.urls.starterPreview} />
       </div>
       <div className="studio-controls">
         <button

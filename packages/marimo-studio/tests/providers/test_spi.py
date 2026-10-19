@@ -86,6 +86,7 @@ def test_provider_info_contains_only_discovery_contracts() -> None:
         "title": "Reports",
         "summary": "Builds report frontends.",
         "options": ["entrypoint", "template"],
+        "requirement": None,
     }
 
 

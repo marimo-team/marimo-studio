@@ -5,6 +5,7 @@ from starlette.types import Message, Send
 from marimo_studio._server.security import SecurityPolicy
 
 NO_STORE = {"Cache-Control": "no-store"}
+IMMUTABLE = {"Cache-Control": "private, max-age=31536000, immutable"}
 DOCUMENT_HEADERS = {
     **NO_STORE,
     "Referrer-Policy": "same-origin",

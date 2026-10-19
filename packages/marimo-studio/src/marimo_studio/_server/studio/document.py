@@ -129,6 +129,7 @@ def studio_bootstrap_payload(
             "viewPrefix": routed("/"),
             "viewSupportPrefix": routed(f"{SUPPORT_PATH}/views"),
             "views": routed(f"{SUPPORT_PATH}/views"),
+            "starterPreview": routed(f"{SUPPORT_PATH}/starters/preview"),
         },
         "workspaceId": workspace_id,
         "clientId": client_id,
@@ -226,6 +227,7 @@ def studio_document(
                 events_query,
             ),
             "views": routed(f"{SUPPORT_PATH}/views"),
+            "starterPreview": routed(f"{SUPPORT_PATH}/starters/preview"),
         },
     }
     if state == "needs-view":

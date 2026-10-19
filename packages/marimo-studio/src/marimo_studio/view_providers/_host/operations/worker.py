@@ -143,6 +143,7 @@ def _invoke(
         context = validate_starter_context(
             conformance.key,
             starter_context_from_payload(data["context"]),
+            starter,
         )
         plan = validate_starter_plan(
             conformance.key,

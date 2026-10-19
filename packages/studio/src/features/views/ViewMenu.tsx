@@ -4,11 +4,18 @@ import type { ViewController } from "./controller.ts";
 
 import { MenuChevron } from "../../shared/ui/icons.tsx";
 import { useDisclosureMenu } from "../../shared/useDisclosureMenu.ts";
-import { CreateViewForm } from "./CreateViewForm.tsx";
+import { CreateViewDialog } from "./CreateViewDialog.tsx";
 import { RemoveViewConfirmation } from "./RemoveViewConfirmation.tsx";
+import { starterPreviewUrl } from "./starters.ts";
 import { useViewMenu } from "./useViewMenu.ts";
 
-export const ViewMenu = ({ controller }: { controller: ViewController }) => {
+export const ViewMenu = ({
+  controller,
+  starterPreview,
+}: {
+  controller: ViewController;
+  starterPreview: string;
+}) => {
   const model = useViewMenu(controller);
   const menu = useDisclosureMenu({
     detailsRef: model.refs.menu,
@@ -18,25 +25,6 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
   });
   const statusMessage = model.snapshot.removeMessage ?? model.snapshot.selectionMessage;
   const panels = {
-    create: (
-      <CreateViewForm
-        busy={model.snapshot.creating}
-        inputRef={model.refs.input}
-        message={model.snapshot.createMessage}
-        name={model.name}
-        submitLabel={model.createLabel}
-        starter={model.starter}
-        starterCatalog={model.snapshot.starterCatalog}
-        starters={model.starters}
-        viewRoot={model.snapshot.viewRoot}
-        persistence={model.snapshot.persistence}
-        onCancel={model.actions.cancelCreate}
-        onNameChange={model.actions.setName}
-        onRetryStarters={model.actions.retryStarters}
-        onStarterChange={model.actions.setStarter}
-        onSubmit={model.actions.submitCreate}
-      />
-    ),
     list: null,
     remove: model.snapshot.removing ? (
       <RemoveViewConfirmation
@@ -116,7 +104,6 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
       </div>
       <div className="studio-view-actions">
         <button
-          ref={model.refs.newView}
           type="button"
           className="studio-menu-item studio-new-view"
           onClick={model.actions.beginCreate}
@@ -158,6 +145,22 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
           </div>
         </div>
       </details>
+      <CreateViewDialog
+        open={model.creating}
+        busy={model.snapshot.creating}
+        draft={model.draft}
+        firstView={false}
+        starters={model.snapshot.starters}
+        catalog={model.snapshot.starterCatalog}
+        viewRoot={model.snapshot.viewRoot}
+        persistence={model.snapshot.persistence}
+        previewUrl={(starter) => starterPreviewUrl(starterPreview, starter)}
+        message={model.snapshot.createMessage}
+        submitLabel={model.createLabel}
+        onCancel={model.actions.cancelCreate}
+        onRetryCatalog={model.actions.retryStarters}
+        onSubmit={model.actions.submitCreate}
+      />
       {statusMessage ? (
         <div
           className="studio-view-selection-message"

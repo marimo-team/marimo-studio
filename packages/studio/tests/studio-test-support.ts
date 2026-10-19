@@ -23,6 +23,7 @@ export const studioBootstrap: StudioBootstrap = {
     viewPrefix: "http://localhost:3000/",
     viewSupportPrefix: "http://localhost:3000/_marimo-studio/views",
     views: "http://localhost:3000/_marimo-studio/views",
+    starterPreview: "http://localhost:3000/_marimo-studio/starters/preview",
   },
   workspaceId: "workspace",
   serverToken: "token",

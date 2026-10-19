@@ -6,7 +6,7 @@ from collections.abc import Mapping
 
 from marimo_studio._cli.print import echo, green, light_blue, yellow
 from marimo_studio._views.records import Starter
-from marimo_studio.view_providers import ProviderAvailability
+from marimo_studio.view_providers import ProviderAvailability, StarterSetting
 
 
 def _status(availability: ProviderAvailability) -> str:
@@ -69,9 +69,18 @@ def _provider_identity(record: Mapping[str, object]) -> None:
     echo(f"  {light_blue('installed')} {record['version']}")
 
 
+def _setting_usage(setting: StarterSetting) -> str:
+    if setting.kind == "boolean":
+        return f"{setting.key}=true|false (default {str(setting.default).lower()})"
+    accepted = "|".join(choice.value for choice in setting.choices) or "TEXT"
+    return f"{setting.key}={accepted} (default {setting.default!r})"
+
+
 def render_starter(starter: Starter) -> None:
     """Write one starter with availability and recovery."""
     echo(f"{_status(starter.availability)} {starter.id}")
     echo(f"  {starter.summary}")
     echo(f"  {light_blue('provider')} {starter.provider}")
+    for setting in starter.settings:
+        echo(f"  {light_blue('setting')} {_setting_usage(setting)}  {setting.help}")
     _recovery(starter.availability)

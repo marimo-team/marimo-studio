@@ -1,3 +1,5 @@
+import type { CreateViewRequest } from "@marimo-studio/protocol/views";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -41,7 +43,7 @@ const remote = (starters = [starter], defaultStarter = starter.id): ViewRemote =
   let views = ["dashboard", "report"];
   return {
     list: vi.fn(async () => viewList(views, views[0], starters, defaultStarter)),
-    create: vi.fn(async (name: string, _starter: string) => {
+    create: vi.fn(async ({ name }: CreateViewRequest) => {
       views = [...views, name].sort();
       return {
         schema: 1 as const,

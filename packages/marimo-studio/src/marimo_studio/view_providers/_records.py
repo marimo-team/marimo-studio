@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Mapping
 from dataclasses import KW_ONLY, dataclass, field
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Literal, Protocol
 
 from marimo_export.values import Representation, Size
@@ -29,11 +31,15 @@ class ProviderInfo:
 
     ``options`` names the ``view.toml`` options the provider reads. Studio
     rejects any other option before it inspects or builds a view.
+    ``requirement`` names what the provider needs to build, such as
+    ``"Quarto 1.9.38+"``, and the New view dialog shows it while the provider
+    is unavailable.
     """
 
     title: str
     summary: str
     options: frozenset[str] = frozenset()
+    requirement: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -41,6 +47,7 @@ class ProviderInfo:
             "title": self.title,
             "summary": self.summary,
             "options": sorted(self.options),
+            "requirement": self.requirement,
         }
 
 
@@ -60,12 +67,77 @@ class ProviderAvailability:
         }
 
 
+SettingValue = str | bool
+SettingKind = Literal["boolean", "choice", "text"]
+
+
+@dataclass(frozen=True)
+class SettingChoice:
+    """One value a choice setting offers, with the label the dialog shows."""
+
+    value: str
+    label: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {"value": self.value, "label": self.label}
+
+
+@dataclass(frozen=True)
+class StarterSetting:
+    """One value a person can set before a starter creates a view's files.
+
+    A ``bool`` default makes a switch. ``choices`` make a choice whose default
+    names one of their values. Any other ``str`` default makes a text field.
+    ``help`` explains the setting beside its control in the New view dialog,
+    and ``create()`` reads the chosen value from ``StarterContext.settings``.
+    """
+
+    key: str
+    label: str
+    help: str
+    default: SettingValue
+    choices: tuple[SettingChoice, ...] = ()
+
+    @property
+    def kind(self) -> SettingKind:
+        if isinstance(self.default, bool):
+            return "boolean"
+        return "choice" if self.choices else "text"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "key": self.key,
+            "label": self.label,
+            "help": self.help,
+            "kind": self.kind,
+            "default": self.default,
+            "choices": [choice.to_dict() for choice in self.choices],
+        }
+
+
 @dataclass(frozen=True)
 class ProviderStarter:
+    """Describe one starting point that the New view dialog offers.
+
+    ``format`` is a short label for what the starter makes, such as
+    ``"Web app"``, ``"Slides"``, or ``"PDF"``. ``icon`` holds the SVG markup of
+    a square mark for the technology the starter builds with. Studio paints
+    the mark's shapes in the theme's text color. ``preview`` holds a PNG, JPEG,
+    or WebP image of the view the starter creates, ideally 16:10 and 1280
+    pixels wide. ``homepage`` links the technology. ``settings`` lists the
+    values a person can change before ``create()`` runs.
+    """
+
     key: str
     title: str
     summary: str
     documents: tuple[PurePosixPath, ...]
+    _: KW_ONLY
+    format: str | None = None
+    icon: str | None = field(default=None, repr=False)
+    preview: bytes | None = field(default=None, repr=False)
+    homepage: str | None = None
+    settings: tuple[StarterSetting, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -74,6 +146,15 @@ class ProviderStarter:
             "title": self.title,
             "summary": self.summary,
             "documents": [item.as_posix() for item in self.documents],
+            "format": self.format,
+            "icon": self.icon,
+            "preview": (
+                base64.b64encode(self.preview).decode("ascii")
+                if self.preview is not None
+                else None
+            ),
+            "homepage": self.homepage,
+            "settings": [setting.to_dict() for setting in self.settings],
         }
 
 
@@ -338,12 +419,21 @@ class StarterCellTarget:
 
 @dataclass(frozen=True)
 class StarterContext:
-    """Describe the saved notebook revision used to create a view project."""
+    """Describe the saved notebook revision used to create a view project.
+
+    ``title`` is the view's display title, and ``settings`` holds a value for
+    every setting the starter declares.
+    """
 
     view_name: str
     notebook_name: str
     notebook: NotebookSpec
     cell_targets: Mapping[CellRef, StarterCellTarget]
+    _: KW_ONLY
+    title: str
+    settings: Mapping[str, SettingValue] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     @property
     def app_title(self) -> str | None:

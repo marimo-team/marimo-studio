@@ -15,7 +15,7 @@ import { responseErrorMessage } from "../../shared/errors.ts";
 
 export interface ViewRemote {
   list(signal?: AbortSignal): Promise<ViewList>;
-  create(name: string, starter: string, catalogGeneration: string): Promise<CreatedView>;
+  create(request: CreateViewRequest): Promise<CreatedView>;
   remove(name: string, catalogGeneration: string, viewGeneration: string): Promise<DeletedView>;
 }
 
@@ -32,12 +32,7 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
     return parseViewList(await responseJson(response));
   },
 
-  async create(name, starter, catalogGeneration) {
-    const request = {
-      catalog_generation: catalogGeneration,
-      name,
-      starter,
-    } satisfies CreateViewRequest;
+  async create(request) {
     const response = await fetch(viewsUrl, {
       method: "POST",
       headers: {

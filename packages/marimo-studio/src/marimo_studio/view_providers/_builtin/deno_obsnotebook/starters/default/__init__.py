@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from importlib import resources
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
@@ -50,6 +51,10 @@ starter = PackagedStarter(
                 "deno.lock",
             )
         ),
+        homepage="https://observablehq.com/notebook-kit/",
+        format="Notebook page",
+        icon=resources.files(__name__).joinpath("icon.svg").read_text("utf-8"),
+        preview=resources.files(__name__).joinpath("preview.webp").read_bytes(),
     ),
     package=__name__,
     markers=_markers,

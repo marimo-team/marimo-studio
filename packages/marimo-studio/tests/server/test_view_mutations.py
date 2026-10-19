@@ -301,6 +301,9 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
                 "catalog_generation": generation,
                 "name": "null-starter",
                 "starter": None,
+                "title": None,
+                "settings": {},
+                "make_default": False,
             },
         )
 
@@ -770,6 +773,9 @@ def test_creating_a_view_from_an_unknown_starter_is_a_client_error(
                 "catalog_generation": generation,
                 "name": "operations",
                 "starter": "marimo-studio/vanilla:missing",
+                "title": None,
+                "settings": {},
+                "make_default": False,
             },
         )
 

@@ -50,10 +50,17 @@ def provider_starter_context(
     *,
     view_name: str = "dashboard",
     notebook_name: str = "analysis",
+    starter: ProviderStarter | None = None,
+    settings: Mapping[str, object] | None = None,
 ) -> StarterContext:
-    """Return a complete starter context from a saved test notebook."""
+    """Return a complete starter context from a saved test notebook.
+
+    With a ``starter``, the context holds a value for each of its settings:
+    the ones in ``settings`` and the defaults for the rest.
+    """
     from marimo_studio import inspect_notebook
     from marimo_studio._views.starter_context import starter_context
+    from marimo_studio.view_providers._host.starters import resolve_starter_settings
 
     from .helpers import notebook_source
 
@@ -67,6 +74,11 @@ def provider_starter_context(
         inspect_notebook(notebook, include_code=True),
         None,
         view_name,
+        settings=(
+            resolve_starter_settings(starter, settings or {})
+            if starter is not None
+            else {}
+        ),
     )
 
 

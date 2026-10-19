@@ -35,7 +35,12 @@ from marimo_studio._views.creation_plan import (
     workspace_provider_ids,
     workspace_provider_requirements,
 )
-from marimo_studio._views.records import Starter, ViewSetupResult
+from marimo_studio._views.records import (
+    DEFAULT_VIEW_CHOICES,
+    Starter,
+    ViewChoices,
+    ViewSetupResult,
+)
 from marimo_studio._views.starter_context import starter_bindings
 from marimo_studio._workspace.bindings import cell_bindings_source
 from marimo_studio._workspace.config import (
@@ -255,6 +260,7 @@ def prepare_view(
     name: str | None = None,
     *,
     starter: str | Starter | None = None,
+    choices: ViewChoices = DEFAULT_VIEW_CHOICES,
     inspect_notebook: NotebookInspector,
     dry_run: bool = False,
     fail_if_exists: bool = False,
@@ -271,6 +277,7 @@ def prepare_view(
         plan = build_view_creation_plan(
             validated,
             starter=starter,
+            choices=choices,
             inspect_notebook=inspect_notebook,
             dry_run=True,
         )
@@ -302,6 +309,8 @@ def prepare_view(
             locations,
             default_view,
             missing,
+            selected,
+            choices,
             pending_starter,
             provider,
             provider_starter,
@@ -377,6 +386,7 @@ def prepare_view(
             plan = build_view_creation_plan(
                 locked,
                 starter=starter,
+                choices=choices,
                 inspect_notebook=inspect_notebook,
                 preplanned=preplanned,
                 prepared_existing=prepared_existing,

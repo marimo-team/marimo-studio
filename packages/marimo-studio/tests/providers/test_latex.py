@@ -65,9 +65,10 @@ tectonic = pytest.mark.skipif(
 
 
 def _project(tmp_path: Path, main: str | None = None) -> CatalogProject:
+    starter = provider.starters()[0]
     plan = provider.create(
-        provider.starters()[0],
-        provider_starter_context(tmp_path, view_name="paper"),
+        starter,
+        provider_starter_context(tmp_path, view_name="paper", starter=starter),
     )
     root = tmp_path / "paper"
     for relative, content in plan.files.items():

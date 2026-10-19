@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Any, Literal
 
 from marimo_studio._artifacts.records import (
@@ -20,6 +21,7 @@ from marimo_studio.view_providers import (
     ProjectDiagnostic,
     ProviderAvailability,
     SourceDocument,
+    StarterSetting,
 )
 
 OverviewState = Literal["unconfigured", "needs-view", "ready"]
@@ -159,7 +161,13 @@ class StudioOverview:
 
 @dataclass(frozen=True)
 class Starter:
-    """Describe one installed starting point for a new view."""
+    """Describe one installed starting point for a new view.
+
+    ``preview`` is the SHA-256 digest of the starter's preview image, which
+    the ``starters/preview`` support route serves. It is ``None`` when the
+    starter ships no preview. ``requirement`` comes from the provider and names
+    what it needs to build.
+    """
 
     id: str
     title: str
@@ -167,6 +175,12 @@ class Starter:
     provider: str
     documents: tuple[PurePosixPath, ...]
     availability: ProviderAvailability
+    format: str | None = None
+    icon: str | None = None
+    preview: str | None = None
+    homepage: str | None = None
+    requirement: str | None = None
+    settings: tuple[StarterSetting, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -177,7 +191,37 @@ class Starter:
             "provider": self.provider,
             "documents": [item.as_posix() for item in self.documents],
             "availability": self.availability.to_dict(),
+            "format": self.format,
+            "icon": self.icon,
+            "preview": self.preview,
+            "homepage": self.homepage,
+            "requirement": self.requirement,
+            "settings": [setting.to_dict() for setting in self.settings],
         }
+
+
+@dataclass(frozen=True)
+class ViewChoices:
+    """The title and starter settings a person chose for one new view.
+
+    A ``None`` title comes from the view name, and each setting missing from
+    ``settings`` keeps the starter's default.
+    """
+
+    title: str | None = None
+    settings: Mapping[str, object] = field(default_factory=lambda: MappingProxyType({}))
+
+
+DEFAULT_VIEW_CHOICES = ViewChoices()
+
+
+@dataclass(frozen=True)
+class StarterPreview:
+    """One starter's preview image and the digest its catalog record names."""
+
+    content: bytes = field(repr=False)
+    media_type: str
+    digest: str
 
 
 @dataclass(frozen=True)

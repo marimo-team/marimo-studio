@@ -10,15 +10,21 @@ from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import cast
+from urllib.parse import urlsplit
+from xml.etree import ElementTree
 
 from marimo_studio._filesystem.budgets import BUILD_INPUT_BUDGET, FileBudgetTracker
+from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
     CellRef,
     CellSpec,
     ProviderStarter,
+    SettingChoice,
+    SettingValue,
     StarterCellTarget,
     StarterContext,
     StarterPlan,
+    StarterSetting,
 )
 from marimo_studio.view_providers._host._shapes import (
     MAX_DOCUMENTS,
@@ -42,6 +48,208 @@ _MAX_STARTER_CELLS = 4_096
 _MAX_STARTER_SOURCE_BYTES = BUILD_INPUT_BUDGET.max_file_bytes
 _MAX_STARTER_METADATA_RECORDS = 1_000_000
 _MAX_STARTER_CONTEXT_BYTES = 96 * 1024 * 1024
+MAX_STARTER_PREVIEW_BYTES = 2 * 1024 * 1024
+_MAX_STARTER_HOMEPAGE_BYTES = 2_048
+MAX_STARTER_ICON_BYTES = 16 * 1024
+_MAX_STARTER_FORMAT_CHARACTERS = 40
+
+
+def starter_preview_media_type(preview: bytes) -> str | None:
+    """Return the media type of a PNG, JPEG, or WebP preview, else ``None``."""
+    if preview.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if preview.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if preview[:4] == b"RIFF" and preview[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _validate_preview(provider: str, key: str, preview: object) -> None:
+    if preview is None:
+        return
+    if type(preview) is not bytes:
+        raise conformance_error(
+            provider, f"requires starter {key!r} preview to be bytes"
+        )
+    if len(preview) > MAX_STARTER_PREVIEW_BYTES:
+        raise conformance_error(
+            provider,
+            f"limits starter {key!r} preview to {MAX_STARTER_PREVIEW_BYTES} bytes",
+        )
+    if starter_preview_media_type(preview) is None:
+        raise conformance_error(
+            provider,
+            f"requires starter {key!r} preview to be a PNG, JPEG, or WebP image",
+        )
+
+
+_SETTING_KEY = re.compile(r"[a-z][a-z0-9_]{0,63}")
+_MAX_STARTER_SETTINGS = 32
+_MAX_SETTING_CHOICES = 64
+_MAX_SETTING_TEXT_BYTES = 4_096
+_MAX_VIEW_TITLE_CHARACTERS = 200
+
+
+def _validate_settings(
+    provider: str, key: str, value: object
+) -> tuple[StarterSetting, ...]:
+    settings = checked_tuple(
+        value,
+        provider,
+        f"starter {key!r} settings",
+        maximum=_MAX_STARTER_SETTINGS,
+    )
+    for item in settings:
+        if not isinstance(item, StarterSetting):
+            raise conformance_error(provider, "requires StarterSetting records")
+        if not isinstance(item.key, str) or _SETTING_KEY.fullmatch(item.key) is None:
+            raise conformance_error(
+                provider, f"declares invalid starter setting key {item.key!r}"
+            )
+        label = f"starter setting {item.key!r}"
+        checked_text(item.label, provider, f"{label} label")
+        checked_text(item.help, provider, f"{label} help")
+        choices = checked_tuple(
+            item.choices, provider, f"{label} choices", maximum=_MAX_SETTING_CHOICES
+        )
+        if isinstance(item.default, bool):
+            if choices:
+                raise conformance_error(
+                    provider, f"requires {label} to offer choices for a text default"
+                )
+            continue
+        if not isinstance(item.default, str) or not item.default.isprintable():
+            raise conformance_error(
+                provider, f"requires {label} default to be a bool or one-line str"
+            )
+        if len(item.default.encode("utf-8")) > _MAX_SETTING_TEXT_BYTES:
+            raise conformance_error(
+                provider,
+                f"limits {label} default to {_MAX_SETTING_TEXT_BYTES} bytes",
+            )
+        for choice in choices:
+            if not isinstance(choice, SettingChoice):
+                raise conformance_error(provider, "requires SettingChoice records")
+            checked_text(choice.value, provider, f"{label} choice value")
+            checked_text(choice.label, provider, f"{label} choice label")
+        values = tuple(cast(SettingChoice, choice).value for choice in choices)
+        require_unique(values, provider, f"{label} choice values")
+        if values and item.default not in values:
+            raise conformance_error(
+                provider, f"requires {label} default to name one of its choices"
+            )
+    keys = tuple(cast(StarterSetting, item).key for item in settings)
+    require_unique(keys, provider, f"starter {key!r} setting keys")
+    return cast(tuple[StarterSetting, ...], settings)
+
+
+def view_title(view_name: str) -> str:
+    """Return the display title Studio derives from a view name."""
+    return view_name.replace("-", " ").title()
+
+
+def validate_view_title(value: object) -> str:
+    """Return a view title from creation input, or raise ``ConfigurationError``."""
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigurationError("A view title must be non-empty text.")
+    title = value.strip()
+    if len(title) > _MAX_VIEW_TITLE_CHARACTERS or not title.isprintable():
+        raise ConfigurationError(
+            "A view title must be one line of at most "
+            f"{_MAX_VIEW_TITLE_CHARACTERS} characters."
+        )
+    return title
+
+
+def resolve_starter_settings(
+    starter: ProviderStarter,
+    requested: Mapping[str, object],
+) -> Mapping[str, SettingValue]:
+    """Return a value for every setting ``starter`` declares.
+
+    Requested values replace defaults. Raises ``ConfigurationError`` for a key
+    the starter does not declare or a value that does not fit its setting.
+    """
+    declared = {setting.key: setting for setting in starter.settings}
+    unknown = sorted(set(requested) - declared.keys())
+    if unknown:
+        raise ConfigurationError(
+            f"Starter {starter.key!r} has no setting {unknown[0]!r}. "
+            f"Its settings: {', '.join(declared) or 'none'}"
+        )
+    values: dict[str, SettingValue] = {}
+    for key, setting in declared.items():
+        value = requested.get(key, setting.default)
+        if setting.kind == "boolean":
+            valid = isinstance(value, bool)
+        elif setting.kind == "choice":
+            valid = value in {choice.value for choice in setting.choices}
+        else:
+            valid = (
+                isinstance(value, str)
+                and value.isprintable()
+                and len(value.encode("utf-8")) <= _MAX_SETTING_TEXT_BYTES
+            )
+        if not valid:
+            raise ConfigurationError(
+                f"Setting {key!r} of starter {starter.key!r} does not accept {value!r}."
+            )
+        values[key] = cast(SettingValue, value)
+    return MappingProxyType(values)
+
+
+def _validate_icon(provider: str, key: str, icon: object) -> None:
+    if icon is None:
+        return
+    if not isinstance(icon, str) or len(icon.encode("utf-8")) > MAX_STARTER_ICON_BYTES:
+        raise conformance_error(
+            provider,
+            f"requires starter {key!r} icon to be SVG text of at most "
+            f"{MAX_STARTER_ICON_BYTES} bytes",
+        )
+    # Studio paints the icon as an image mask, so markup only has to be a
+    # well-formed SVG document. Entity declarations stay out of the parser.
+    try:
+        if "<!DOCTYPE" in icon or "<!ENTITY" in icon:
+            raise ValueError("document type declaration")
+        root = ElementTree.fromstring(icon)
+    except (ElementTree.ParseError, ValueError) as error:
+        raise conformance_error(
+            provider, f"requires starter {key!r} icon to be SVG markup: {error}"
+        ) from error
+    if root.tag not in {"svg", "{http://www.w3.org/2000/svg}svg"}:
+        raise conformance_error(
+            provider, f"requires starter {key!r} icon to have an <svg> root"
+        )
+
+
+def _validate_format(provider: str, key: str, value: object) -> None:
+    if value is None:
+        return
+    text = checked_text(value, provider, f"starter {key!r} format")
+    if len(text) > _MAX_STARTER_FORMAT_CHARACTERS or not text.isprintable():
+        raise conformance_error(
+            provider,
+            f"limits starter {key!r} format to one line of "
+            f"{_MAX_STARTER_FORMAT_CHARACTERS} characters",
+        )
+
+
+def _validate_homepage(provider: str, key: str, homepage: object) -> None:
+    if homepage is None:
+        return
+    text = checked_text(homepage, provider, f"starter {key!r} homepage")
+    parts = urlsplit(text)
+    if (
+        parts.scheme != "https"
+        or not parts.hostname
+        or len(text.encode("utf-8")) > _MAX_STARTER_HOMEPAGE_BYTES
+        or any(character.isspace() for character in text)
+    ):
+        raise conformance_error(
+            provider, f"requires starter {key!r} homepage to be an https URL"
+        )
 
 
 def validate_starters(provider: str, value: object) -> tuple[ProviderStarter, ...]:
@@ -56,6 +264,11 @@ def validate_starters(provider: str, value: object) -> tuple[ProviderStarter, ..
             raise conformance_error(provider, f"declares invalid starter key {key!r}")
         checked_text(item.title, provider, "starter title")
         checked_text(item.summary, provider, "starter summary")
+        _validate_format(provider, key, item.format)
+        _validate_icon(provider, key, item.icon)
+        _validate_preview(provider, key, item.preview)
+        _validate_homepage(provider, key, item.homepage)
+        _validate_settings(provider, key, item.settings)
         documents = tuple(
             provider_path(path, provider, "starter document")
             for path in checked_tuple(
@@ -79,11 +292,23 @@ def validate_starters(provider: str, value: object) -> tuple[ProviderStarter, ..
     return tuple(starters)
 
 
-def validate_starter_context(key: str, value: object) -> StarterContext:
+def validate_starter_context(
+    key: str, value: object, starter: ProviderStarter
+) -> StarterContext:
     if not isinstance(value, StarterContext):
         raise conformance_error(key, "requires a StarterContext record")
     checked_text(value.view_name, key, "starter view name")
     checked_text(value.notebook_name, key, "starter notebook name")
+    checked_text(value.title, key, "starter view title")
+    if not isinstance(value.settings, Mapping) or not all(
+        isinstance(name, str) and isinstance(item, (str, bool))
+        for name, item in value.settings.items()
+    ):
+        raise conformance_error(key, "requires starter settings of str or bool values")
+    if set(value.settings) != {setting.key for setting in starter.settings}:
+        raise conformance_error(
+            key, f"requires one value for each setting of starter {starter.key!r}"
+        )
     notebook = value.notebook
     if not isinstance(notebook.path, Path) or not isinstance(notebook.revision, str):
         raise conformance_error(key, "requires a saved starter notebook")
@@ -238,6 +463,8 @@ def validate_starter_context(key: str, value: object) -> StarterContext:
         notebook_name=value.notebook_name,
         notebook=normalized_notebook,
         cell_targets=MappingProxyType(targets),
+        title=value.title,
+        settings=MappingProxyType(dict(value.settings)),
     )
 
 

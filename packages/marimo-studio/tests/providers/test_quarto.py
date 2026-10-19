@@ -92,9 +92,10 @@ def _project(
     files: dict[str, str] | None = None,
     options: dict[str, JsonValue] | None = None,
 ) -> CatalogProject:
+    starter = provider.starters()[0]
     plan = provider.create(
-        provider.starters()[0],
-        provider_starter_context(tmp_path, view_name="report"),
+        starter,
+        provider_starter_context(tmp_path, view_name="report", starter=starter),
     )
     root = tmp_path / "report"
     for relative, content in plan.files.items():

@@ -56,12 +56,18 @@ test("view responses validate list, create, and delete envelopes", () => {
     createViewRequestSchema.parse({
       catalog_generation: views.generation,
       name: "report",
-      starter: "marimo-studio/vanilla:default",
+      starter: "marimo-studio/typst:default",
+      title: "Quarterly report",
+      settings: { paper: "us-letter", toc: true },
+      make_default: true,
     }),
     {
       catalog_generation: views.generation,
       name: "report",
-      starter: "marimo-studio/vanilla:default",
+      starter: "marimo-studio/typst:default",
+      title: "Quarterly report",
+      settings: { paper: "us-letter", toc: true },
+      make_default: true,
     },
   );
   assert.deepEqual(
@@ -93,6 +99,19 @@ test("view responses validate list, create, and delete envelopes", () => {
       catalog_generation: views.generation,
       name: "report",
       starter: "vanilla",
+      title: null,
+      settings: {},
+      make_default: false,
+    }),
+  );
+  assert.throws(() =>
+    createViewRequestSchema.parse({
+      catalog_generation: views.generation,
+      name: "report",
+      starter: "marimo-studio/typst:default",
+      title: null,
+      settings: { paper: 4 },
+      make_default: false,
     }),
   );
   assert.throws(() =>

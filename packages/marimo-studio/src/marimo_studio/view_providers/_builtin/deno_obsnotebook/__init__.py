@@ -69,6 +69,7 @@ class NotebookKitProvider:
         title="Observable Notebook Kit",
         summary="Builds Observable notebook HTML with the installed Deno toolchain.",
         options=_PROJECT.options,
+        requirement="marimo-studio[deno]",
     )
 
     def availability(self) -> ProviderAvailability:

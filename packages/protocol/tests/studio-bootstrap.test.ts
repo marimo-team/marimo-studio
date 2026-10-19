@@ -22,6 +22,7 @@ const payload = {
     viewPrefix: "../../",
     viewSupportPrefix: "../../_marimo-studio/views",
     views: "../../_marimo-studio/views",
+    starterPreview: "../../_marimo-studio/starters/preview",
   },
   workspaceId: "workspace",
   serverToken: "token",
@@ -43,6 +44,7 @@ describe("Studio bootstrap", () => {
         viewPrefix: "https://workbench.example/s/f3a9/p/77c1/",
         viewSupportPrefix: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views",
         views: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views",
+        starterPreview: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/starters/preview",
       },
     });
   });

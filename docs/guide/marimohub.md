@@ -95,7 +95,7 @@ Open the notebook and run its cells. Click **Add view** in the Studio toolbar,
 keep the proposed name `dashboard`, choose **HTML document**, and click
 **Create view**.
 
-![The Add view dialog proposing dashboard with the HTML document starter selected](/screenshots/marimohub/add-view.png){width=450}
+![The New view dialog proposing dashboard with the HTML document starter selected and its preview shown](/screenshots/marimohub/add-view.png)
 
 Notebook and Preview open side by side on the same kernel, so moving a slider
 in the view reruns dependent cells and updates both panes.

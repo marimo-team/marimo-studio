@@ -38,7 +38,7 @@ from marimo_studio._server.control_config_api import control_config_response
 from marimo_studio._server.development.routes import change_events
 from marimo_studio._server.event_socket import EventSocketResponse
 from marimo_studio._server.files import file_response
-from marimo_studio._server.headers import NO_STORE
+from marimo_studio._server.headers import IMMUTABLE, NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._server.ports import (
     ExistingSessionAttachment,
@@ -94,9 +94,14 @@ from marimo_studio._server.workspace_lifecycle import (
     WorkspaceLifecycle,
 )
 from marimo_studio._server.zero_python_api import zero_python_response
+from marimo_studio._views.catalog import starter_preview
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import MarimoStudioError, ViewNotFoundError
+from marimo_studio.errors import (
+    ConfigurationError,
+    MarimoStudioError,
+    ViewNotFoundError,
+)
 
 
 def _manifest_source_view(support_path: str) -> str | None:
@@ -130,6 +135,8 @@ async def support_response(
         return authentication_required_response()
     if support_path == "/status" and request.method == "GET":
         return _status_response(lifecycle)
+    if support_path == "/starters/preview" and request.method == "GET":
+        return await _starter_preview_response(request)
     if (
         support_path == "/views"
         and request.method == "GET"
@@ -278,6 +285,33 @@ async def support_response(
             presentation_capability=presentation_capability,
         )
     return Response(status_code=404)
+
+
+async def _starter_preview_response(request: Request) -> Response:
+    identity = request.query_params.get("starter")
+    if not identity:
+        return Response(status_code=404)
+    try:
+        preview = await run_provider_operation(partial(starter_preview, identity))
+    except ConfigurationError:
+        return Response(status_code=404)
+    if preview is None:
+        return Response(status_code=404)
+    cache = (
+        IMMUTABLE
+        if request.query_params.get("revision") == preview.digest
+        else {"Cache-Control": "no-cache"}
+    )
+    return Response(
+        preview.content,
+        media_type=preview.media_type,
+        headers={
+            **cache,
+            "Content-Security-Policy": "default-src 'none'",
+            "ETag": f'"{preview.digest}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 def _status_response(

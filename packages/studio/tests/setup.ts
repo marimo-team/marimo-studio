@@ -24,6 +24,19 @@ class ResizeObserverStub implements ResizeObserver {
   unobserve(): void {}
 }
 
+// jsdom implements <dialog> without its modal methods, so tests open and close
+// it through the `open` attribute that a browser's showModal() and close() set.
+HTMLDialogElement.prototype.showModal ??= function showModal(this: HTMLDialogElement) {
+  this.open = true;
+};
+HTMLDialogElement.prototype.close ??= function close(this: HTMLDialogElement) {
+  this.open = false;
+  this.dispatchEvent(new Event("close"));
+};
+
+// jsdom has no layout, so scrolling a focused starter into view does nothing.
+Element.prototype.scrollIntoView ??= function scrollIntoView() {};
+
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   vi.stubGlobal("matchMedia", (query: string) => ({

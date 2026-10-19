@@ -27,6 +27,7 @@ from marimo_studio._cli.output import (
     render_view_setup,
 )
 from marimo_studio._cli.targets import resolve_environment_target, resolve_notebook
+from marimo_studio._views.records import ViewChoices
 
 
 def _stdin_is_interactive() -> bool:
@@ -49,6 +50,18 @@ def _starter_provider_id(starter: str | None) -> str | None:
     return provider_id
 
 
+def _setting_values(values: tuple[str, ...]) -> dict[str, str | bool]:
+    settings: dict[str, str | bool] = {}
+    for value in values:
+        key, separator, text = value.partition("=")
+        if not separator or not key:
+            raise click.BadParameter(
+                f"expected KEY=VALUE, got {value!r}", param_hint="--setting"
+            )
+        settings[key] = {"true": True, "false": False}.get(text, text)
+    return settings
+
+
 @click.command("create", cls=ColoredCommand)
 @view_name_argument
 @target_option
@@ -58,12 +71,35 @@ def _starter_provider_id(starter: str | None) -> str | None:
     metavar="ID",
     help="Choose an installed starting point for the view.",
 )
+@click.option(
+    "--title",
+    default=None,
+    help="Set the view's display title. Defaults to a title made from its name.",
+)
+@click.option(
+    "--setting",
+    "settings",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help=(
+        "Set one of the starter's settings. Write true or false for a switch. "
+        "`marimo-studio starters` lists each starter's settings."
+    ),
+)
+@click.option(
+    "--make-default",
+    is_flag=True,
+    help="Serve the new view at the notebook's main route.",
+)
 @click.option("--dry-run", is_flag=True, help="Report changes without writing.")
 @json_option
 def create(
     view_name: str,
     target: Path | None,
     starter: str | None,
+    title: str | None,
+    settings: tuple[str, ...],
+    make_default: bool,
     dry_run: bool,
     json_output: bool,
 ) -> None:
@@ -86,6 +122,8 @@ def create(
             notebook,
             view_name,
             starter=starter,
+            choices=ViewChoices(title=title, settings=_setting_values(settings)),
+            make_default=make_default,
             dry_run=dry_run,
         )
     )

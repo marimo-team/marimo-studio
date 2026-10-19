@@ -174,6 +174,9 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
                 "catalog_generation": inventory["generation"],
                 "name": "detail",
                 "starter": "marimo-studio/vanilla:default",
+                "title": None,
+                "settings": {},
+                "make_default": False,
             },
         )
         marimo_resource = client.get(f"{authored_root}dashboard/public-files-sw.js")
@@ -318,6 +321,9 @@ def test_mounted_directory_host_promotes_with_canonical_urls(tmp_path: Path) -> 
                 "catalog_generation": host["generation"],
                 "name": "dashboard",
                 "starter": "marimo-studio/vanilla:default",
+                "title": None,
+                "settings": {},
+                "make_default": False,
             },
         )
         ready = client.get(f"{host['urls']['bootstrap']}&marimo_studio_view=dashboard")

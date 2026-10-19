@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from importlib import resources
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
@@ -40,6 +41,10 @@ starter = PackagedStarter(
             "CSS, icons, and a helper that reads live notebook values."
         ),
         documents=(PurePosixPath("index.html"), PurePosixPath("AGENTS.md")),
+        homepage="https://developer.mozilla.org/en-US/docs/Web/HTML",
+        format="HTML page",
+        icon=resources.files(__name__).joinpath("icon.svg").read_text("utf-8"),
+        preview=resources.files(__name__).joinpath("preview.webp").read_bytes(),
     ),
     package=__name__,
     markers=_markers,

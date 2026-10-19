@@ -8,11 +8,11 @@ description: Write a Python package that teaches Studio a new view format, from 
 A [view provider](../reference/glossary.md#view-provider) is a Python package
 that teaches Studio one [format](../reference/glossary.md#format). Install one
 in the notebook's environment, and its starters appear in the **New view**
-form beside the built-in ones:
+dialog beside the built-in ones:
 
-![The New view form lists Acme report and Acme dashboard under From acme-views, above the built-in starters from marimo-studio](/screenshots/provider-new-view.png){width=448}
+![The New view dialog lists Acme report and Acme dashboard under acme-views, above the built-in starters from marimo-studio, and shows the files the selected Acme report creates](/screenshots/provider-new-view.png)
 
-This page builds `acme-views`, the package in that form. **Acme report**
+This page builds `acme-views`, the package in that dialog. **Acme report**
 starts a plain HTML page and needs only Python. **Acme dashboard** adds a
 [Lit](https://lit.dev/) component bundled by Vite.
 
@@ -247,16 +247,19 @@ provider = ReportProvider()
 Each method answers one moment from
 [What a provider receives and returns](#what-a-provider-receives-and-returns).
 
-### `availability()` and `starters()`: fill the New view form
+### `availability()` and `starters()`: fill the New view dialog
 
 `ReportProvider` needs only Python, so `availability()` always returns
 `ProviderAvailability(True)`. A provider that runs an installed tool returns
 `probe_tool(("tool", "--version"), minimum=..., install=...)`, which reports a
 missing or outdated tool with your install instructions.
 
-`starters()` returns one `ProviderStarter`. Its `title` and `summary` fill the
-starter card, and `documents` fills the **Files created** list. Studio keeps the
-starter list for the life of the process.
+`starters()` returns one `ProviderStarter`. Its `title` names the starter in
+the list, and `summary` and `documents` fill the starter's details. Add a
+`format`, an SVG `icon`, a `preview` screenshot, a `homepage`, and `settings` to
+present the starter the way the built-in ones are, as
+[Present a starter in the New view dialog](../reference/provider-api.md#present-a-starter-in-the-new-view-dialog)
+describes. Studio keeps the starter list for the life of the process.
 
 ### `create()`: write the starting files
 
@@ -564,8 +567,9 @@ provider = ViteProvider()
 
 `ViteProvider` reuses the report provider and changes four methods:
 
-- `availability()` checks for the `deno` binary, so the **New view** form
-  disables the starter with a recovery action when it is missing.
+- `availability()` checks for the `deno` binary, so the **New view** dialog
+  shows the starter's recovery action and keeps **Create view** disabled when
+  it is missing.
 - `create()` copies `main.js`, `deno.json`, and `deno.lock` into the new view,
   and adds an `<acme-header>` element and a `<script>` tag to `index.html`.
 - `inspect()` adds the three files to Source and to the build inputs.

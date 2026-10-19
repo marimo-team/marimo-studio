@@ -124,7 +124,7 @@ Typst, or LaTeX. The view's [provider](#view-provider) builds that format.
 ### Starter {#starter}
 
 A template that writes the first files of a new view project. Choose one in
-the **New view** form, or pass `--starter` to `marimo-studio view create`.
+the **New view** dialog, or pass `--starter` to `marimo-studio view create`.
 
 ### View provider {#view-provider}
 

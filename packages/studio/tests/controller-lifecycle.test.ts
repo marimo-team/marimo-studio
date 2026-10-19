@@ -1,9 +1,11 @@
+import type { CreateViewRequest } from "@marimo-studio/protocol/views";
+
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { ViewRemote } from "../src/features/views/remote.ts";
 
 import { ViewController } from "../src/features/views/controller.ts";
-import { starter, viewGeneration, viewList } from "./fixtures.ts";
+import { createViewRequest, starter, viewGeneration, viewList } from "./fixtures.ts";
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -25,7 +27,7 @@ const beginRemoval = (controller: ViewController, view: string): void => {
 const createView = (controller: ViewController, name: string): Promise<boolean> => {
   const generation = controller.getSnapshot().catalogGeneration;
   expect(generation).toBeDefined();
-  return controller.create(name, starter.id, generation!);
+  return controller.create(createViewRequest(name, starter.id, generation!));
 };
 
 describe("feature controller lifecycle", () => {
@@ -44,7 +46,9 @@ describe("feature controller lifecycle", () => {
         starter.id,
       );
 
-      expect(await controller.create(name, starter.id, viewGeneration(0))).toBe(false);
+      expect(await controller.create(createViewRequest(name, starter.id, viewGeneration(0)))).toBe(
+        false,
+      );
       expect(create).not.toHaveBeenCalled();
       expect(controller.getSnapshot().createMessage).toMatchObject({ state: "error" });
       controller.dispose();
@@ -211,7 +215,7 @@ describe("feature controller lifecycle", () => {
     const prepared = deferred<boolean>();
     const remote: ViewRemote = {
       list: vi.fn(async () => viewList(["dashboard", "report"])),
-      create: vi.fn(async (name: string, _starter: string) => ({
+      create: vi.fn(async ({ name }: CreateViewRequest) => ({
         schema: 1 as const,
         name,
       })),
@@ -277,7 +281,7 @@ describe("feature controller lifecycle", () => {
       ["dashboard"],
       {
         list: vi.fn(async () => viewList(["dashboard", "report"])),
-        create: vi.fn(async (name: string, _starter: string) => ({
+        create: vi.fn(async ({ name }: CreateViewRequest) => ({
           schema: 1 as const,
           name,
         })),
@@ -388,7 +392,7 @@ describe("feature controller lifecycle", () => {
         .mockResolvedValueOnce(initial)
         .mockImplementationOnce(() => listing.promise)
         .mockResolvedValue(canonical),
-      create: vi.fn(async (name: string, _starter: string) => ({
+      create: vi.fn(async ({ name }: CreateViewRequest) => ({
         schema: 1 as const,
         name,
       })),
@@ -449,7 +453,9 @@ describe("feature controller lifecycle", () => {
     inventory = replacement;
     await controller.refreshInventory();
 
-    await expect(controller.create("report", starter.id, first.generation)).resolves.toBe(false);
+    await expect(
+      controller.create(createViewRequest("report", starter.id, first.generation)),
+    ).resolves.toBe(false);
     expect(prepare).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
     expect(controller.getSnapshot()).toMatchObject({

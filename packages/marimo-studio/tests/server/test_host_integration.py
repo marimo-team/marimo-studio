@@ -265,6 +265,9 @@ def test_studio_route_initializes_an_unconfigured_notebook(
                 "catalog_generation": inventory["generation"],
                 "name": inventory["default_view"],
                 "starter": inventory["default_starter"],
+                "title": None,
+                "settings": {},
+                "make_default": False,
             },
         )
         workspace = client.get("/studio/dashboard/?session_id=s_ready1")

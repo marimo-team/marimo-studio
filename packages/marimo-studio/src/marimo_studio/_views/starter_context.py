@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 
 from marimo_studio._notebook.cell_refs import safe_cell_ref_matches
@@ -13,10 +13,12 @@ from marimo_studio._workspace.models import (
 )
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
+    SettingValue,
     StarterCellTarget,
     StarterContext,
     StarterPlan,
 )
+from marimo_studio.view_providers._host.starters import view_title
 
 
 def _resolved_aliases(
@@ -50,8 +52,14 @@ def starter_context(
     notebook: NotebookSpec,
     studio: StudioDefinition | None,
     view_name: str,
+    *,
+    title: str | None = None,
+    settings: Mapping[str, SettingValue] = MappingProxyType({}),
 ) -> StarterContext:
-    """Return one detached notebook snapshot with a target for each ordinary cell."""
+    """Return one detached notebook snapshot with a target for each ordinary cell.
+
+    Without a ``title``, the view's title comes from its name.
+    """
     aliases = _resolved_aliases(notebook, studio)
     occupied = {
         cell.name
@@ -77,6 +85,8 @@ def starter_context(
         notebook_name=notebook.path.stem,
         notebook=notebook,
         cell_targets=MappingProxyType(targets),
+        title=title if title is not None else view_title(view_name),
+        settings=MappingProxyType(dict(settings)),
     )
 
 

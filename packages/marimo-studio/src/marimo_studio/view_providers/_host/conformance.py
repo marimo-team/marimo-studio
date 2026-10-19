@@ -231,6 +231,8 @@ class ProviderConformance:
             raise conformance_error(
                 provider, "requires options to be a frozenset of names"
             )
+        if value.requirement is not None:
+            checked_text(value.requirement, provider, "requirement")
         return value
 
     def validate_availability(self, value: object) -> ProviderAvailability:

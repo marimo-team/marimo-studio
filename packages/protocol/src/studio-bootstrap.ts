@@ -30,6 +30,7 @@ export const studioBootstrapSchema = z
       viewPrefix: z.string().min(1),
       viewSupportPrefix: z.string().min(1),
       views: z.string().min(1),
+      starterPreview: z.string().min(1),
     }),
     workspaceId: z.string().min(1),
     clientId: z.string().min(1),
@@ -96,6 +97,7 @@ export const parseStudioBootstrap = (value: JsonValue, base: string | URL): Stud
       viewPrefix: resolveUrl(urls.viewPrefix, base),
       viewSupportPrefix: resolveUrl(urls.viewSupportPrefix, base),
       views: resolveUrl(urls.views, base),
+      starterPreview: resolveUrl(urls.starterPreview, base),
     },
   };
 };

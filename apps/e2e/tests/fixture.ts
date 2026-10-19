@@ -1,6 +1,10 @@
 import { parseMountConfig, type MountConfig } from "@marimo-studio/protocol/runtime-config";
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
-import { deletedViewSchema, viewListSchema } from "@marimo-studio/protocol/views";
+import {
+  type CreateViewRequest,
+  deletedViewSchema,
+  viewListSchema,
+} from "@marimo-studio/protocol/views";
 import {
   expect,
   type APIRequestContext,
@@ -574,7 +578,10 @@ const releaseWorkspaceProjects = async (
         catalog_generation: inventory.generation,
         name: survivor,
         starter: "marimo-studio/vanilla:default",
-      },
+        title: null,
+        settings: {},
+        make_default: false,
+      } satisfies CreateViewRequest,
       headers,
     });
     if (!created.ok()) {

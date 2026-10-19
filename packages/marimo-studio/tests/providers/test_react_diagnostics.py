@@ -10,8 +10,8 @@ def test_react_type_error_identifies_authored_source(tmp_path: Path) -> None:
     work.mkdir(parents=True)
     output = (
         "Check src/main.tsx\n"
-        "TS2451 [ERROR]: Cannot redeclare block-scoped variable 'VIEW_HEADING'.\n"
-        'const VIEW_HEADING = "React";\n'
+        "TS2451 [ERROR]: Cannot redeclare block-scoped variable 'VIEW_TITLE'.\n"
+        'const VIEW_TITLE = "React";\n'
         "      ~~~~~~~~~~~~\n"
         f"    at {work.as_uri()}/src/Chart%20caf%C3%A9.tsx:4:7\n\n"
         "Found 1 error.\n\n"
@@ -28,7 +28,7 @@ def test_react_type_error_identifies_authored_source(tmp_path: Path) -> None:
     assert diagnostic.source is not None
     assert diagnostic.source.path == PurePosixPath("src/Chart café.tsx")
     assert (diagnostic.source.line, diagnostic.source.column) == (4, 7)
-    assert "Cannot redeclare block-scoped variable 'VIEW_HEADING'" in diagnostic.message
+    assert "Cannot redeclare block-scoped variable 'VIEW_TITLE'" in diagnostic.message
     assert "at src/Chart café.tsx:4:7" in diagnostic.message
     assert work.as_uri() not in diagnostic.message
 

@@ -14,6 +14,7 @@ const payload = {
     editor: "./_marimo-studio/editor/?file=analysis.py",
     events: "./_marimo-studio/dev/events",
     views: "./_marimo-studio/views",
+    starterPreview: "./_marimo-studio/starters/preview",
   },
 };
 
@@ -45,6 +46,7 @@ describe("Studio host bootstrap", () => {
       editor: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/editor/?file=analysis.py",
       events: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/dev/events",
       views: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/views",
+      starterPreview: "https://workbench.example/s/f3a9/p/77c1/_marimo-studio/starters/preview",
     });
   });
 

@@ -18,6 +18,7 @@ const studioHostBaseSchema = z.object({
     editor: z.string().min(1),
     events: z.string().min(1),
     views: z.string().min(1),
+    starterPreview: z.string().min(1),
   }),
 });
 
@@ -46,6 +47,7 @@ export const parseStudioHostBootstrap = (
       editor: resolveUrl(host.urls.editor, base),
       events: resolveUrl(host.urls.events, base),
       views: resolveUrl(host.urls.views, base),
+      starterPreview: resolveUrl(host.urls.starterPreview, base),
     },
   };
 };
