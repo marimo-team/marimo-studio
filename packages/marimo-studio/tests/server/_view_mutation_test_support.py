@@ -34,6 +34,9 @@ def _create_owned_view(
             "catalog_generation": owner,
             "name": name,
             "starter": "marimo-studio/vanilla:default",
+            "title": None,
+            "settings": {},
+            "make_default": False,
         },
     )
 

@@ -124,16 +124,19 @@ and supplies a cancellation owner and a supervised command runner. Import
 every name from `marimo_studio.view_providers`. Studio's other modules change
 without notice.
 
-`ProviderInfo` holds the title and summary shown in the **New view** form and in
-diagnostics, plus `options`, the provider options the provider reads.
+`ProviderInfo` holds the title and summary shown in diagnostics, `options`,
+the provider options the provider reads, and `requirement`, a short name for
+what the provider needs to build, such as `"Quarto 1.9.38+"`. The **New view**
+dialog shows "Needs Quarto 1.9.38+" beside each of its starters while the
+provider is unavailable.
 
 ## Create starting files
 
 `starters()` returns `ProviderStarter` records, each with a starter key, a
-title and summary for the **New view** form, and `documents`, the Source documents a new
-view starts with. Studio prefixes the starter key with the provider key to form
-the starter ID: starter key `default` from `acme-views/report` becomes
-`acme-views/report:default`.
+title and summary for the **New view** dialog, and `documents`, the Source
+documents a new view starts with. Studio prefixes the starter key with the
+provider key to form the starter ID: starter key `default` from
+`acme-views/report` becomes `acme-views/report:default`.
 
 `create()` returns a `StarterPlan`. `StarterPlan.files` holds every file the
 provider writes and must include each path in `ProviderStarter.documents`.
@@ -190,6 +193,83 @@ conflict before that commit rejects the whole creation. When saving aliases
 changes notebook-local configuration, Studio calls `create()` again with the
 notebook as it will be saved. Return the same `cell_targets` from both calls.
 
+### Present a starter in the New view dialog
+
+The dialog lists each starter with a mark and a short format, and shows the
+selected starter's preview, summary, website, and documents:
+
+```python
+from importlib import resources
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import ProviderStarter
+
+STARTER = ProviderStarter(
+    key="default",
+    title="Report",
+    summary="A paged report that lays out one notebook value.",
+    documents=(PurePosixPath("main.typ"),),
+    format="PDF",
+    icon=resources.files(__name__).joinpath("icon.svg").read_text("utf-8"),
+    preview=resources.files(__name__).joinpath("preview.webp").read_bytes(),
+    homepage="https://acme.example/report",
+)
+```
+
+| Field      | Contract                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `format`   | One line of at most 40 characters that names what the starter makes, such as `"Web app"`, `"Slides"`, `"PDF"` |
+| `icon`     | SVG markup of at most 16 KiB with an `<svg>` root and no document type declaration                            |
+| `preview`  | PNG, JPEG, or WebP bytes of at most 1 MiB, and 6 MiB across a provider's starters                             |
+| `homepage` | An `https` URL for the technology the starter builds with                                                     |
+
+Studio paints the icon's shapes as a mask in the theme's text color, so a
+single-color square mark reads in light and dark themes. A starter without an
+icon shows its preview, then its initial. Make the preview a 1280 by 800
+screenshot of the view the starter creates. Studio serves it with an immutable
+cache header keyed by its SHA-256 digest. A starter without a preview shows the
+folder and documents it creates. Studio reads all four fields once per provider
+and process, and carries them across the provider process boundary.
+
+### Offer starter settings
+
+`ProviderStarter.settings` lists values a person can change in the **New view**
+dialog, with `marimo-studio view create --setting KEY=VALUE`, or with
+`create_view(settings=...)` in code mode. Each `StarterSetting` has a key, a
+label, help text the dialog shows beside the control, and a default:
+
+```python
+from marimo_studio.view_providers import SettingChoice, StarterSetting
+
+SETTINGS = (
+    StarterSetting(
+        key="paper",
+        label="Paper size",
+        help="The page size of the PDF. main.typ sets it in its page rule.",
+        default="a4",
+        choices=(SettingChoice("a4", "A4"), SettingChoice("us-letter", "US Letter")),
+    ),
+    StarterSetting(
+        key="toc",
+        label="Table of contents",
+        help="Lists the document's headings beside its text.",
+        default=False,
+    ),
+)
+```
+
+A `bool` default makes a switch. `choices` make a choice whose default names one
+of their values. Any other one-line `str` default makes a text field. Keys
+match `[a-z][a-z0-9_]{0,63}`, and a starter declares at most 32 settings.
+
+`create()` reads `StarterContext.settings`, which holds a value for every
+declared setting: the person's choice or the default. Studio rejects an
+undeclared key or a value that does not fit its setting before it calls
+`create()`. `StarterContext.title` holds the title the starter writes into the view, which a
+person can set in the dialog, with `--title`, or with `create_view(title=...)`.
+Without one, Studio makes a title from the view name, so `quarterly-report`
+becomes `Quarterly Report`.
+
 ### Ship starter files as package data
 
 `PackagedStarter` keeps a starter's files in a package directory and fills
@@ -244,8 +324,9 @@ class ReportProvider:
 
 `create_starter()` reads the files beneath `files/`, which needs no
 `__init__.py`, and replaces each marker with its value. Every starter can also
-use `__NOTEBOOK_LABEL_HTML__`, `__VIEW_HEADING_HTML__`,
-`__NOTEBOOK_LABEL_JSON__`, and `__VIEW_HEADING_JSON__`. The `_JSON` markers
+use `__NOTEBOOK_LABEL_HTML__`, `__VIEW_TITLE_HTML__`,
+`__NOTEBOOK_LABEL_JSON__`, and `__VIEW_TITLE_JSON__`, where the title is
+`StarterContext.title`. The `_JSON` markers
 produce a JSON string literal that is safe inside a `<script>` element, and
 `script_json()` produces the same form for your own markers. Include the
 `files/` directories in the package build so they ship in the wheel.
@@ -678,7 +759,12 @@ request.runner.run(
 ### Provider records
 
 ```text
-ProviderInfo(title: str, summary: str, options: frozenset[str] = frozenset())
+ProviderInfo(
+    title: str,
+    summary: str,
+    options: frozenset[str] = frozenset(),
+    requirement: str | None = None,
+)
 
 ProviderAvailability(
     available: bool,
@@ -692,7 +778,23 @@ ProviderStarter(
     title: str,
     summary: str,
     documents: tuple[PurePosixPath, ...],
+    *,
+    format: str | None = None,
+    icon: str | None = None,
+    preview: bytes | None = None,
+    homepage: str | None = None,
+    settings: tuple[StarterSetting, ...] = (),
 )
+
+StarterSetting(
+    key: str,
+    label: str,
+    help: str,
+    default: str | bool,
+    choices: tuple[SettingChoice, ...] = (),
+)
+
+SettingChoice(value: str, label: str)
 ```
 
 Studio validates `ProviderInfo` when it discovers the provider. Return `reason`
@@ -726,6 +828,9 @@ StarterContext(
     notebook_name: str,
     notebook: NotebookSpec,
     cell_targets: Mapping[CellRef, StarterCellTarget],
+    *,
+    title: str,
+    settings: Mapping[str, str | bool] = {},
 )
 
 StarterCellTarget(cell: CellRef, target: str)

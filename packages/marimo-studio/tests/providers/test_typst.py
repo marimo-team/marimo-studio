@@ -69,9 +69,10 @@ def _project(
 ) -> CatalogProject:
     if notebook is not None:
         (tmp_path / "analysis.py").write_text(notebook, encoding="utf-8")
+    starter = provider.starters()[0]
     plan = provider.create(
-        provider.starters()[0],
-        provider_starter_context(tmp_path, view_name="report"),
+        starter,
+        provider_starter_context(tmp_path, view_name="report", starter=starter),
     )
     root = tmp_path / "report"
     for relative, content in plan.files.items():

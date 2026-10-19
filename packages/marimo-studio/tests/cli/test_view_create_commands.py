@@ -425,3 +425,78 @@ def test_create_reports_the_project_editor_command_without_uv_installed(
     assert result.exit_code == 0, result.output
     assert "uv run --project" in result.stderr
     assert load_studio(notebook_path).default_view == "dashboard"
+
+
+def test_view_create_applies_title_settings_and_default(notebook_path: Path) -> None:
+    runner = CliRunner()
+    assert (
+        runner.invoke(
+            cli, ["view", "create", "dashboard", "--target", str(notebook_path)]
+        ).exit_code
+        == 0
+    )
+
+    created = runner.invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "report",
+            "--target",
+            str(notebook_path),
+            "--starter",
+            "marimo-studio/typst:default",
+            "--title",
+            "Quarterly report",
+            "--setting",
+            "paper=us-letter",
+            "--make-default",
+        ],
+    )
+
+    assert created.exit_code == 0, created.output
+    studio = load_studio(notebook_path)
+    main = studio.views["report"].root.joinpath("main.typ").read_text(encoding="utf-8")
+    assert studio.default_view == "report"
+    assert '#let title = "Quarterly report"' in main
+    assert 'paper: "us-letter",' in main
+
+
+def test_view_create_rejects_a_setting_without_a_value(notebook_path: Path) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "report",
+            "--target",
+            str(notebook_path),
+            "--setting",
+            "paper",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "expected KEY=VALUE" in unstyle(result.output)
+
+
+def test_view_create_accepts_only_true_or_false_for_a_switch(
+    notebook_path: Path,
+) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "report",
+            "--target",
+            str(notebook_path),
+            "--starter",
+            "marimo-studio/quarto:default",
+            "--setting",
+            "toc=yes",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "toc is a switch" in unstyle(result.output)

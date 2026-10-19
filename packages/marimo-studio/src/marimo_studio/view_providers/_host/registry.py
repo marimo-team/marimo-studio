@@ -279,7 +279,7 @@ class _RegisteredProvider:
         context: StarterContext,
     ) -> StarterPlan:
         validate_starters(self.key, (starter,))
-        context = validate_starter_context(self.key, context)
+        context = validate_starter_context(self.key, context, starter)
         with self._guard(f"create starter {starter.key!r}"):
             plan = (
                 create_in_provider_process(

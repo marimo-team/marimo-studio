@@ -151,6 +151,10 @@ for starter in starters:
 ```
 
 Pass the selected returned `starter.id` as `starter=` to `create_view()`.
+`starter.settings` lists the values the starter accepts, such as a paper size.
+Pass the requested ones as `settings={"paper": "us-letter"}`, the title the starter writes
+into the view as `title=`, and `make_default=True` when the user asks for the new view to
+open at the notebook's main route.
 Build a slide deck from the starter titled `Reveal.js slides`. Resolve
 unavailable requirements before building. For an ordinary dashboard,
 the default starter creates an editable HTML page with notebook output hosts:

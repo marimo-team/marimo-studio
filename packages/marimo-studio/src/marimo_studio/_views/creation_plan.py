@@ -20,10 +20,10 @@ from marimo_studio._views.inspection import (
     inspect_view_project_sync,
     project_provenance,
 )
-from marimo_studio._views.records import Starter
+from marimo_studio._views.records import DEFAULT_VIEW_CHOICES, Starter, ViewChoices
 from marimo_studio._views.starter_context import starter_bindings, starter_context
 from marimo_studio._workspace.bindings import cell_bindings_source
-from marimo_studio._workspace.config import discover_views
+from marimo_studio._workspace.config import default_view_source, discover_views
 from marimo_studio._workspace.config_snapshot import WorkspaceConfigSnapshot
 from marimo_studio._workspace.locations import CatalogLocations
 from marimo_studio._workspace.metadata import configured_notebook_source
@@ -46,6 +46,10 @@ from marimo_studio.view_providers._host.package_policy import DEFAULT_STARTER_ID
 from marimo_studio.view_providers._host.requirements import (
     resolve_launch_requirements,
 )
+from marimo_studio.view_providers._host.starters import (
+    resolve_starter_settings,
+    validate_view_title,
+)
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,7 @@ class PreparedStarter:
     starter: Starter
     provider: ViewProvider
     provider_starter: ProviderStarter
+    choices: ViewChoices
     observed_studio: StudioDefinition | None
     observed_config_identity: Version | None
     observed_notebook: NotebookSpec
@@ -179,14 +184,28 @@ def _provider_plans(
     notebook: NotebookSpec,
     studio: StudioDefinition | None,
     view_names: tuple[str, ...],
+    selected: str,
+    choices: ViewChoices,
 ) -> dict[str, StarterPlan]:
-    return {
-        view_name: provider.create(
+    """Create each new view, applying ``choices`` to the ``selected`` one.
+
+    A configured default view that is still missing starts with defaults.
+    """
+    chosen = (
+        validate_view_title(choices.title) if choices.title is not None else None,
+        resolve_starter_settings(starter, choices.settings),
+    )
+    defaults = (None, resolve_starter_settings(starter, {}))
+    plans: dict[str, StarterPlan] = {}
+    for view_name in view_names:
+        title, settings = chosen if view_name == selected else defaults
+        plans[view_name] = provider.create(
             starter,
-            starter_context(notebook, studio, view_name),
+            starter_context(
+                notebook, studio, view_name, title=title, settings=settings
+            ),
         )
-        for view_name in view_names
-    }
+    return plans
 
 
 def prepare_starter(
@@ -197,6 +216,8 @@ def prepare_starter(
     locations: CatalogLocations,
     default_view: str,
     view_names: tuple[str, ...],
+    selected: str,
+    choices: ViewChoices,
     starter: Starter,
     provider: ViewProvider,
     provider_starter: ProviderStarter,
@@ -208,12 +229,15 @@ def prepare_starter(
         saved.notebook,
         studio,
         view_names,
+        selected,
+        choices,
     )
     if studio is not None and not studio.uses_notebook_config:
         return PreparedStarter(
             starter,
             provider,
             provider_starter,
+            choices,
             studio,
             config_identity,
             saved.notebook,
@@ -235,6 +259,7 @@ def prepare_starter(
             starter,
             provider,
             provider_starter,
+            choices,
             studio,
             config_identity,
             saved.notebook,
@@ -254,6 +279,8 @@ def prepare_starter(
         planned_notebook,
         studio,
         view_names,
+        selected,
+        choices,
     )
     if any(
         planned[view_name].cell_targets != initial[view_name].cell_targets
@@ -280,6 +307,7 @@ def prepare_starter(
         starter,
         provider,
         provider_starter,
+        choices,
         studio,
         config_identity,
         saved.notebook,
@@ -332,6 +360,8 @@ def _revalidate_prepared_starter(
             validated.locations,
             validated.default_view,
             validated.new_views,
+            validated.selected,
+            prepared.choices,
             prepared.starter,
             prepared.provider,
             prepared.provider_starter,
@@ -347,6 +377,7 @@ def _prepared_starter_for_plan(
     validated: ValidatedViewCreation,
     *,
     starter: str | Starter | None,
+    choices: ViewChoices,
     inspect_notebook: NotebookInspector,
     dry_run: bool,
     preplanned: PreparedStarter | None,
@@ -371,6 +402,8 @@ def _prepared_starter_for_plan(
         validated.locations,
         validated.default_view,
         validated.new_views,
+        validated.selected,
+        choices,
         selected,
         provider,
         provider_starter,
@@ -427,6 +460,8 @@ def _configuration_transition(
     assert snapshot is not None
     expected.update(snapshot.expected_identities)
     configured = cell_bindings_source(studio, bindings, source=snapshot.source)
+    if validated.default_view != studio.default_view:
+        configured = default_view_source(studio, configured, validated.default_view)
     write = (studio.config_path, configured) if configured != snapshot.source else None
     return _ConfigurationTransition(
         studio.root,
@@ -561,6 +596,7 @@ def build_view_creation_plan(
     validated: ValidatedViewCreation,
     *,
     starter: str | Starter | None = None,
+    choices: ViewChoices = DEFAULT_VIEW_CHOICES,
     inspect_notebook: NotebookInspector,
     dry_run: bool = False,
     preplanned: PreparedStarter | None = None,
@@ -570,6 +606,7 @@ def build_view_creation_plan(
     prepared = _prepared_starter_for_plan(
         validated,
         starter=starter,
+        choices=choices,
         inspect_notebook=inspect_notebook,
         dry_run=dry_run,
         preplanned=preplanned,

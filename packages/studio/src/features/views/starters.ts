@@ -39,3 +39,38 @@ export const preferredStarterId = (
     ""
   );
 };
+
+/** Name what an unavailable starter needs, such as "Needs Quarto 1.9.38+". */
+export const setupLabel = (starter: Starter): string =>
+  starter.requirement ? `Needs ${starter.requirement}` : "Needs setup";
+
+export const homepageHost = (homepage: string): string =>
+  new URL(homepage).hostname.replace(/^www\./, "");
+
+/** Return the URL of a starter's preview image, or undefined without one. */
+export const starterPreviewUrl = (base: string, starter: Starter): string | undefined => {
+  if (!starter.preview) {
+    return undefined;
+  }
+  const url = new URL(base);
+  url.searchParams.set("starter", starter.id);
+  url.searchParams.set("revision", starter.preview);
+  return url.toString();
+};
+
+export const matchesStarterQuery = (starter: Starter, query: string): boolean => {
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) {
+    return true;
+  }
+  const haystack = [
+    starter.title,
+    starter.summary,
+    starter.format ?? "",
+    starter.provider,
+    ...starter.documents,
+  ]
+    .join(" ")
+    .toLocaleLowerCase();
+  return terms.every((term) => haystack.includes(term));
+};

@@ -61,6 +61,7 @@ from marimo_studio.view_providers._builtin.latex._sources import (
     latex_reads,
 )
 from marimo_studio.view_providers._builtin.latex._tectonic import (
+    TECTONIC_MIN_VERSION,
     compile_latex,
     tectonic_availability,
 )
@@ -83,6 +84,7 @@ class LatexProvider:
         title="LaTeX",
         summary="Typesets a LaTeX document to PDF with live notebook values.",
         options=frozenset({"entrypoint"}),
+        requirement=f"Tectonic {TECTONIC_MIN_VERSION}+",
     )
 
     def availability(self) -> ProviderAvailability:

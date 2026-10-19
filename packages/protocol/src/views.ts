@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { JsonValue } from "./runtime-config.ts";
 
-import { starterIdSchema, starterSchema } from "./provider-catalog.ts";
+import { settingValueSchema, starterIdSchema, starterSchema } from "./provider-catalog.ts";
 
 export const VIEW_NAME_MAX_BYTES = 240;
 
@@ -72,6 +72,12 @@ export const createViewRequestSchema = z
     catalog_generation: ownerGenerationSchema,
     name: viewNameSchema,
     starter: starterIdSchema,
+    /** The title the starter writes into the view, or null to make one from the name. */
+    title: z.string().trim().min(1).max(200).nullable(),
+    /** Values for the starter's settings. A missing key keeps its default. */
+    settings: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,63}$/), settingValueSchema),
+    /** Serve the new view at the notebook's main route. */
+    make_default: z.boolean(),
   })
   .strict();
 

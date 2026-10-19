@@ -202,7 +202,7 @@ need something else, you have two ways to go further:
   Three.js, MapLibre, Observable Plot, and Recharts.
 - You can install or write a [view provider](guide/view-providers.md), a
   Python package that brings another framework, template, or build tool. Its
-  starters appear in the **New view** form, and its views build, preview, and
+  starters appear in the **New view** dialog, and its views build, preview, and
   export like the built-in ones.
   [marimo-manim](https://github.com/peter-gy/marimo-manim), for example, turns
   notebook results into [Manim](https://www.manim.community/) animations.

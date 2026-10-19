@@ -2,13 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vite-plus/test";
 
-import type { ViewRemote } from "../src/features/views/remote.ts";
-
 import { RuntimeMenu } from "../src/features/navigation/RuntimeMenu.tsx";
 import { WorkspaceMenu } from "../src/features/navigation/WorkspaceMenu.tsx";
-import { ViewController } from "../src/features/views/controller.ts";
-import { ViewMenu } from "../src/features/views/ViewMenu.tsx";
-import { starter, viewList } from "./fixtures.ts";
 import { studioBootstrap } from "./studio-test-support.ts";
 
 const status = {
@@ -80,56 +75,6 @@ it("light-dismisses outside and keeps one disclosure menu open at a time", async
   await user.click(outside);
   expect(workspaceMenu?.open).toBe(false);
   expect(outside).toHaveFocus();
-});
-
-it("keeps a busy view menu open when a peer requests ownership", async () => {
-  const create = new Promise<Awaited<ReturnType<ViewRemote["create"]>>>(() => undefined);
-  const remote: ViewRemote = {
-    list: vi.fn(async () => viewList(["dashboard"])),
-    create: vi.fn(() => create),
-    remove: vi.fn(),
-  };
-  const controller = new ViewController(
-    "dashboard",
-    ["dashboard"],
-    remote,
-    vi.fn(async () => true),
-    vi.fn(async () => true),
-    vi.fn(),
-    [starter],
-    starter.id,
-  );
-  await controller.refreshInventory();
-  const user = userEvent.setup();
-  render(
-    <div id="marimo-studio-root">
-      <ViewMenu controller={controller} />
-      <RuntimeMenu
-        current={studioBootstrap.runtimes[0]!}
-        disabled={false}
-        runtimes={studioBootstrap.runtimes}
-        status={status}
-        visible
-        onSelect={vi.fn()}
-      />
-    </div>,
-  );
-  const viewTrigger = screen.getByLabelText(/^Switch view:/);
-  const runtimeTrigger = screen.getByLabelText("Python preview runtime");
-  const viewMenu = viewTrigger.closest("details");
-  const runtimeMenu = runtimeTrigger.closest("details");
-
-  await user.click(viewTrigger);
-  await user.click(screen.getByRole("button", { name: "New view" }));
-  await user.type(screen.getByLabelText("New view"), "created");
-  await user.click(screen.getByRole("button", { name: "Create" }));
-  expect(await screen.findByRole("button", { name: "Creating…" })).toBeDisabled();
-
-  await user.click(runtimeTrigger);
-
-  expect(viewMenu?.open).toBe(true);
-  expect(runtimeMenu?.open).toBe(false);
-  controller.dispose();
 });
 
 it("restores trigger focus when a menu action closes its disclosure", async () => {

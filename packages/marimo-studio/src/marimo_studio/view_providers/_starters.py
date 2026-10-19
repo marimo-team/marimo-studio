@@ -45,8 +45,8 @@ class PackagedStarter:
 
     ``markers`` returns the values for the starter's own ``__MARKER__``
     placeholders. Every starter can also use ``__NOTEBOOK_LABEL_HTML__``,
-    ``__VIEW_HEADING_HTML__``, ``__NOTEBOOK_LABEL_JSON__``, and
-    ``__VIEW_HEADING_JSON__``.
+    ``__VIEW_TITLE_HTML__``, ``__NOTEBOOK_LABEL_JSON__``, and
+    ``__VIEW_TITLE_JSON__``.
     """
 
     info: ProviderStarter
@@ -70,13 +70,12 @@ def _replacements(
     context: StarterContext,
     additions: Mapping[str, str],
 ) -> dict[str, str]:
-    heading = context.view_name.replace("-", " ").title()
     label = context.notebook_label
     replacements = {
         "__NOTEBOOK_LABEL_HTML__": html.escape(label),
-        "__VIEW_HEADING_HTML__": html.escape(heading),
+        "__VIEW_TITLE_HTML__": html.escape(context.title),
         "__NOTEBOOK_LABEL_JSON__": script_json(label),
-        "__VIEW_HEADING_JSON__": script_json(heading),
+        "__VIEW_TITLE_JSON__": script_json(context.title),
     }
     for marker, value in additions.items():
         if _MARKER_NAME.fullmatch(marker) is None:

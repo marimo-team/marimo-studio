@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from marimo_studio._authoring.validation import validate as validate_workspace
 from marimo_studio._authoring.view import show_view
 from marimo_studio._authoring.view_api import View as SavedView
@@ -10,7 +12,7 @@ from marimo_studio._authoring.workspace_api import Workspace as SavedWorkspace
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationLevel, ValidationReport
-from marimo_studio._views.records import Starter
+from marimo_studio._views.records import Starter, ViewChoices
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.ownership import (
     observed_view_owner,
@@ -56,12 +58,22 @@ class Workspace(SavedWorkspace):
         name: str,
         *,
         starter: str | Starter | None = None,
+        title: str | None = None,
+        settings: Mapping[str, str | bool] | None = None,
+        make_default: bool = False,
     ) -> View:
-        """Create one named view and return its live handle."""
+        """Create one named view and return its live handle.
+
+        ``title`` replaces the title derived from ``name``. ``settings`` sets
+        values for the starter's declared settings, and ``make_default`` serves
+        the view at the notebook's main route.
+        """
         result = await create_view_operation(
             self.notebook,
             name,
             starter=starter,
+            choices=ViewChoices(title=title, settings=dict(settings or {})),
+            make_default=make_default,
             expected_catalog_generation=self._catalog_generation,
         )
         assert result.workspace is not None

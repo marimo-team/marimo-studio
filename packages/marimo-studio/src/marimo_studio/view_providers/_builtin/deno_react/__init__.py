@@ -78,6 +78,7 @@ class DenoReactProvider:
         title="React",
         summary="Builds a React project with the installed Deno toolchain.",
         options=_PROJECT.options,
+        requirement="marimo-studio[deno]",
     )
 
     def availability(self) -> ProviderAvailability:

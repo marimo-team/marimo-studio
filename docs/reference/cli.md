@@ -103,10 +103,13 @@ marimo-studio starters [--target PATH] [--json]
 ```
 
 Lists installed starters for new view projects. Human output includes the
-starter ID, summary, provider key, availability, and recovery action.
-`--target` reports availability for one notebook, including the tools its pixi
-metadata declares. JSON adds
-the title and `documents`, the starter's initial Source document plan. Use
+starter ID, summary, provider key, settings, availability, and recovery action.
+Each setting line shows the key, its accepted values, its default, and its
+help, such as `paper=a4|us-letter (default 'a4')`. `--target` reports
+availability for one notebook, including the tools its pixi metadata declares.
+JSON adds the title, `format`, `homepage`, the provider's `requirement`,
+`settings`, the icon's SVG markup, the preview image's SHA-256 digest, and
+`documents`, the starter's initial Source document plan. Use
 `view create --dry-run` to inspect every file the selected starter and Studio
 will write.
 
@@ -158,7 +161,8 @@ reports the change. `--overwrite` replaces an existing alias.
 ## `marimo-studio view create`
 
 ```text
-marimo-studio view create VIEW [--target PATH] [--starter ID] [--dry-run] [--json]
+marimo-studio view create VIEW [--target PATH] [--starter ID] [--title TEXT]
+    [--setting KEY=VALUE]... [--make-default] [--dry-run] [--json]
 ```
 
 Creates one named view and rejects an existing name. The default starter,
@@ -166,6 +170,20 @@ Creates one named view and rejects an existing name. The default starter,
 documents, and Vanilla inspection also exposes directly referenced local CSS
 and JavaScript files. `--starter` selects another installed starter.
 `--dry-run` reports every planned write without committing it.
+
+`--title` sets the title the starter writes into the view. Without it, Studio
+makes one from the view name. `--setting` sets one of the starter's settings
+and can repeat. Write `true` or `false` for a switch. `marimo-studio starters`
+lists each starter's settings, their accepted values, and their defaults:
+
+```console
+marimo-studio view create report --target analysis.py \
+  --starter marimo-studio/typst:default --title "Quarterly report" \
+  --setting paper=us-letter --make-default
+```
+
+`--make-default` then serves the new view at the main route, as
+`view default` does. A notebook's first view always becomes its default.
 
 A completed creation returns exact `launch_requirements` in JSON and prints an
 environment-aware launch command: `uv run` with `--no-sandbox` for project

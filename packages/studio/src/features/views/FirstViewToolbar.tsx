@@ -1,51 +1,47 @@
 import { PlusIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
-import { useDisclosureMenu } from "../../shared/useDisclosureMenu.ts";
-import { CreateViewForm, type CreateViewFormProps } from "./CreateViewForm.tsx";
+import { CreateViewDialog, type CreateViewDialogProps } from "./CreateViewDialog.tsx";
 
 export const FirstViewToolbar = ({
-  form,
+  dialog,
   onOpen,
 }: {
-  form: Omit<CreateViewFormProps, "inputRef" | "onCancel">;
+  dialog: Omit<CreateViewDialogProps, "open" | "onCancel" | "firstView">;
   onOpen: () => void;
 }) => {
-  const input = useRef<HTMLInputElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const menu = useDisclosureMenu({
-    dismissible: !form.busy,
-    onToggle: (visible) => {
-      setOpen(visible);
-      if (visible) onOpen();
-    },
-  });
-  useEffect(() => {
-    if (open) input.current?.focus();
-  }, [open]);
   return (
     <header className="studio-toolbar" aria-label="Studio">
-      <details
-        ref={menu.detailsRef}
-        className="studio-menu studio-view-menu studio-first-view"
-        data-studio-disclosure-menu
-        onToggle={menu.onToggle}
-        onKeyDown={menu.onKeyDown}
+      <button
+        ref={trigger}
+        type="button"
+        className="studio-control studio-menu-trigger studio-first-view"
+        aria-haspopup="dialog"
+        onClick={() => {
+          setOpen(true);
+          onOpen();
+        }}
       >
-        <summary ref={menu.triggerRef} className="studio-control studio-menu-trigger">
-          <PlusIcon className="studio-mode-icon" aria-hidden />
-          <span>Add view</span>
-        </summary>
-        <div className="studio-menu-popover">
-          {open ? <CreateViewForm {...form} inputRef={input} onCancel={menu.close} /> : null}
-        </div>
-      </details>
-      {form.message && !open ? (
+        <PlusIcon className="studio-mode-icon" aria-hidden />
+        <span>Add view</span>
+      </button>
+      <CreateViewDialog
+        {...dialog}
+        open={open}
+        firstView
+        onCancel={() => {
+          setOpen(false);
+          trigger.current?.focus();
+        }}
+      />
+      {dialog.message && !open ? (
         <span className="studio-host-message" role="alert">
-          {form.message.text}
+          {dialog.message.text}
         </span>
       ) : null}
-      {form.busy ? <span role="status">Opening view</span> : null}
+      {dialog.busy ? <span role="status">Opening view</span> : null}
     </header>
   );
 };

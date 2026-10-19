@@ -1,9 +1,9 @@
 ---
-title: __VIEW_HEADING_JSON__
+title: __VIEW_TITLE_JSON__
 subtitle: __NOTEBOOK_LABEL_JSON__
 format:
   html:
-    toc: false
+    toc: __TOC_QMD__
 ---
 
 __NOTEBOOK_CELLS_QMD__

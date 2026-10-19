@@ -542,7 +542,8 @@ def configured_notebook_source(
     elif not isinstance(config, MutableMapping):
         raise ConfigurationError("[tool.marimo-studio] must be a TOML table")
     else:
-        config.setdefault("default", default_view)
+        if config.get("default") != default_view:
+            config["default"] = default_view
         config.setdefault("cells", tomlkit.table())
     if "dependencies" in document or project_environment(path) is None:
         _set_provider_dependency_ownership(

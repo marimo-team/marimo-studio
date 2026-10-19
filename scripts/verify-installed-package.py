@@ -168,10 +168,11 @@ assert set(marimo_studio.view_providers.__all__) == {
     "ProviderCommandError", "ProviderCommandResult", "ProviderError",
     "ProviderInfo", "ProviderRunner", "ProviderStarter", "Rect", "Render", "RenderCell",
     "RenderFile", "RenderOutput", "RenderProvider", "RenderRegion", "RenderRequest",
-    "RenderResult", "RenderValue", "Representation", "Size",
+    "RenderResult", "RenderValue", "Representation", "SettingChoice", "SettingValue",
+    "Size",
     "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
-    "StarterMarkers", "StarterPlan", "ViewProject", "ViewProvider", "copy_inputs",
+    "StarterMarkers", "StarterPlan", "StarterSetting", "ViewProject", "ViewProvider", "copy_inputs",
     "create_starter", "find_tool", "html_sites", "parse_accept", "probe_tool",
     "project_files",
     "project_path", "render_page", "script_json",
@@ -219,7 +220,14 @@ assert tuple(field.name for field in fields(providers.Render)) == (
     "source", "values", "outputs", "cells",
 )
 assert tuple(field.name for field in fields(providers.ProviderInfo)) == (
-    "title", "summary", "options",
+    "title", "summary", "options", "requirement",
+)
+assert tuple(field.name for field in fields(providers.ProviderStarter)) == (
+    "key", "title", "summary", "documents", "format", "icon", "preview",
+    "homepage", "settings",
+)
+assert tuple(field.name for field in fields(providers.StarterSetting)) == (
+    "key", "label", "help", "default", "choices",
 )
 assert tuple(field.name for field in fields(providers.BuildRequest)) == (
     "project", "inspection", "inputs", "project_revision", "profile",
@@ -240,7 +248,7 @@ assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
     "cell", "target",
 )
 assert tuple(field.name for field in fields(providers.StarterContext)) == (
-    "view_name", "notebook_name", "notebook", "cell_targets",
+    "view_name", "notebook_name", "notebook", "cell_targets", "title", "settings",
 )
 assert tuple(field.name for field in fields(providers.StarterPlan)) == (
     "files", "cell_targets",

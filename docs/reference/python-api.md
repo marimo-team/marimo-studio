@@ -47,7 +47,14 @@ await workspace.inspect_notebook(
     runtime_timeout: float = 60.0,
 ) -> InspectionResult
 await workspace.starters() -> tuple[Starter, ...]
-await workspace.create_view(name, *, starter=None) -> View
+await workspace.create_view(
+    name,
+    *,
+    starter=None,
+    title: str | None = None,
+    settings: Mapping[str, str | bool] | None = None,
+    make_default: bool = False,
+) -> View
 workspace.view(name) -> View
 await workspace.bind(alias, cell, *, overwrite=False) -> BindingResult
 await workspace.validate(
@@ -69,6 +76,10 @@ and is not a security sandbox, so run trusted notebook code only.
 produces their inputs.
 
 `create_view()` raises `ViewExistsError` when the name already has a view.
+`title` replaces the title Studio makes from the view name, `settings` sets
+values for the starter's declared settings, and `make_default` serves the new
+view at the main route. An undeclared setting or a value that does not fit its
+setting raises `ConfigurationError` before any file is written.
 `view()` reads the current catalog and returns a handle bound to that workspace
 and view incarnation. `create_view()` and `bind()` raise
 `WorkspaceGenerationConflictError` for a replaced workspace. Open a new

@@ -22,7 +22,8 @@ import { RetrySchedule } from "../features/preview/retry-schedule.ts";
 import { StarterCatalogController } from "../features/views/catalog.ts";
 import { FirstViewToolbar } from "../features/views/FirstViewToolbar.tsx";
 import { createViewRemote } from "../features/views/remote.ts";
-import { preferredStarterId } from "../features/views/starters.ts";
+import { starterPreviewUrl } from "../features/views/starters.ts";
+import { useViewDraft } from "../features/views/useViewDraft.ts";
 import { useEditorWorkspace } from "../shared/editor-workspace.ts";
 import { errorMessage, responseErrorMessage } from "../shared/errors.ts";
 import { StudioThemeProvider, useResolvedStudioTheme } from "../shared/theme.tsx";
@@ -166,9 +167,7 @@ export const StudioHost = ({
   const [createdView, setCreatedView] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [opening, setOpening] = useState(false);
-  const [starter, setStarter] = useState("");
   const pendingView = useRef<string | null>(null);
-  const [name, setName] = useState(host.state === "needs-view" ? host.defaultView : "dashboard");
   const theme = useResolvedStudioTheme(editorFrame, options.connectThemeFrame);
   const views = useMemo(
     () => createViewRemote(host.urls.views, host.serverToken),
@@ -180,21 +179,15 @@ export const StudioHost = ({
     [initialCatalogGeneration, views],
   );
   const catalogSnapshot = useControllerSnapshot(catalog);
+  const draft = useViewDraft({
+    starters: catalogSnapshot.starters,
+    defaultStarter: catalogSnapshot.defaultStarter,
+    initialName: host.state === "needs-view" ? host.defaultView : "dashboard",
+  });
 
   useEffect(() => {
     return () => catalog.dispose();
   }, [catalog]);
-
-  useEffect(() => {
-    if (
-      catalogSnapshot.starters.some(
-        (candidate) => candidate.id === starter && candidate.availability.available,
-      )
-    ) {
-      return;
-    }
-    setStarter(preferredStarterId(catalogSnapshot.starters, catalogSnapshot.defaultStarter));
-  }, [catalogSnapshot.defaultStarter, catalogSnapshot.starters, starter]);
 
   const openWorkspace = useCallback(
     async (view: string, activation?: ActiveViewRequest) => {
@@ -338,7 +331,7 @@ export const StudioHost = ({
     );
   }
 
-  const selectedStarter = catalogSnapshot.starters.find((candidate) => candidate.id === starter);
+  const selectedStarter = draft.selected;
   const createFirstView = async (event: FormEvent) => {
     event.preventDefault();
     if (opening) {
@@ -355,7 +348,9 @@ export const StudioHost = ({
       let view = createdView;
       if (!view) {
         try {
-          view = (await views.create(name, starter, catalogSnapshot.generation)).name;
+          // The notebook's first view always becomes its default.
+          const request = { ...draft.request(catalogSnapshot.generation), make_default: true };
+          view = (await views.create(request)).name;
         } catch (cause) {
           catalog.invalidate();
           await catalog.refresh();
@@ -381,19 +376,17 @@ export const StudioHost = ({
       >
         <FirstViewToolbar
           onOpen={() => void catalog.ensure()}
-          form={{
+          dialog={{
             busy: opening,
+            draft,
             message: message ? { state: "error", text: message } : undefined,
-            name,
             submitLabel: createdView ? `Open ${createdView}` : "Create view",
-            starter,
-            starterCatalog: catalogSnapshot.state,
             starters: catalogSnapshot.starters,
+            catalog: catalogSnapshot.state,
             viewRoot: catalogSnapshot.viewRoot,
             persistence: catalogSnapshot.persistence,
-            onNameChange: setName,
-            onRetryStarters: () => void catalog.ensure(),
-            onStarterChange: setStarter,
+            previewUrl: (starter) => starterPreviewUrl(host.urls.starterPreview, starter),
+            onRetryCatalog: () => void catalog.ensure(),
             onSubmit: (event) => void createFirstView(event),
           }}
         />

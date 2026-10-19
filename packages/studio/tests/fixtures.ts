@@ -1,7 +1,7 @@
 import type { Starter } from "@marimo-studio/protocol/provider-catalog";
 import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import type { ViewBuildState } from "@marimo-studio/protocol/view-project";
-import type { ViewList } from "@marimo-studio/protocol/views";
+import type { CreateViewRequest, ViewList } from "@marimo-studio/protocol/views";
 
 export const unbuiltView: ViewBuildState = {
   schema: 1,
@@ -21,6 +21,12 @@ export const starter: Starter = {
   summary: "One browser-native document.",
   documents: ["index.html"],
   availability: { available: true, version: null, reason: null, action: null },
+  format: null,
+  icon: null,
+  preview: null,
+  homepage: null,
+  requirement: null,
+  settings: [],
 };
 
 export const componentStarter: Starter = {
@@ -78,3 +84,18 @@ export const symbolicRuntimeFields: Pick<
   },
   runtimeBindings: { cellRefs: {} },
 };
+
+export const STARTER_PREVIEW_URL = "http://studio.test/_marimo-studio/starters/preview";
+
+export const createViewRequest = (
+  name: string,
+  starterId: string,
+  catalogGeneration: string,
+): CreateViewRequest => ({
+  catalog_generation: catalogGeneration,
+  name,
+  starter: starterId,
+  title: null,
+  settings: {},
+  make_default: false,
+});

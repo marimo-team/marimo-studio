@@ -156,7 +156,19 @@ Browser and Prepared runtimes keep opaque-origin isolation.
 ## Third-party view providers
 
 Declare `marimo-studio` as a dependency bounded to the minor line the provider
-has tested, such as `marimo-studio>=0.4,<0.5`. Test the provider against each
+has tested, such as `marimo-studio>=0.4,<0.5`.
+
+A provider written for Studio 0.3 needs two changes for the current release:
+
+- Rename the `__VIEW_HEADING_HTML__` and `__VIEW_HEADING_JSON__` markers in
+  packaged starter files to `__VIEW_TITLE_HTML__` and `__VIEW_TITLE_JSON__`.
+  An unrenamed marker stays in the created file as literal text.
+- Pass `title=` when a test builds a `StarterContext` directly, and read
+  `context.title` instead of deriving a heading from `context.view_name`.
+
+[Present a starter in the New view dialog](provider-api.md#present-a-starter-in-the-new-view-dialog)
+and [Offer starter settings](provider-api.md#offer-starter-settings) describe
+the optional fields that starters can now declare. Test the provider against each
 Studio minor release it supports with
 [`check_provider()`](provider-api.md#check-provider).
 

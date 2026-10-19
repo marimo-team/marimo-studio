@@ -1,3 +1,5 @@
+import type { CreateViewRequest } from "@marimo-studio/protocol/views";
+
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vite-plus/test";
@@ -6,7 +8,7 @@ import type { ViewRemote } from "../src/features/views/remote.ts";
 
 import { ViewController } from "../src/features/views/controller.ts";
 import { ViewMenu } from "../src/features/views/ViewMenu.tsx";
-import { starter, viewGeneration, viewList } from "./fixtures.ts";
+import { STARTER_PREVIEW_URL, starter, viewGeneration, viewList } from "./fixtures.ts";
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -36,7 +38,7 @@ it("keeps creation and removal directly available in the switcher", async () => 
   );
   await controller.refreshInventory();
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   expect(screen.getByLabelText("Switch view: dashboard")).toHaveTextContent("dashboard");
   await user.click(screen.getByLabelText(/^Switch view:/));
@@ -69,7 +71,7 @@ it("closes immediately while a selected view loads and can reopen on its pending
   );
   await controller.refreshInventory();
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
   const menu = screen.getByLabelText(/^Switch view:/).closest("details");
   expect(menu).not.toBeNull();
 
@@ -117,7 +119,7 @@ it.each([
     );
     await controller.refreshInventory();
     const user = userEvent.setup();
-    render(<ViewMenu controller={controller} />);
+    render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
     const menu = screen.getByLabelText(/^Switch view:/).closest("details");
 
     await user.click(screen.getByLabelText(/^Switch view:/));
@@ -131,7 +133,7 @@ it.each([
   },
 );
 
-it("keeps a newer create panel open when an earlier view selection settles", async () => {
+it("keeps a newer New view dialog open when an earlier view selection settles", async () => {
   const selected = deferred<boolean>();
   const cancelSelection = vi.fn();
   const remote: ViewRemote = {
@@ -151,7 +153,7 @@ it("keeps a newer create panel open when an earlier view selection settles", asy
   );
   await controller.refreshInventory();
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "report" }));
@@ -159,8 +161,8 @@ it("keeps a newer create panel open when an earlier view selection settles", asy
   await user.click(screen.getByRole("button", { name: "New view" }));
   selected.resolve(true);
 
-  await vi.waitFor(() => expect(screen.getByLabelText("New view")).toBeVisible());
-  expect(screen.getByLabelText(/^Switch view:/).closest("details")?.open).toBe(true);
+  await vi.waitFor(() => expect(screen.getByLabelText("Name")).toBeVisible());
+  expect(screen.getByRole("dialog", { name: "New view" })).toHaveAttribute("open");
   expect(cancelSelection).toHaveBeenCalledTimes(1);
   controller.dispose();
 });
@@ -185,7 +187,7 @@ it("keeps direct removal open when an earlier view selection settles", async () 
   );
   await controller.refreshInventory();
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "report" }));
@@ -220,30 +222,32 @@ it.each(["success", "failure"] as const)(
     );
     await controller.refreshInventory();
     const user = userEvent.setup();
-    render(<ViewMenu controller={controller} />);
+    render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
     const menu = screen.getByLabelText(/^Switch view:/).closest("details");
     expect(menu).not.toBeNull();
     await user.click(screen.getByLabelText(/^Switch view:/));
     await user.click(screen.getByRole("button", { name: "New view" }));
-    await user.type(screen.getByLabelText("New view"), "created");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.type(screen.getByLabelText("Name"), "created");
+    await user.click(screen.getByRole("button", { name: "Create view" }));
     expect(await screen.findByRole("button", { name: "Creating…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     expect(screen.getByLabelText(/^Switch view:/)).toHaveAttribute("aria-disabled", "true");
 
+    const dialog = screen.getByRole("dialog", { name: "New view" });
     await user.click(screen.getByLabelText(/^Switch view:/));
-    expect(menu?.open).toBe(true);
+    expect(menu?.open).toBe(false);
+    expect(dialog).toHaveAttribute("open");
 
     if (outcome === "success") {
       created.resolve({
         schema: 1,
         name: "created",
       });
-      await vi.waitFor(() => expect(menu?.open).toBe(false));
+      await vi.waitFor(() => expect(dialog).not.toHaveAttribute("open"));
     } else {
       created.reject(new Error("create failed"));
       expect(await screen.findByRole("alert")).toHaveTextContent("create failed");
-      expect(menu?.open).toBe(true);
+      expect(dialog).toHaveAttribute("open");
       expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
     }
     controller.dispose();
@@ -271,7 +275,7 @@ it.each(["success", "failure"] as const)(
     );
     await controller.refreshInventory();
     const user = userEvent.setup();
-    render(<ViewMenu controller={controller} />);
+    render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
     const menu = screen.getByLabelText(/^Switch view:/).closest("details");
     expect(menu).not.toBeNull();
     await user.click(screen.getByLabelText(/^Switch view:/));
@@ -326,7 +330,7 @@ it.each([
   async ({ name, opened, rejected, role, remains }) => {
     const remote: ViewRemote = {
       list: vi.fn(async () => viewList(["dashboard"])),
-      create: vi.fn(async (viewName: string) => {
+      create: vi.fn(async ({ name: viewName }: CreateViewRequest) => {
         if (rejected) {
           throw new Error(`A view named '${viewName}' already exists.`);
         }
@@ -346,15 +350,15 @@ it.each([
     );
     await controller.refreshInventory();
     const user = userEvent.setup();
-    render(<ViewMenu controller={controller} />);
+    render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
     await user.click(screen.getByLabelText(/^Switch view:/));
     await user.click(screen.getByRole("button", { name: "New view" }));
-    await user.type(screen.getByRole("textbox", { name: "New view" }), name);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.type(screen.getByRole("textbox", { name: "Name" }), name);
+    await user.click(screen.getByRole("button", { name: "Create view" }));
     const notice = await screen.findByRole(role);
     expect(notice).toBeVisible();
 
-    await user.type(screen.getByRole("textbox", { name: "New view" }), "-2");
+    await user.type(screen.getByRole("textbox", { name: "Name" }), "-2");
 
     if (remains) {
       expect(notice).toBeVisible();

@@ -89,6 +89,7 @@ class DenoSvelteProvider:
         title="Svelte",
         summary="Builds a Svelte project with the installed Deno toolchain.",
         options=_PROJECT.options,
+        requirement="marimo-studio[deno]",
     )
 
     def availability(self) -> ProviderAvailability:

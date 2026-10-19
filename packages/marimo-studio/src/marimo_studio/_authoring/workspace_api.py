@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeVar
@@ -26,7 +26,7 @@ from marimo_studio._notebook.records import (
 )
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
-from marimo_studio._views.records import Starter, StudioOverview
+from marimo_studio._views.records import Starter, StudioOverview, ViewChoices
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import discover_studio_definition
 from marimo_studio._workspace.generation import (
@@ -169,12 +169,22 @@ class Workspace:
         name: str,
         *,
         starter: str | Starter | None = None,
+        title: str | None = None,
+        settings: Mapping[str, str | bool] | None = None,
+        make_default: bool = False,
     ) -> View:
-        """Create one named view and return its handle."""
+        """Create one named view and return its handle.
+
+        ``title`` replaces the title derived from ``name``. ``settings`` sets
+        values for the starter's declared settings, and ``make_default`` serves
+        the view at the notebook's main route.
+        """
         result = await create_view_operation(
             self.notebook,
             name,
             starter=starter,
+            choices=ViewChoices(title=title, settings=dict(settings or {})),
+            make_default=make_default,
             expected_catalog_generation=self._catalog_generation,
         )
         assert result.workspace is not None

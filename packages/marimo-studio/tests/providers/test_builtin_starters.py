@@ -10,6 +10,7 @@ import marimo
 import pytest
 
 from marimo_studio import inspect_notebook
+from marimo_studio._views.catalog import starters as installed_starters
 from marimo_studio._views.starter_context import starter_context
 from marimo_studio.view_providers import (
     PackagedStarter,
@@ -323,3 +324,53 @@ if __name__ == "__main__":
     )
 
     assert f"<title>{label} · Dashboard</title>" in page
+
+
+@pytest.mark.parametrize(
+    "starter_id",
+    [
+        "marimo-studio/vanilla:default",
+        "marimo-studio/react:default",
+        "marimo-studio/react:reveal",
+        "marimo-studio/svelte:default",
+        "marimo-studio/notebook-kit:default",
+        "marimo-studio/quarto:default",
+        "marimo-studio/typst:default",
+        "marimo-studio/latex:default",
+    ],
+)
+def test_builtin_starters_describe_themselves_in_the_catalog(starter_id: str) -> None:
+    starter = next(item for item in installed_starters() if item.id == starter_id)
+
+    assert starter.format
+    assert starter.icon is not None and starter.icon.startswith("<svg")
+    assert starter.preview is not None
+    assert starter.homepage is not None and starter.homepage.startswith("https://")
+
+
+@pytest.mark.parametrize(
+    ("module", "settings", "document", "expected"),
+    [
+        ("typst", {"paper": "us-letter"}, "main.typ", 'paper: "us-letter",'),
+        ("latex", {"paper": "us-letter"}, "main.tex", r"\usepackage[letterpaper,"),
+        ("quarto", {"toc": True}, "index.qmd", "toc: true"),
+    ],
+)
+def test_builtin_starter_settings_shape_their_documents(
+    tmp_path: Path,
+    module: str,
+    settings: dict[str, object],
+    document: str,
+    expected: str,
+) -> None:
+    provider = importlib.import_module(
+        f"marimo_studio.view_providers._builtin.{module}"
+    ).provider
+    starter = provider.starters()[0]
+
+    plan = provider.create(
+        starter,
+        provider_starter_context(tmp_path, starter=starter, settings=settings),
+    )
+
+    assert expected in plan.files[PurePosixPath(document)].decode()

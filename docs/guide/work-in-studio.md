@@ -99,9 +99,18 @@ its place.
 | -------------------- | ----------------------------------- | --------------------------------------------------------------- |
 | Create a view        | **New view**, then choose a starter | `marimo-studio view create report --target analysis.py`         |
 | Switch views         | Pick one in the view menu           |                                                                 |
-| Set the default view |                                     | `marimo-studio view default report --target analysis.py`        |
+| Set the default view | **Default view** when you create it | `marimo-studio view default report --target analysis.py`        |
 | Rename a view        |                                     | `marimo-studio view rename report summary --target analysis.py` |
 | Remove a view        | The remove action beside its name   | `marimo-studio view remove report --target analysis.py`         |
+
+The **New view** dialog lists the installed starters by package, each with its
+technology's mark and what it makes. The selected starter shows a preview of
+the view it creates, its website, the files it writes, and what it needs when
+its provider is unavailable. **Settings** set the view's title, whether it
+becomes the default view, and the options the starter offers, such as the
+paper size of a Typst report. The info button beside each setting explains it.
+`marimo-studio view create` takes the same choices as `--title`,
+`--setting KEY=VALUE`, and `--make-default`.
 
 The default view opens at `/` in `marimo run`, and a view named `report` opens
 at `/report/`. Studio records the default in the notebook's configuration:

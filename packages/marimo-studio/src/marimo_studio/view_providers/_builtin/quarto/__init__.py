@@ -43,6 +43,7 @@ from marimo_studio.view_providers import (
     project_files,
 )
 from marimo_studio.view_providers._builtin.quarto._render import (
+    QUARTO_MIN_VERSION,
     build_quarto,
     quarto_availability,
 )
@@ -162,6 +163,7 @@ class QuartoProvider:
         title="Quarto",
         summary="Renders a Quarto document with live notebook results.",
         options=frozenset({"entrypoint"}),
+        requirement=f"Quarto {QUARTO_MIN_VERSION}+",
     )
 
     def availability(self) -> ProviderAvailability:

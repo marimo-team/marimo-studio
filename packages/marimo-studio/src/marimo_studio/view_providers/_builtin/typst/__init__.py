@@ -270,6 +270,7 @@ class TypstProvider:
         title="Typst",
         summary="Renders a Typst document to PDF with live notebook values.",
         options=frozenset({"entrypoint"}),
+        requirement="marimo-studio[typst]",
     )
 
     def availability(self) -> ProviderAvailability:

@@ -6,7 +6,7 @@ import type { ViewRemote } from "../src/features/views/remote.ts";
 
 import { ViewController } from "../src/features/views/controller.ts";
 import { ViewMenu } from "../src/features/views/ViewMenu.tsx";
-import { starter, componentStarter, viewList } from "./fixtures.ts";
+import { STARTER_PREVIEW_URL, componentStarter, starter, viewList } from "./fixtures.ts";
 
 it("recovers the starter catalog after a failed Create refresh", async () => {
   const list = vi
@@ -27,7 +27,7 @@ it("recovers the starter catalog after a failed Create refresh", async () => {
     vi.fn(),
   );
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
@@ -44,15 +44,16 @@ it("recovers the starter catalog after a failed Create refresh", async () => {
   controller.dispose();
 });
 
-it("reveals selected starter files on demand and keeps recovery actions local", async () => {
+it("shows an unavailable starter's recovery and keeps Create disabled", async () => {
   const unavailable = {
     ...componentStarter,
     documents: ["src/App.tsx", "src/theme.css"],
+    requirement: "Deno 2.9+",
     availability: {
       available: false,
       version: null,
       reason: "Deno is unavailable.",
-      action: "Install Deno to use React.",
+      action: "Install Deno with `pixi global install deno`.",
     },
   };
   const remote: ViewRemote = {
@@ -71,45 +72,19 @@ it("reveals selected starter files on demand and keeps recovery actions local", 
     starter.id,
   );
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
+  const option = screen.getByRole("radio", { name: /Component project/ });
+  expect(option.closest("label")).toHaveTextContent("Needs Deno 2.9+");
+  await user.click(option);
 
-  const react = screen.getByRole("radio", { name: /Component project/ }).closest("label");
-  expect(react).toHaveTextContent("Install Deno to use React.");
-  const details = screen.getByText("Files created").closest("details");
-  expect(details?.open).toBe(false);
-  await user.click(screen.getByText("Files created"));
-  expect(details?.open).toBe(true);
-  expect(details).toHaveTextContent("index.html");
-  controller.dispose();
-});
-
-it("keeps a single-distribution starter catalog flat", async () => {
-  const remote: ViewRemote = {
-    list: vi.fn(async () => viewList(["dashboard"])),
-    create: vi.fn(),
-    remove: vi.fn(),
-  };
-  const controller = new ViewController(
-    "dashboard",
-    ["dashboard"],
-    remote,
-    vi.fn(async () => true),
-    vi.fn(async () => true),
-    vi.fn(),
-    [starter],
-    starter.id,
-  );
-  const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
-
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  await user.click(screen.getByRole("button", { name: "New view" }));
-
-  expect(screen.queryByRole("group", { name: "From marimo-studio" })).not.toBeInTheDocument();
-  expect(screen.getByRole("radio", { name: /HTML/ })).toBeChecked();
+  const details = screen.getByRole("region", { name: "Component project" });
+  expect(details).toHaveTextContent("Deno is unavailable.");
+  expect(within(details).getByText("pixi global install deno").tagName).toBe("CODE");
+  expect(details).toHaveTextContent("src/App.tsx");
+  expect(screen.getByRole("button", { name: "Create view" })).toBeDisabled();
   controller.dispose();
 });
 
@@ -130,13 +105,13 @@ it("groups starter choices by registering distribution", async () => {
     starter.id,
   );
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
 
-  const acme = screen.getByRole("group", { name: "From acme-views" });
-  const studio = screen.getByRole("group", { name: "From marimo-studio" });
+  const acme = screen.getByRole("group", { name: "acme-views" });
+  const studio = screen.getByRole("group", { name: "marimo-studio" });
   expect(within(acme).getByRole("radio", { name: /Component project/ })).toBeInTheDocument();
   expect(within(studio).getByRole("radio", { name: /HTML/ })).toBeChecked();
   controller.dispose();
@@ -157,19 +132,17 @@ it("shows the folder where a new view's files are created", async () => {
     vi.fn(),
   );
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
   await screen.findByRole("radio", { name: /HTML/ });
-  await user.click(screen.getByText("Files created"));
-  const files = screen.getByText("Files created").closest("details");
-  await user.type(screen.getByLabelText("New view"), "Briefing");
-  expect(files).not.toHaveTextContent("studio/analysis/Briefing/");
-  await user.clear(screen.getByLabelText("New view"));
-  await user.type(screen.getByLabelText("New view"), "briefing");
+  await user.type(screen.getByLabelText("Name"), "Briefing");
+  expect(screen.getByText("studio/analysis/…/")).toBeVisible();
+  await user.clear(screen.getByLabelText("Name"));
+  await user.type(screen.getByLabelText("Name"), "briefing");
 
-  expect(files).toHaveTextContent("studio/analysis/briefing/");
+  expect(screen.getByText("studio/analysis/briefing/")).toBeVisible();
   controller.dispose();
 });
 
@@ -193,13 +166,13 @@ it.each([
     vi.fn(),
   );
   const user = userEvent.setup();
-  render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} starterPreview={STARTER_PREVIEW_URL} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
   await screen.findByRole("radio", { name: /HTML/ });
 
-  const create = screen.getByRole("button", { name: "Create" });
+  const create = screen.getByRole("button", { name: "Create view" });
   expect(create).toHaveAccessibleDescription(warns ? expect.stringMatching(/\bsession\b/iu) : "");
   controller.dispose();
 });

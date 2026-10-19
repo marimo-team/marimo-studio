@@ -1,10 +1,10 @@
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import type { StudioHostBootstrap } from "@marimo-studio/protocol/studio-host";
 
+import { createViewRequestSchema } from "@marimo-studio/protocol/views";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vite-plus/test";
-import { z } from "zod";
 
 import { StudioHost } from "../src/app/StudioHost.tsx";
 import { PreviewDeck } from "../src/features/preview/deck.ts";
@@ -35,6 +35,7 @@ const host: StudioHostBootstrap = {
     editor: studioUrl("/_marimo-studio/editor/?file=analysis.py"),
     events: studioUrl("/_marimo-studio/dev/events"),
     views: studioUrl("/_marimo-studio/views"),
+    starterPreview: studioUrl("/_marimo-studio/starters/preview"),
   },
 };
 
@@ -59,17 +60,10 @@ const ready: StudioBootstrap = {
     viewPrefix: studioUrl("/"),
     viewSupportPrefix: studioUrl("/_marimo-studio/views"),
     views: studioUrl("/_marimo-studio/views"),
+    starterPreview: studioUrl("/_marimo-studio/starters/preview"),
   },
   workspaceId: "workspace",
 };
-
-const createViewBodySchema = z
-  .object({
-    catalog_generation: z.string(),
-    name: z.string(),
-    starter: z.string(),
-  })
-  .strict();
 
 const viewGenerationConflictResponse = () =>
   Response.json(
@@ -246,7 +240,7 @@ it("retries first-view authoring options after a transient inventory failure", a
   expect(screen.getByRole("button", { name: "Create view" })).toBeDisabled();
   expect(editorFrame).not.toHaveAttribute("inert");
   expect(editorFrame).not.toHaveAttribute("aria-hidden");
-  expect(screen.getByRole("textbox", { name: "New view" })).toHaveFocus();
+  expect(screen.getByRole("textbox", { name: "Name" })).toHaveFocus();
   await user.click(screen.getByRole("button", { name: "Retry view choices" }));
 
   expect(await screen.findByRole("radio", { name: new RegExp(starter.title) })).toBeChecked();
@@ -363,7 +357,7 @@ it("refreshes first-view ownership after a create conflict", async () => {
         });
       }
       if (init?.method === "POST" && url.pathname.endsWith("/_marimo-studio/views")) {
-        const body = createViewBodySchema.parse(await new Request(url, init).json());
+        const body = createViewRequestSchema.parse(await new Request(url, init).json());
         submittedGenerations.push(body.catalog_generation);
         return viewGenerationConflictResponse();
       }
@@ -433,7 +427,7 @@ it("replaces an in-flight catalog retry after a create conflict", async () => {
         });
       }
       if (init?.method === "POST" && url.pathname.endsWith("/_marimo-studio/views")) {
-        const body = createViewBodySchema.parse(await new Request(url, init).json());
+        const body = createViewRequestSchema.parse(await new Request(url, init).json());
         submittedGenerations.push(body.catalog_generation);
         return viewGenerationConflictResponse();
       }
@@ -504,7 +498,7 @@ it("shows first-view starter documents and unavailable recovery", async () => {
 
   await userEvent.click(screen.getByText("Add view", { exact: true }));
   expect(await screen.findByText("Install Deno to use React.")).toBeVisible();
-  expect(screen.getByRole("radio")).toBeDisabled();
+  expect(screen.getByRole("radio", { name: /Component project/ })).toBeChecked();
   expect(screen.getByRole("button", { name: "Create view" })).toBeDisabled();
 });
 
@@ -559,9 +553,10 @@ it("opens an already-created first view after a bootstrap retry", async () => {
       }
       if (init?.method === "POST" && url.pathname.endsWith("/_marimo-studio/views")) {
         creates += 1;
-        const body = createViewBodySchema.parse(await new Request(url, init).json());
+        const body = createViewRequestSchema.parse(await new Request(url, init).json());
         expect(body.catalog_generation).toBe(host.generation);
         expect(body.name).toBe("dashboard");
+        expect(body.make_default).toBe(true);
         createdStarter = body.starter;
         return Response.json(
           {

@@ -25,6 +25,12 @@ export const starter: Starter = {
     reason: null,
     action: null,
   },
+  format: null,
+  icon: null,
+  preview: null,
+  homepage: null,
+  requirement: null,
+  settings: [],
 };
 
 export const componentStarter: Starter = {

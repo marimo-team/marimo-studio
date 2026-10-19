@@ -47,7 +47,7 @@ from marimo_studio._server.studio.retirement import (
 from marimo_studio._views.api import create_view
 from marimo_studio._views.catalog import starters
 from marimo_studio._views.inspection import view_project_state
-from marimo_studio._views.records import ViewDocument
+from marimo_studio._views.records import ViewChoices, ViewDocument
 from marimo_studio._views.sources import (
     SOURCE_DOCUMENT_MAX_BYTES,
     PreparedSourceWrite,
@@ -124,19 +124,43 @@ async def create_view_response(
         )
     except JSONBodyError as error:
         return json_body_error_response(error)
-    fields = {"catalog_generation", "name", "starter"}
+    fields = {
+        "catalog_generation",
+        "name",
+        "starter",
+        "title",
+        "settings",
+        "make_default",
+    }
     if not isinstance(body, dict) or set(body) != fields:
         return _invalid_request(
             "invalid-view-create-request",
-            "View creation requires name, starter, and catalog generation.",
+            "View creation requires name, starter, title, settings, make_default, "
+            "and catalog generation.",
         )
     name = body.get("name")
     starter = body.get("starter")
+    title = body.get("title")
+    settings = body.get("settings")
+    make_default = body.get("make_default")
     catalog_generation = _owner_generation(body.get("catalog_generation"))
     if not isinstance(name, str):
         return _invalid_request("invalid-view-name", "name must be a string.")
     if not isinstance(starter, str):
         return _invalid_request("invalid-view-starter", "starter must be a string.")
+    if title is not None and not isinstance(title, str):
+        return _invalid_request("invalid-view-title", "title must be a string or null.")
+    if not isinstance(settings, dict) or not all(
+        isinstance(value, (str, bool)) for value in settings.values()
+    ):
+        return _invalid_request(
+            "invalid-view-settings",
+            "settings must map setting keys to text or boolean values.",
+        )
+    if type(make_default) is not bool:
+        return _invalid_request(
+            "invalid-view-create-request", "make_default must be a boolean."
+        )
     if catalog_generation is None:
         return _invalid_request(
             "invalid-view-create-request",
@@ -151,6 +175,8 @@ async def create_view_response(
                 notebook,
                 name,
                 starter=starter,
+                choices=ViewChoices(title=title, settings=settings),
+                make_default=make_default,
                 expected_catalog_generation=current_catalog_generation,
             )
         )

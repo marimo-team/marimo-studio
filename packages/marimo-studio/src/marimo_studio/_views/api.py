@@ -8,7 +8,12 @@ from marimo_studio._composition import create_notebook_write_lock
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._notebook.records import CellSelector
 from marimo_studio._views.create import prepare_view as _prepare_view
-from marimo_studio._views.records import Starter, ViewSetupResult
+from marimo_studio._views.records import (
+    DEFAULT_VIEW_CHOICES,
+    Starter,
+    ViewChoices,
+    ViewSetupResult,
+)
 from marimo_studio._views.resolve import resolve_studio as resolve_studio
 from marimo_studio._workspace.bindings import (
     bind_cell as _bind_cell,
@@ -63,14 +68,22 @@ def create_view(
     name: str | None = None,
     *,
     starter: str | Starter | None = None,
+    choices: ViewChoices = DEFAULT_VIEW_CHOICES,
+    make_default: bool = False,
     dry_run: bool = False,
     expected_catalog_generation: str | None = None,
 ) -> ViewSetupResult:
-    """Create one new view and reject an existing name."""
+    """Create one new view and reject an existing name.
+
+    ``make_default`` also serves the new view at the notebook's main route,
+    in the same commit. The first view of a notebook always becomes its default.
+    """
     return _prepare_view(
         notebook,
         name,
         starter=starter,
+        choices=choices,
+        make_default=make_default,
         inspect_notebook=inspect_notebook,
         dry_run=dry_run,
         fail_if_exists=True,

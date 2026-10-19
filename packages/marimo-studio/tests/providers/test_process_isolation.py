@@ -811,6 +811,9 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
                 "catalog_generation": studio.catalog_generation,
                 "name": "cancelled",
                 "starter": "test-process/create-tree:default",
+                "title": None,
+                "settings": {},
+                "make_default": False,
             }
         ).encode()
         sent = False

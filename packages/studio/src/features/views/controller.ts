@@ -1,7 +1,12 @@
 import type { ViewNavigationIntent } from "@marimo-studio/protocol/preview-messages";
 import type { Starter } from "@marimo-studio/protocol/provider-catalog";
 
-import { type HostPersistence, type ViewList, viewNameError } from "@marimo-studio/protocol/views";
+import {
+  type CreateViewRequest,
+  type HostPersistence,
+  type ViewList,
+  viewNameError,
+} from "@marimo-studio/protocol/views";
 
 import type { StarterCatalogState } from "./catalog.ts";
 import type { ViewRemote } from "./remote.ts";
@@ -187,7 +192,8 @@ export class ViewController {
     return true;
   }
 
-  async create(name: string, starter: string, catalogGeneration: string): Promise<boolean> {
+  async create(request: CreateViewRequest): Promise<boolean> {
+    const { name, starter, catalog_generation: catalogGeneration } = request;
     if (this.disposed || this.snapshot.creating || this.snapshot.deleting || !catalogGeneration) {
       return false;
     }
@@ -235,13 +241,16 @@ export class ViewController {
         });
         return false;
       }
-      const created = await this.remote.create(name, starter, catalogGeneration);
+      const created = await this.remote.create(request);
       if (!this.isCurrentMutation(generation)) {
         return false;
       }
-      if (!this.snapshot.views.includes(created.name)) {
-        this.update({ views: [...this.snapshot.views, created.name].sort() });
-      }
+      this.update({
+        views: this.snapshot.views.includes(created.name)
+          ? this.snapshot.views
+          : [...this.snapshot.views, created.name].sort(),
+        defaultView: request.make_default ? created.name : this.snapshot.defaultView,
+      });
       if (await this.selectWithinMutation(created.name, "authoring", undefined, generation)) {
         return true;
       }

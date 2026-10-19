@@ -484,8 +484,8 @@ test("keeps relative navigation public across direct view reloads", async ({
   await page.getByLabel("Switch view").click();
   await page.getByRole("button", { name: "New view" }).click();
   await page.getByRole("radio", { name: /HTML document/ }).check();
-  await page.getByLabel("New view").fill("qa-view");
-  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("qa-view");
+  await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/qa-view\/\?/);
   await waitForPreview(page);
   const direct = await page.context().newPage();
@@ -563,8 +563,8 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
 
   await page.getByLabel("Switch view").click();
   await page.getByRole("button", { name: "New view" }).click();
-  await page.getByLabel("New view").fill("qa-view");
-  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("qa-view");
+  await page.getByRole("button", { name: "Create view", exact: true }).click();
   await expect(page.getByLabel("Switch view")).toContainText("qa-view", {
     timeout: 65_000,
   });
@@ -671,50 +671,48 @@ test("keeps a large view and starter catalog usable on mobile", async ({ page })
   await expect(page.getByRole("button", { name: "view-16", exact: true })).toBeAttached();
 
   await page.getByRole("button", { name: "New view" }).click();
-  const externalStarters = page.getByRole("group", {
-    name: "From marimo-studio-e2e-provider",
+  const dialog = page.getByRole("dialog", { name: "New view" });
+  const externalStarters = dialog.getByRole("group", {
+    name: "marimo-studio-e2e-provider",
     exact: true,
   });
-  const builtinStarters = page.getByRole("group", {
-    name: "From marimo-studio",
-    exact: true,
-  });
+  const builtinStarters = dialog.getByRole("group", { name: "marimo-studio", exact: true });
   await expect(externalStarters).toContainText("External report");
   await expect(externalStarters).toContainText("E2E web project");
   await expect(builtinStarters).toContainText("React");
   await expect(builtinStarters).toContainText("Svelte");
   await expect(builtinStarters).toContainText("HTML document");
-  const input = page.getByLabel("New view");
+  const input = dialog.getByLabel("Name", { exact: true });
   await expect(input).toBeFocused();
   await expect(input).toBeInViewport();
-  const bounds = await input.evaluate((element) => {
-    if (!(element instanceof HTMLInputElement) || !element.form) {
-      throw new Error("New view input has no form owner");
-    }
-    const rectangle = element.form.getBoundingClientRect();
+  const bounds = await dialog.evaluate((element) => {
+    const rectangle = element.getBoundingClientRect();
     return {
       left: rectangle.left,
       right: rectangle.right,
+      bottom: rectangle.bottom,
       scrollWidth: document.documentElement.scrollWidth,
       viewportWidth: globalThis.innerWidth,
+      viewportHeight: globalThis.innerHeight,
     };
   });
   expect(bounds.left).toBeGreaterThanOrEqual(0);
   expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight);
   expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.viewportWidth);
 
+  await dialog.getByRole("searchbox", { name: "Search starters" }).press("Tab");
+  const focusedStarter = dialog.locator('input[name="starter"]:focus');
+  await expect(focusedStarter).toBeChecked();
+  await focusedStarter.press("ArrowDown");
+  await expect(focusedStarter).toBeChecked();
+  const title = await focusedStarter.evaluate(
+    (element) => element.closest("label")?.querySelector("strong")?.textContent ?? "",
+  );
+  await expect(dialog.getByRole("heading", { level: 3 })).toHaveText(title);
+  await expect(focusedStarter.locator("..")).toBeInViewport();
   await input.press("Tab");
-  const radios = page.getByRole("radio");
-  await expect(radios.first()).toBeFocused();
-  await radios.first().press("ArrowUp");
-  await expect(radios.last()).toBeFocused();
-  await expect(radios.last()).toBeChecked();
-  await expect(radios.last().locator("..")).toBeInViewport();
-  await radios.last().press("Tab");
-  const details = page.getByText("Files created", { exact: true });
-  await expect(details).toBeFocused();
-  await details.press("Tab");
-  const cancel = page.getByRole("button", { name: "Cancel" });
+  const cancel = dialog.getByRole("button", { name: "Cancel" });
   await expect(cancel).toBeFocused();
   await expect(cancel).toBeInViewport();
 });

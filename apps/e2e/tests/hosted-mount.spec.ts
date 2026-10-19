@@ -189,7 +189,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     { width: 375, height: 812 },
   ]) {
     await page.setViewportSize(viewport);
-    await expect(page.getByRole("textbox", { name: "New view" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

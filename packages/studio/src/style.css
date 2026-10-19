@@ -3,6 +3,7 @@
 @import "./shared/ui/diagnostic.css";
 @import "./features/navigation/navigation.css";
 @import "./features/views/views.css";
+@import "./features/views/create-view-dialog.css";
 @import "./features/workspace/workspace.css";
 @import "./features/source-editor/source-editor.css";
 @import "./features/workspace/resizing.css";
