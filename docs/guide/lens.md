@@ -28,15 +28,28 @@ in the notebook or in the view.
 
 ## Set up Lens
 
-Install Lens in the notebook's Python environment, and restart a running
-notebook afterwards:
+Lens runs in the notebook's Python environment. For a notebook opened with
+`--sandbox`, add it to the script's dependencies, then stop the running edit
+command and start it again:
+
+```console
+uv add --script analysis.py "marimo-studio[lens]"
+uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
+```
+
+In a uv project, add it to the project and restart the notebook:
+
+```console
+uv add "marimo-studio[lens]"
+```
+
+In another activated virtual environment, install it there instead:
 
 ```console
 uv pip install "marimo-studio[lens]"
 ```
 
-For a sandboxed notebook, add `marimo-studio[lens]` to the script's
-dependencies instead. When the notebook creates no Lens of its own, marimo
+When the notebook creates no Lens of its own, marimo
 mounts one, and Notebook and Preview each show a Lens dock, the panel that
 lists your selections. Both docks share
 one Lens, so a selection made in a view reaches the same agent as a selection
