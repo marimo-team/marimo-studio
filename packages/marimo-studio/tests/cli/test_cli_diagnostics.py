@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from io import StringIO
@@ -797,3 +798,79 @@ def test_dependency_doctor_reports_a_missing_target_as_a_diagnostic(
     assert raised.value.code == 3
     assert event["code"] == "configuration-error"
     assert event["message"].startswith("Target does not exist:")
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="POSIX directory permissions bind regular users",
+)
+def test_view_create_in_a_read_only_directory_names_the_permission_failure(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    directory = notebook_path.parent
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--json",
+        ],
+    )
+    directory.chmod(0o555)
+    try:
+        with pytest.raises(SystemExit) as raised:
+            main()
+    finally:
+        directory.chmod(0o755)
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert "Permission denied" in event["message"]
+    assert event["details"]["hint"] == (
+        f"Make {directory} writable for the user running Studio."
+    )
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="POSIX directory permissions bind regular users",
+)
+def test_view_build_names_the_view_root_that_refuses_its_locks(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    setup = prepare_view(notebook_path)
+    view_root = setup.root.parent
+    shutil.rmtree(view_root / ".locks")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "view",
+            "build",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--json",
+        ],
+    )
+    view_root.chmod(0o555)
+    try:
+        with pytest.raises(SystemExit) as raised:
+            main()
+    finally:
+        view_root.chmod(0o755)
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert event["details"]["hint"] == (
+        f"Make {view_root} writable for the user running Studio."
+    )
+
