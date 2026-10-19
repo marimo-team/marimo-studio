@@ -99,13 +99,16 @@ def _starter_record(
 
 
 def starters(notebook: Path | None = None) -> tuple[Starter, ...]:
-    """Return every installed view starter, available for ``notebook``."""
+    """Return every installed view starter, available for ``notebook``.
+
+    Starters that can create a view in this environment come first.
+    """
     with notebook_tools(notebook):
         records = _starter_records()
     return tuple(
         sorted(
             (starter for starter, _provider, _provider_starter in records),
-            key=lambda item: item.id,
+            key=lambda item: (not item.availability.available, item.id),
         )
     )
 

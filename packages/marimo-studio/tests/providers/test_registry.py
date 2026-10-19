@@ -79,6 +79,31 @@ def test_catalog_probes_availability_concurrently_and_caches_starters(
     assert [provider.starter_calls for provider in providers] == [1, 1]
 
 
+def test_catalog_lists_available_starters_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    providers = (
+        ProviderStub("example/alpha", "default", available=False),
+        ProviderStub("example/beta", "default"),
+        ProviderStub("example/gamma", "default"),
+    )
+    registry = ProviderRegistry(
+        tuple(
+            candidate(name, provider)
+            for name, provider in zip(
+                ("alpha", "beta", "gamma"), providers, strict=True
+            )
+        )
+    )
+    monkeypatch.setattr(providers_module, "_REGISTRY", registry)
+
+    assert [starter.id for starter in catalog_module.starters()] == [
+        "test-beta/beta:default",
+        "test-gamma/gamma:default",
+        "test-alpha/alpha:default",
+    ]
+
+
 def test_exact_starter_resolves_only_its_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
