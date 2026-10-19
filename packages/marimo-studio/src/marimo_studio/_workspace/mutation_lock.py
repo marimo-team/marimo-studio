@@ -81,9 +81,20 @@ def _mutation_lock(
             except ConfigurationError:
                 raise
             except OSError as error:
-                raise ConfigurationError(
-                    f"Could not open view mutation lock: {lock_path}"
-                ) from error
+                failure = ConfigurationError(
+                    f"Could not open view mutation lock {lock_path}: "
+                    f"{error.strerror or type(error).__name__}"
+                )
+                if isinstance(error, PermissionError):
+                    # Opening the lock creates its missing parents, so the
+                    # nearest existing one is the directory that refused.
+                    refused = lock_path.parent
+                    while not refused.is_dir() and refused != boundary:
+                        refused = refused.parent
+                    failure.public_hint = (
+                        f"Make {refused} writable for the user running Studio."
+                    )
+                raise failure from error
             if not acquired:
                 yield False
                 return

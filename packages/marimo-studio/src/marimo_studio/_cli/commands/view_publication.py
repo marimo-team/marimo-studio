@@ -10,7 +10,11 @@ import click
 from marimo_studio._authoring.view import hold_publication, release_publication
 from marimo_studio._cli.diagnostics import json_option
 from marimo_studio._cli.help import ColoredCommand
-from marimo_studio._cli.options import target_option, view_name_argument
+from marimo_studio._cli.options import (
+    finite_timeout,
+    target_option,
+    view_name_argument,
+)
 from marimo_studio._cli.output import echo_json
 from marimo_studio._cli.targets import resolve_notebook
 from marimo_studio._views.publication_hold import (
@@ -41,6 +45,7 @@ def _hold_owner(
 @click.option(
     "--ttl",
     type=click.FloatRange(min=0, min_open=True, max=MAX_PUBLICATION_HOLD_SECONDS),
+    callback=finite_timeout,
     default=DEFAULT_PUBLICATION_HOLD_SECONDS,
     show_default=True,
     help="Expire the hold after this many seconds.",

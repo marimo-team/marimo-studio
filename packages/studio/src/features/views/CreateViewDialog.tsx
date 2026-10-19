@@ -1,6 +1,10 @@
 import type { Starter } from "@marimo-studio/protocol/provider-catalog";
 
-import { type HostPersistence, viewNameError } from "@marimo-studio/protocol/views";
+import {
+  type HostPersistence,
+  VIEW_NAME_MAX_BYTES,
+  viewNameError,
+} from "@marimo-studio/protocol/views";
 import { XIcon } from "lucide-react";
 import { type FormEvent, useEffect, useRef } from "react";
 
@@ -192,7 +196,7 @@ export const CreateViewDialog = ({
                   aria-describedby="studio-view-name-hint"
                   pattern={VIEW_NAME_PATTERN}
                   placeholder="executive-report"
-                  maxLength={240}
+                  maxLength={VIEW_NAME_MAX_BYTES}
                   required
                   disabled={busy}
                   value={draft.value.name}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from io import StringIO
@@ -711,3 +712,186 @@ def test_main_preserves_view_not_found_details(
         "view": "missing",
         "available_views": ["dashboard", "report"],
     }
+
+
+def test_status_without_configuration_names_the_create_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["marimo-studio", "status"])
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    assert raised.value.code == 3
+    assert (
+        "marimo-studio view create dashboard --target notebook.py"
+        in capsys.readouterr().err
+    )
+
+
+def test_unauthenticated_server_request_names_the_access_token_variable(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def unauthenticated(*_args: object, **_kwargs: object) -> str:
+        raise AgentRequestError(
+            "authentication-required",
+            "The Studio server requires authentication.",
+            status_code=401,
+        )
+
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view_delivery.preview_url", unauthenticated
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "view",
+            "preview",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--server",
+            "http://127.0.0.1:2718",
+            "--runtime",
+            "server",
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 5
+    assert event["code"] == "authentication-required"
+    assert "MARIMO_STUDIO_ACCESS_TOKEN" in event["details"]["hint"]
+
+
+def test_dependency_doctor_reports_a_missing_target_as_a_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "doctor",
+            "--dependencies",
+            "--target",
+            "missing.py",
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert event["code"] == "configuration-error"
+    assert event["message"].startswith("Target does not exist:")
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="POSIX directory permissions bind regular users",
+)
+def test_view_create_in_a_read_only_directory_names_the_permission_failure(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    directory = notebook_path.parent
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--json",
+        ],
+    )
+    directory.chmod(0o555)
+    try:
+        with pytest.raises(SystemExit) as raised:
+            main()
+    finally:
+        directory.chmod(0o755)
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert "Permission denied" in event["message"]
+    assert event["details"]["hint"] == (
+        f"Make {directory} writable for the user running Studio."
+    )
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="POSIX directory permissions bind regular users",
+)
+def test_view_build_names_the_view_root_that_refuses_its_locks(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    setup = prepare_view(notebook_path)
+    view_root = setup.root.parent
+    shutil.rmtree(view_root / ".locks")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "marimo-studio",
+            "view",
+            "build",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--json",
+        ],
+    )
+    view_root.chmod(0o555)
+    try:
+        with pytest.raises(SystemExit) as raised:
+            main()
+    finally:
+        view_root.chmod(0o755)
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert event["details"]["hint"] == (
+        f"Make {view_root} writable for the user running Studio."
+    )
+
+
+def test_doctor_rejects_a_project_whose_notebook_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.marimo-studio]\nnotebook = "missing.py"\ndefault = "dashboard"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["marimo-studio", "doctor", "--target", str(tmp_path), "--json"],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    event = json.loads(capsys.readouterr().err)
+    assert raised.value.code == 3
+    assert event["message"].startswith("Configured notebook does not exist:")

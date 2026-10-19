@@ -280,8 +280,13 @@ def _load_config(target: Path) -> tuple[Path, Mapping[str, Any]]:
             f"--target {target}` to create one."
         )
     start = target if target.is_dir() else target.parent
-    inline = _notebook_configured_in(start)
+    # The nearest configured notebook can sit above the start, as for a command
+    # run inside its view projects, and still conflicts with project
+    # configuration found at its level or above.
+    inline = None
     for directory in _directories(start):
+        if inline is None:
+            inline = _notebook_configured_in(directory)
         found = _config_in(directory)
         if found is None:
             continue
@@ -301,7 +306,8 @@ def _load_config(target: Path) -> tuple[Path, Mapping[str, Any]]:
     if inline is not None:
         return inline
     raise ConfigurationError(
-        f"No Studio configuration found in {start}. Pass a notebook path to create one."
+        f"No Studio configuration found in {start}. Run `marimo-studio view create "
+        "dashboard --target notebook.py` with your notebook to create one."
     )
 
 

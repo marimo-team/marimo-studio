@@ -22,7 +22,9 @@ PYPROJECT_NAME = "pyproject.toml"
 ALIAS_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 VIEW_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 RUNTIME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
-VIEW_NAME_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".artifacts.lock")
+# `.publication.json` is the longest suffix of the per-view control files in
+# `.locks`, so every control file name of an accepted view fits one component.
+VIEW_NAME_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".publication.json")
 RESERVED_VIEW_NAMES = frozenset(
     {
         "_marimo-studio",

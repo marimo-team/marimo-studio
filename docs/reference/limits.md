@@ -13,7 +13,7 @@ publication or mutation commit unless the table names a browser boundary.
 
 | Boundary                                              |           Limit | Failure or diagnostic                             |
 | ----------------------------------------------------- | --------------: | ------------------------------------------------- |
-| View name                                             | 240 UTF-8 bytes | `configuration-error` or an inline creation error |
+| View name                                             | 238 UTF-8 bytes | `configuration-error` or an inline creation error |
 | Source document                                       |          64 MiB | `source-too-large`                                |
 | Source encoding                                       |           UTF-8 | `invalid-source-encoding`                         |
 | Source documents returned by one provider inspection  |             256 | Provider conformance error                        |

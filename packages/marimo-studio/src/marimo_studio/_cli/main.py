@@ -92,6 +92,12 @@ def _hint(error: MarimoStudioError, command: str | None) -> str:
         )
     if error.code in _GENERATION_CONFLICTS:
         return "Run the command again."
+    if error.code == "authentication-required" and not error.public_hint:
+        return (
+            "Set MARIMO_STUDIO_ACCESS_TOKEN to the server's access token, the "
+            "access_token value in the URL that marimo printed, then run the "
+            "command again."
+        )
     return error.public_hint
 
 

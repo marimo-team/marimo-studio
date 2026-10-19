@@ -25,12 +25,16 @@ def load_studio_target(target: str | Path | None) -> StudioWorkspace:
 
 def resolve_notebook(target: str | Path | None) -> Path:
     """Resolve a notebook path, project path, or implicit current configuration."""
-    if target is None:
-        return load_studio_definition(".").notebook
-    path = Path(target).expanduser()
-    if path.is_dir() or path.suffix == ".toml":
-        return load_studio_definition(path).notebook
-    return path.resolve()
+    path = Path(target or ".").expanduser()
+    if target is None or path.is_dir() or path.suffix == ".toml":
+        notebook = load_studio_definition(path).notebook
+        if not notebook.is_file():
+            raise ConfigurationError(f"Configured notebook does not exist: {notebook}")
+        return notebook
+    notebook = path.resolve()
+    if not notebook.exists():
+        raise ConfigurationError(f"Target does not exist: {notebook}")
+    return notebook
 
 
 def resolve_environment_target(
