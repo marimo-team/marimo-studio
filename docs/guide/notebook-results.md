@@ -217,9 +217,13 @@ React and Svelte providers find the targets a view uses while they build it.
 Literal names and finite arrays work:
 
 ```tsx
-{
-  ["summary", "details"].map((name) => <marimo-cell key={name} name={name} />);
-}
+export const Results = () => (
+  <section>
+    {["summary", "details"].map((name) => (
+      <marimo-cell key={name} name={name} />
+    ))}
+  </section>
+);
 ```
 
 When page state can pick any notebook target, declare that on the host:
