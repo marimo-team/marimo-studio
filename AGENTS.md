@@ -102,6 +102,11 @@ user behavior
 - Test through the API, command, file, protocol, browser state, or package
   boundary that consumers use. Add cases for a distinct runtime, platform,
   input, lifecycle phase, failure, security boundary, or compatibility promise.
+- Serve a live notebook with `make serve NOTEBOOK=path [ARGS=--sandbox]`, which
+  runs `marimo edit` through Portless at a named `.localhost` URL. Never pass a
+  fixed `--port`: concurrent agents, worktrees, and the end-to-end suite share
+  this machine. See
+  [Serve a notebook for live acceptance](development_docs/README.md#serve-a-notebook-for-live-acceptance).
 - Use observable readiness and owned barriers for lifecycle tests. Keep test
   resources explicit, make browser diagnostics fail closed, and avoid shipped
   routes or public records that exist to coordinate tests. Preserve the

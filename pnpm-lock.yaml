@@ -162,6 +162,9 @@ importers:
       picomatch:
         specifier: 'catalog:'
         version: 2.3.1
+      portless:
+        specifier: 'catalog:'
+        version: 0.15.6
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

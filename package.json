@@ -9,6 +9,7 @@
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
     "picomatch": "catalog:",
+    "portless": "catalog:",
     "typescript": "catalog:",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
     "vite-plus": "catalog:",

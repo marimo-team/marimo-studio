@@ -256,6 +256,32 @@ Add the matching boundary checks:
 | Generated browser assets or distribution contents                                 | `make package`                                               |
 | Public documentation                                                              | `make docs-build` and rendered desktop and narrow inspection |
 
+### Serve a notebook for live acceptance
+
+Serve a notebook in the Studio editor with the checkout's Studio and system
+tools:
+
+```console
+make serve NOTEBOOK=examples/athletes.py ARGS=--sandbox
+```
+
+The target builds the browser assets, then runs `marimo edit` through
+[Portless](https://portless.sh/), which assigns the server an available port
+and routes `https://athletes.marimo-studio.localhost/` to it. The notebook's
+stem names the URL, and a linked Git worktree adds its branch as a prefix, so
+servers for different notebooks and worktrees run side by side. `ARGS` passes
+options to `marimo edit`, such as `--sandbox` for a notebook whose PEP 723
+dependencies the workspace environment lacks. Open the URL that the target
+prints, or list running servers with `pnpm exec portless list`.
+
+Start every manual or agent-driven server this way, and leave `--port` to
+Portless. A fixed port collides with the end-to-end suite, other worktrees, and
+other agents on the same machine. The end-to-end suite allocates its own
+ephemeral ports per worker. Without a terminal, such as from a coding agent,
+the target reuses a proxy already listening on port 443 or starts one on port
+1355, and the printed URL includes `:1355`, as for
+[`make docs-serve`](documentation.md).
+
 `make test` runs the complete Python profile for the current platform and the
 frontend package tests. `make check` adds formatting, linting, architecture,
 provider-source, and type checks. Its shell-script lint runs
