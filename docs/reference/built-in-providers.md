@@ -51,7 +51,7 @@ update.
 
 The Vanilla provider publishes browser-native HTML with directly referenced
 local CSS and JavaScript. The default starter creates these provider-owned
-files, and Studio adds `view.toml` to the project and Source:
+files, and Studio adds `view.toml` to the project:
 
 ```text
 AGENTS.md

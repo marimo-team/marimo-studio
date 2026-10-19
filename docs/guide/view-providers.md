@@ -103,7 +103,7 @@ changes.
 | `index.html` | the provider, at creation   | yes                 | yes         |
 | `AGENTS.md`  | the provider, at creation   | yes                 | no          |
 | `DESIGN.md`  | the user or an agent, later | yes, once it exists | no          |
-| `view.toml`  | Studio                      | yes                 | yes         |
+| `view.toml`  | Studio                      | CLI and Python only | yes         |
 
 `AGENTS.md` tells a coding agent which file holds the page, what the
 `<marimo-cell>` hosts mean, and where decisions belong. The `marimo-studio`

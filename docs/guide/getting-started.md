@@ -5,8 +5,9 @@ description: Open a marimo notebook with Studio, create an HTML view, find its f
 
 # Getting started
 
-You need Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), and a
-[marimo](https://marimo.io/) notebook such as `analysis.py`. This page creates
+You need Python 3.10 through 3.14 and [uv](https://docs.astral.sh/uv/). This
+page works with a [marimo](https://marimo.io/) notebook named `analysis.py`,
+which the first command creates when it does not exist yet. It creates
 a [view](../reference/glossary.md#view) named `dashboard`, an HTML page, and
 places one notebook result in it.
 
@@ -19,6 +20,11 @@ uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
 `--sandbox` installs the notebook's declared dependencies with uv. It manages
 packages and does not restrict what notebook code can access. `--watch`
 reloads the notebook when another editor or a coding agent changes the file.
+
+Without a notebook yet, the command creates an empty `analysis.py`. Type
+`import marimo as mo` in the first cell, add a cell with
+`mo.md("Hello from marimo")`, run both, and save. A view needs at least one
+saved cell.
 
 ## Create a view
 

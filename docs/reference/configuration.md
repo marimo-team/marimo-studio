@@ -441,10 +441,12 @@ The next build recreates it from saved source.
 ## Cell aliases
 
 Native marimo cell names resolve directly. Give an existing anonymous cell a
-stable name when view source needs to reference it:
+stable name when view source needs to reference it. `--cell` takes the
+zero-based index, name, or ref that `notebook inspect` prints:
 
 ```console
-marimo-studio notebook bind summary --target analysis.py --cell 12
+marimo-studio notebook inspect --target analysis.py
+marimo-studio notebook bind summary --target analysis.py --cell 1
 ```
 
 Studio stores aliases under `[tool.marimo-studio.cells]` and makes them

@@ -345,8 +345,8 @@ produce a JSON string literal that is safe inside a `<script>` element, and
 
 Studio watches the Source documents and the build inputs. The build inputs
 also decide the project revision and the contents of the build snapshot.
-Studio adds `view.toml` to the build inputs and lists `view.toml`, `AGENTS.md`,
-and `DESIGN.md` in Source. Leave a Source document out of the build inputs
+Studio adds `view.toml` to the build inputs and lists `AGENTS.md` and
+`DESIGN.md` in Source when they exist. Leave a Source document out of the build inputs
 when editing it should skip a rebuild.
 
 For a project whose build inputs follow its directory layout,

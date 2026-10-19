@@ -91,7 +91,7 @@ format and the browser reader.
 Serve the folder over HTTP and keep its relative paths intact:
 
 ```console
-python -m http.server --bind 127.0.0.1 --directory dist/dashboard
+uv run --no-project python -m http.server --bind 127.0.0.1 --directory dist/dashboard
 ```
 
 The site is relocatable but not offline. Remote scripts, fonts, maps, and data
@@ -191,5 +191,5 @@ To publish the notebook as it ran, with its code and outputs, use marimo's own
 export:
 
 ```console
-marimo export html analysis.py --sandbox --output dist/notebook/index.html
+uvx --with marimo-studio marimo export html analysis.py --sandbox --output dist/notebook/index.html
 ```

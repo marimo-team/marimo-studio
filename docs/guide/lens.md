@@ -28,15 +28,28 @@ in the notebook or in the view.
 
 ## Set up Lens
 
-Install Lens in the notebook's Python environment, and restart a running
-notebook afterwards:
+Lens runs in the notebook's Python environment. For a notebook opened with
+`--sandbox`, add it to the script's dependencies, then stop the running edit
+command and start it again:
+
+```console
+uv add --script analysis.py "marimo-studio[lens]"
+uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
+```
+
+In a uv project, add it to the project and restart the notebook:
+
+```console
+uv add "marimo-studio[lens]"
+```
+
+In another activated virtual environment, install it there instead:
 
 ```console
 uv pip install "marimo-studio[lens]"
 ```
 
-For a sandboxed notebook, add `marimo-studio[lens]` to the script's
-dependencies instead. When the notebook creates no Lens of its own, marimo
+When the notebook creates no Lens of its own, marimo
 mounts one, and Notebook and Preview each show a Lens dock, the panel that
 lists your selections. Both docks share
 one Lens, so a selection made in a view reaches the same agent as a selection
@@ -86,8 +99,12 @@ of target:
 - **Rendered files.** A PDF or a video is a picture of results. When the
   provider renders the file, it reports a render region for each placed
   result: a rectangle on a page, an image, or a span of video frames, with the
-  results it shows and the line that placed them. Studio lays an invisible box
-  over each region, and Lens selects the boxes.
+  results it shows. A provider can also report the line that placed each
+  region. Without one, the selection names the line where the source reads the
+  region's first result. The Typst and LaTeX providers report that read line,
+  such as the `marimo_value("report")` call, which can sit above the code that
+  draws the result. Studio lays an invisible box over each region, and Lens
+  selects the boxes.
 - **Authored content.** Headings, prose, and layout read no results. Lens
   selects them by their nearest section or card, and the selection names the
   source file so the agent edits the view.

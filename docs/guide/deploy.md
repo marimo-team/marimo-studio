@@ -82,7 +82,7 @@ comma-separated, of parent pages that may frame Studio's edit workspace:
 
 ```console
 MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS=http://localhost:55021,https://notebooks.example.com \
-  marimo edit /srv/analysis/analysis.py --headless --port 8000
+  uvx --with marimo-studio marimo edit /srv/analysis/analysis.py --sandbox --headless --port 8000
 ```
 
 Studio adds them to the
@@ -104,11 +104,13 @@ third-party iframes.
 
 [ASGI](https://asgi.readthedocs.io/en/latest/) is the standard interface
 between asynchronous Python web applications and servers. Serve Studio's ASGI
-entry point with the notebook path in the environment:
+entry point with the notebook path in the environment. The server builds the
+views, so its environment needs the Studio extras they use: `deno` for React,
+Svelte, and Notebook Kit, and `typst` for Typst:
 
 ```console
 MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
-  uvicorn marimo_studio.asgi:app \
+  uvx --with 'marimo-studio[deno,typst]' uvicorn marimo_studio.asgi:app \
     --host 127.0.0.1 \
     --port 8000 \
     --lifespan on

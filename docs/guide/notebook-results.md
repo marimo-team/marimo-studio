@@ -52,10 +52,12 @@ results["overview"]
 ```
 
 Give an unnamed cell a [cell alias](../reference/glossary.md#cell-alias) when
-renaming its function is not an option:
+renaming its function is not an option. List the cells, then bind the alias to
+one by the zero-based index, name, or ref that the listing prints:
 
 ```console
-uvx marimo-studio notebook bind summary --target analysis.py --cell 12
+uvx marimo-studio notebook inspect --target analysis.py
+uvx marimo-studio notebook bind summary --target analysis.py --cell 1
 ```
 
 The alias belongs to the notebook, so every view can use it.
@@ -217,9 +219,13 @@ React and Svelte providers find the targets a view uses while they build it.
 Literal names and finite arrays work:
 
 ```tsx
-{
-  ["summary", "details"].map((name) => <marimo-cell key={name} name={name} />);
-}
+export const Results = () => (
+  <section>
+    {["summary", "details"].map((name) => (
+      <marimo-cell key={name} name={name} />
+    ))}
+  </section>
+);
 ```
 
 When page state can pick any notebook target, declare that on the host:
