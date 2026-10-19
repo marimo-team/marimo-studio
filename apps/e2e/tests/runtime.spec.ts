@@ -15,6 +15,7 @@ import {
   previewFrame,
   readWorkspaceFile,
   recoverRequestAbort,
+  staticExportFileUrl,
   staticExportUrl,
   studioEntryUrl,
   studioOrigin,
@@ -157,6 +158,20 @@ test("static WebAssembly executes the mounted dependency closure", async ({ page
   await expect(status).toHaveText("clean");
   await expect(page.locator("#escaped-slash")).toHaveText("slash");
   await expect(page.locator("#surrogate-pair")).toHaveText("emoji");
+});
+
+test("explains that a static export opened from disk needs a web server", async ({ browser }) => {
+  // Chromium blocks the export's runtime assets on a file:// page. The page
+  // loads outside every server under test, so its context skips their checks.
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.goto(staticExportFileUrl());
+
+    await expect(page.getByRole("alert")).toContainText("This site needs a web server.");
+  } finally {
+    await context.close();
+  }
 });
 
 test("explains a degraded runtime diagnostic in the runtime menu", async ({ page }) => {
