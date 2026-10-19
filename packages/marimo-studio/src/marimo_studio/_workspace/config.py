@@ -301,7 +301,8 @@ def _load_config(target: Path) -> tuple[Path, Mapping[str, Any]]:
     if inline is not None:
         return inline
     raise ConfigurationError(
-        f"No Studio configuration found in {start}. Pass a notebook path to create one."
+        f"No Studio configuration found in {start}. Run `marimo-studio view create "
+        "dashboard --target notebook.py` with your notebook to create one."
     )
 
 

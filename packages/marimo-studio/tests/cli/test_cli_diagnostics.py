@@ -711,3 +711,21 @@ def test_main_preserves_view_not_found_details(
         "view": "missing",
         "available_views": ["dashboard", "report"],
     }
+
+
+def test_status_without_configuration_names_the_create_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["marimo-studio", "status"])
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    assert raised.value.code == 3
+    assert (
+        "marimo-studio view create dashboard --target notebook.py"
+        in capsys.readouterr().err
+    )
