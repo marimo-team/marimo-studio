@@ -356,6 +356,28 @@ read.
 `inspect()` must leave the project unchanged. Keep downloaded or generated data
 beneath `request.cache_root`.
 
+### Inspection caches
+
+Studio reuses inspection caches across processes and projects, with a separate
+namespace for each provider. They live in `inspection/` beneath the absolute
+path in `MARIMO_STUDIO_CACHE_DIR` when it is set, and otherwise in:
+
+- macOS: `~/Library/Caches/marimo-studio/inspection`
+- Linux: `$XDG_CACHE_HOME/marimo-studio/inspection`, defaulting to
+  `~/.cache/marimo-studio/inspection`
+- Windows: `%LOCALAPPDATA%\marimo-studio\Cache\inspection`
+
+Studio creates private cache directories with mode `0700` on POSIX systems.
+When the user cache directory is unusable, Studio logs a warning and keeps a
+temporary inspection cache for the current process.
+Providers must coordinate concurrent access and validate cached dependencies
+against their project inputs. The built-in providers for JavaScript views use
+[Deno](https://docs.deno.com/runtime/packages/), a JavaScript runtime, to share
+dependencies across views by runtime version. Deno verifies downloaded npm
+packages against the project's frozen lockfile. To reclaim space, delete the
+`inspection` directory while Studio commands and servers are stopped. The next
+inspection downloads the dependencies it needs.
+
 ### Read provider options
 
 `request.project.options` holds the `[options]` table of `view.toml`:

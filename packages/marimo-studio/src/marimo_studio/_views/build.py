@@ -136,20 +136,16 @@ def _require_buildable_inspection(
     return inspection
 
 
-def _inspect_provider(
+def _require_available_provider(
     project: CatalogProject,
     profile: BuildProfile,
     provider: BuildProvider,
     started: float,
-    cancellation: ProviderCancellation,
-) -> ProjectInspection:
+) -> None:
     availability = provider.availability()
     if not availability.available:
         detail = f": {availability.reason.rstrip('.')}" if availability.reason else ""
-        action = f" {availability.action}" if availability.action else ""
-        message = (
-            f"View provider {project.provider!r} is unavailable{detail}.{action}"
-        ).strip()
+        message = f"View provider {project.provider!r} is unavailable{detail}."
         record_build_failure(
             project,
             profile,
@@ -163,6 +159,16 @@ def _inspect_provider(
             ),
             started,
         )
+
+
+def _inspect_provider(
+    project: CatalogProject,
+    profile: BuildProfile,
+    provider: BuildProvider,
+    started: float,
+    cancellation: ProviderCancellation,
+) -> ProjectInspection:
+    _require_available_provider(project, profile, provider, started)
     try:
         inspection = provider.inspect(inspection_request(project))
     except Exception as error:
@@ -509,6 +515,10 @@ def _publish_locked(
             )
         if cached is not None:
             return cached
+    if inspection is not None:
+        # A prepared inspection skipped `_inspect_provider`, so check the
+        # provider before it builds. A current artifact needs no provider.
+        _require_available_provider(project, profile, provider, started)
     try:
         candidate_owner = capture_artifact_candidate(project, discovered)
         with candidate_owner as candidate:

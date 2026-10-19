@@ -5,6 +5,7 @@ import errno
 import json
 import os
 import sys
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -104,6 +105,21 @@ def export_repository(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path
     monkeypatch.setenv("MARIMO_EXPORT_REPOSITORY", str(repository))
     yield repository
     monkeypatch.undo()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def studio_cache() -> Iterator[Path]:
+    """Keep provider inspection caches out of the developer's user cache.
+
+    The cache sits directly in the system temporary directory, because Deno's
+    package paths beneath pytest's deeper base directory exceed Windows' path
+    limit.
+    """
+    with tempfile.TemporaryDirectory(prefix="studio-cache-") as directory:
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setenv("MARIMO_STUDIO_CACHE_DIR", directory)
+        yield Path(directory)
+        monkeypatch.undo()
 
 
 @pytest.fixture(autouse=True, scope="session")

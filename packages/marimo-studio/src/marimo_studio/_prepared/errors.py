@@ -22,11 +22,26 @@ if TYPE_CHECKING:
     from marimo_studio._server.presentation.service import PresentationSnapshot
 
 
-def _recovery_hint(error: MarimoExportError) -> str:
+def _recovery_hint(error: MarimoExportError, prepare_timeout: float | None) -> str:
     if isinstance(error, CompatibilityError):
         return (
             "Check the installed Marimo and marimo-export versions, "
             "then restart Studio."
+        )
+    if prepare_timeout is not None and error.code == "server_start_failed":
+        return (
+            "Studio runs the notebook in its own marimo server and allows "
+            f"{prepare_timeout:g} seconds to start and prepare it. Raise "
+            "--prepare-timeout, or prepare_timeout in Python, when the notebook "
+            "needs longer, or run `marimo run` on the notebook to see its "
+            "startup error."
+        )
+    if prepare_timeout is not None and isinstance(
+        error, (SessionError, TransportError)
+    ):
+        return (
+            "Studio lost the notebook server it started for this export. Run "
+            "`marimo run` on the notebook to check that it runs, then try again."
         )
     if isinstance(error, (SessionError, TransportError)):
         return (
@@ -92,7 +107,14 @@ def publication_error(
     error: MarimoExportError,
     compiled: CompiledExportView | None,
     snapshot: PresentationSnapshot,
+    *,
+    prepare_timeout: float | None = None,
 ) -> PublicationError:
+    """Translate an export failure.
+
+    ``prepare_timeout`` marks a static export or preflight, which starts its
+    own notebook server, and names the time it waited.
+    """
     wire = error.wire()
     details = error.details
     if isinstance(error, (CaptureLimitError, RepositoryLimitError)):
@@ -158,7 +180,7 @@ def publication_error(
             f"Could not prepare the notebook states: {error}",
             code=error.code,
             details=diagnostic,
-            hint=_recovery_hint(error),
+            hint=_recovery_hint(error, prepare_timeout),
         )
     kind, target = identity
     diagnostic.update(_projection_details(snapshot, identity))
@@ -181,5 +203,5 @@ def publication_error(
         f"Could not prepare {kind} projection {target!r}: {error}",
         code=error.code,
         details=diagnostic,
-        hint=_recovery_hint(error),
+        hint=_recovery_hint(error, prepare_timeout),
     )
