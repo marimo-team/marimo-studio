@@ -183,11 +183,11 @@ test("preview messages decode every supported discriminant", () => {
   );
 });
 
-test("preview view identities use the portable 240-byte contract", () => {
-  for (const message of viewIdentityMessages("v".repeat(240))) {
+test("preview view identities use the portable 238-byte contract", () => {
+  for (const message of viewIdentityMessages("v".repeat(238))) {
     assert.notEqual(parsePreviewMessage(message), undefined, message.type);
   }
-  for (const message of viewIdentityMessages("v".repeat(241))) {
+  for (const message of viewIdentityMessages("v".repeat(239))) {
     assert.equal(parsePreviewMessage(message), undefined, message.type);
   }
 });
@@ -276,7 +276,7 @@ test("preview mutation messages reject oversized domain fields", () => {
       type: "marimo-studio:navigate-view",
       runtime: "server",
       lifecycleId: 7,
-      view: "v".repeat(241),
+      view: "v".repeat(239),
       query: "",
       hash: "",
     },

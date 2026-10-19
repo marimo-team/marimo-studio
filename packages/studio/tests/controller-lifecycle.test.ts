@@ -31,7 +31,7 @@ const createView = (controller: ViewController, name: string): Promise<boolean> 
 };
 
 describe("feature controller lifecycle", () => {
-  it.each(["Bad View", "api", "con", "lpt9", "a".repeat(241)])(
+  it.each(["Bad View", "api", "con", "lpt9", "a".repeat(239)])(
     "rejects non-portable view name %s before mutation",
     async (name) => {
       const create = vi.fn();

@@ -172,7 +172,7 @@ def test_an_empty_view_name_never_selects_the_default_view(
         load_studio(notebook_path).view("")
 
 
-@pytest.mark.parametrize("name", ("con", "a" * 241))
+@pytest.mark.parametrize("name", ("con", "a" * 239))
 def test_view_names_are_portable_filesystem_components(name: str) -> None:
     with pytest.raises(ConfigurationError):
         validate_view_name(name)
@@ -216,7 +216,7 @@ def test_invalid_notebook_filename_is_escaped_in_the_diagnostic(
 
 
 def test_workspace_names_accept_their_maximum_portable_size(tmp_path: Path) -> None:
-    view_name = "v" * 240
+    view_name = "v" * 238
     notebook_stem = "n" * 252
 
     assert validate_view_name(view_name) == view_name

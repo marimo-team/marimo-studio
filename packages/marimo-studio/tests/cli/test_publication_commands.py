@@ -155,6 +155,23 @@ def test_absent_view_handle_cannot_hold_a_later_view(notebook_path: Path) -> Non
         asyncio.run(absent.release_publication("token"))
 
 
+def test_a_maximum_length_view_name_builds_and_holds_publication(
+    notebook_path: Path,
+) -> None:
+    view_name = "v" * 238
+    prepare_view(notebook_path, view_name)
+
+    built = _invoke(notebook_path, "build", view_name)
+    held = _invoke(notebook_path, "hold", view_name, "--owner", "editor", "--json")
+    released = _invoke(
+        notebook_path, "release", view_name, "--token", json.loads(held.stdout)["token"]
+    )
+
+    assert built.exit_code == 0, built.output
+    assert held.exit_code == 0, held.output
+    assert released.exit_code == 0, released.output
+
+
 def _invoke(notebook: Path, *args: str):
     return CliRunner().invoke(cli, ["view", *args, "--target", str(notebook)])
 

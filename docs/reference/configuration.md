@@ -263,7 +263,7 @@ caches. To move views from the Studio 0.3 layout, see
 [Upgrade from 0.3](compatibility.md#upgrade-from-0-3).
 
 View names start with a lowercase letter and contain lowercase letters, digits,
-or hyphens, up to 240 UTF-8 bytes. Studio rejects reserved route names and
+or hyphens, up to 238 UTF-8 bytes. Studio rejects reserved route names and
 Windows device names. A directory becomes a view when it contains a valid
 `view.toml`. Studio adopts an externally created view directory by writing its
 owner record under the catalog lock.

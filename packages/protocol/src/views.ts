@@ -4,7 +4,7 @@ import type { JsonValue } from "./runtime-config.ts";
 
 import { settingValueSchema, starterIdSchema, starterSchema } from "./provider-catalog.ts";
 
-export const VIEW_NAME_MAX_BYTES = 240;
+export const VIEW_NAME_MAX_BYTES = 238;
 
 const utf8 = new TextEncoder();
 const viewNamePattern = /^[a-z][a-z0-9-]*$/;

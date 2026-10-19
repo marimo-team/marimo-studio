@@ -295,7 +295,7 @@ def test_view_owner_rejects_invalid_records(tmp_path: Path, source: str) -> None
     "name",
     (
         "api.toml",
-        f"{'a' * 241}.toml",
+        f"{'a' * 239}.toml",
         "notes.txt",
     ),
 )
