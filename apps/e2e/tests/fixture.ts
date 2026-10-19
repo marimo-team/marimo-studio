@@ -15,6 +15,7 @@ import {
 } from "@playwright/test";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
 import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.ts";
@@ -32,6 +33,7 @@ import {
   notebookPath,
   noDisplayNotebookPath,
   noDisplayStaticExportDirectory,
+  staticExportDirectory,
   proxiedFixtureDirectory,
   proxiedNotebookPath,
   proxiedWorkspaceDirectory,
@@ -118,6 +120,8 @@ export const studioEntryUrl = "/?file=notebook.py";
 export const collaborativeStudioEntryUrl = () =>
   `${e2eNetwork.main.collaboration.origin}/?file=notebook.py`;
 export const staticExportUrl = () => `${e2eNetwork.main.exported.origin}/src/index.html`;
+export const staticExportFileUrl = () =>
+  pathToFileURL(resolve(staticExportDirectory, "src/index.html")).href;
 export const noDisplayStaticExportUrl = () =>
   `${e2eNetwork.main.exported.origin}/no-display/index.html`;
 

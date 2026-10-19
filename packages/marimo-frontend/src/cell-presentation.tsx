@@ -21,8 +21,9 @@ export type RuntimeCell = UpstreamCell;
 export const cellOutputIsLoading = (status: RuntimeCell["status"]): boolean =>
   outputIsLoading(status);
 
-export const cellOutputIsStale = (cell: RuntimeCell, edited: boolean): boolean =>
-  outputIsStale(cell, edited);
+// A view projects the kernel's results. Source edits that the kernel has not
+// run belong to the editor, so they leave the projected output current.
+export const cellOutputIsStale = (cell: RuntimeCell): boolean => outputIsStale(cell, false);
 
 interface ProjectedCellPresentationProps {
   accessibleName?: string;

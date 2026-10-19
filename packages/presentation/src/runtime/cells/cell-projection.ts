@@ -120,7 +120,7 @@ export const projectCell = ({
   runtimeReady,
   showCellLogs,
 }: CellProjectionInput): CellProjection => {
-  const stale = cell ? cellOutputIsStale(cell, cell.edited) : false;
+  const stale = cell ? cellOutputIsStale(cell) : false;
   const disabled = cell
     ? cell.config.disabled === true || cell.status === "disabled-transitively"
     : false;

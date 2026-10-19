@@ -108,6 +108,9 @@ process.stdout.write(process.env.TESTED_TREE + "\\n");
   const environment = {
     ...process.env,
     PATH: `${directory}:${process.env.PATH}`,
+    // A pull request run sets GITHUB_BASE_REF to its base branch, which a push
+    // leaves unset. Cases that need a base ref set it themselves.
+    GITHUB_BASE_REF: "",
     GITHUB_EVENT_NAME: "push",
     VALIDATION_BASE_SHA: "e".repeat(40),
     GITHUB_OUTPUT: output,

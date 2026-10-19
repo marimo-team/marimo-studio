@@ -40,6 +40,21 @@ _STORAGE_FALLBACK = (
     "enumerable:true,get:()=>storage})}})();"
 )
 
+# Browsers refuse module scripts on file:// pages, so an exported site opened
+# from disk would show its authored HTML without notebook results. A classic
+# script still runs there and explains how to serve the folder.
+_FILE_PROTOCOL_NOTICE = (
+    "if(location.protocol==='file:')addEventListener('DOMContentLoaded',()=>{"
+    "const n=document.createElement('p');n.setAttribute('role','alert');"
+    "n.dataset.marimoStudioFileNotice='';"
+    "n.textContent='This site needs a web server. Browsers block its scripts "
+    "on file:// pages. Serve this folder over HTTP, for example with "
+    "uv run --no-project python -m http.server, and open the address it prints.';"
+    "n.style.cssText='margin:1rem;padding:.75rem 1rem;border-inline-start:3px "
+    "solid #b7791f;background:#fffbeb;color:#422006;font:14px/1.5 system-ui,"
+    "sans-serif';document.body.prepend(n)});"
+)
+
 
 def node_list(*nodes: object) -> list[Node]:
     return cast(list[Node], list(nodes))
@@ -93,6 +108,7 @@ def runtime_head(
     return fragment[
         node_list(
             script({"data-marimo-studio-runtime": True})[Markup(_STORAGE_FALLBACK)],
+            script({"data-marimo-studio-runtime": True})[Markup(_FILE_PROTOCOL_NOTICE)],
             *(
                 link(
                     {
