@@ -19,7 +19,7 @@ PORTLESS_ENV = $(shell [ -t 0 ] || { command -v nc >/dev/null && nc -z 127.0.0.1
 PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-group marimo-studio-build --no-emit-workspace --no-annotate --no-header
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
-.PHONY: serve e2e e2e-ui docs-examples docs-thumbnails docs-showcase docs-figures docs-build docs-serve docs-preview package
+.PHONY: serve _serve-notebook e2e e2e-ui docs-examples docs-thumbnails docs-showcase docs-figures docs-build docs-serve docs-preview package
 .PHONY: _anti-slop-check _architecture-check _provider-sources-check _workflow-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 .PHONY: _prepare-browser-tests
@@ -99,9 +99,11 @@ _prepare-browser-tests: _frontend-ready
 # https://athletes.marimo-studio.localhost, with a branch prefix in a worktree.
 SERVE_NAME = $(shell basename "$(NOTEBOOK)" .py | tr '[:upper:]_' '[:lower:]-' | tr -cd 'a-z0-9-').marimo-studio
 
-serve: _frontend-ready build ## Serve NOTEBOOK in Studio at a Portless URL; ARGS adds marimo edit options.
-	@test -n "$(NOTEBOOK)" || { echo "Set NOTEBOOK, as in: make serve NOTEBOOK=examples/athletes.py" >&2; exit 2; }
+serve: _serve-notebook _frontend-ready build ## Serve NOTEBOOK in Studio at a Portless URL; ARGS adds marimo edit options.
 	$(PORTLESS_ENV) $(PNPM) exec portless run --name "$(SERVE_NAME)" ./scripts/serve-notebook.sh "$(NOTEBOOK)" $(ARGS)
+
+_serve-notebook:
+	@test -n "$(NOTEBOOK)" || { echo "Set NOTEBOOK, as in: make serve NOTEBOOK=examples/athletes.py" >&2; exit 2; }
 
 e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
 	$(PNPM) --filter @marimo-studio/e2e e2e

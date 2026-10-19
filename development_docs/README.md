@@ -256,6 +256,23 @@ Add the matching boundary checks:
 | Generated browser assets or distribution contents                                 | `make package`                                               |
 | Public documentation                                                              | `make docs-build` and rendered desktop and narrow inspection |
 
+`make test` runs the complete Python profile for the current platform and the
+frontend package tests. `make check` adds formatting, linting, architecture,
+provider-source, and type checks. Its shell-script lint runs
+[ShellCheck](https://www.shellcheck.net/) from `PATH`, for example after
+`pixi global install shellcheck`. `make docs-build` owns public example exports
+and VitePress verification. Live browser acceptance remains the evidence for
+cross-document behavior.
+
+Documentation exports reuse prepared states in
+`apps/docs/.vitepress/cache/export-repository`. Each browser worker owns a
+temporary export repository for its full fixture lifetime.
+
+`make typecheck` runs ty, Pyrefly, basedpyright, and the TypeScript checks.
+Basedpyright analyzes the distributed package against Python 3.10 and analyzes
+tests and contributor scripts against Python 3.11. Error diagnostics fail the
+type-check gate.
+
 ### Serve a notebook for live acceptance
 
 Serve a notebook in the Studio editor with the checkout's Studio and system
@@ -281,23 +298,6 @@ ephemeral ports per worker. Without a terminal, such as from a coding agent,
 the target reuses a proxy already listening on port 443 or starts one on port
 1355, and the printed URL includes `:1355`, as for
 [`make docs-serve`](documentation.md).
-
-`make test` runs the complete Python profile for the current platform and the
-frontend package tests. `make check` adds formatting, linting, architecture,
-provider-source, and type checks. Its shell-script lint runs
-[ShellCheck](https://www.shellcheck.net/) from `PATH`, for example after
-`pixi global install shellcheck`. `make docs-build` owns public example exports
-and VitePress verification. Live browser acceptance remains the evidence for
-cross-document behavior.
-
-Documentation exports reuse prepared states in
-`apps/docs/.vitepress/cache/export-repository`. Each browser worker owns a
-temporary export repository for its full fixture lifetime.
-
-`make typecheck` runs ty, Pyrefly, basedpyright, and the TypeScript checks.
-Basedpyright analyzes the distributed package against Python 3.10 and analyzes
-tests and contributor scripts against Python 3.11. Error diagnostics fail the
-type-check gate.
 
 ### Validation stages
 
