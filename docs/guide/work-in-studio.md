@@ -157,6 +157,7 @@ Ask the provider directly with:
 uvx marimo-studio view inspect dashboard --target analysis.py
 ```
 
-Source always shows `view.toml`, even when the provider fails, so you can
-repair a provider option there. Source keeps the view's provider key, so fix a
-misspelled key in your own editor.
+Read and write `view.toml` with `marimo-studio view read` and
+`marimo-studio view write`.
+Both work even when the provider fails, so you can repair a provider option.
+They keep the view's provider key, so fix a misspelled key in your own editor.

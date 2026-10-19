@@ -207,8 +207,8 @@ affects the build. Editing `DESIGN.md` leaves the build unchanged.
 ### Source document {#source-document}
 
 A file of the view project that the [Source](#source) pane shows, editable or
-read-only. The view's provider chooses these files, and Studio adds
-`view.toml`.
+read-only. The view's provider chooses these files. Outside the pane,
+`view read`, `view write`, and `View.inspect()` also reach `view.toml`.
 
 ### Source {#source}
 
