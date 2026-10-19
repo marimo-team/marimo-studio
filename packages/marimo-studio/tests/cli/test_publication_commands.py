@@ -182,6 +182,18 @@ def test_cli_hold_rejects_an_unusable_owner(notebook_path: Path, owner: str) -> 
     assert "--owner" in result.output
 
 
+@pytest.mark.parametrize("ttl", ("nan", "0"), ids=("non-finite", "zero"))
+def test_cli_hold_rejects_an_unusable_ttl(notebook_path: Path, ttl: str) -> None:
+    prepare_view(notebook_path)
+
+    result = _invoke(
+        notebook_path, "hold", "dashboard", "--owner", "editor", "--ttl", ttl
+    )
+
+    assert result.exit_code == 2
+    assert "--ttl" in result.output
+
+
 def test_cli_release_without_a_hold_says_nothing_was_held(
     notebook_path: Path,
 ) -> None:
