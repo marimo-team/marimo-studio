@@ -111,7 +111,7 @@ notebook with Studio, writes the calculus in Python cells, then builds both
 views and shows them beside the notebook. [uv](https://docs.astral.sh/uv/)
 supplies `uvx`.
 
-To work by hand, open a notebook with Studio:
+To work by hand, open one of your marimo notebooks with Studio:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox --watch
