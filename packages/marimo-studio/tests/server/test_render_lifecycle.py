@@ -200,10 +200,14 @@ def _pid_is_live(pid: int) -> bool:
 
 async def _started(marker: Path) -> int:
     deadline = time.monotonic() + 15
-    while not marker.is_file() or not marker.read_text(encoding="utf-8"):
+    while True:
+        # Each render command rewrites the marker, which empties it briefly, so
+        # parse the same read that found a process id.
+        text = marker.read_text(encoding="utf-8") if marker.is_file() else ""
+        if text:
+            return int(text)
         assert time.monotonic() < deadline, "The provider command never started"
         await asyncio.sleep(0.02)
-    return int(marker.read_text(encoding="utf-8"))
 
 
 async def _stopped(pid: int) -> None:
