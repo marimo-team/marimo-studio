@@ -37,7 +37,9 @@ rendered regions to their existing notebook input hosts:
 ```html
 <marimo-output value="studio_lens"></marimo-output>
 
-<span id="revenue-data" hidden mo-value="quarterly_revenue"></span>
+<div hidden>
+  <span id="revenue-data" hidden mo-value="quarterly_revenue"></span>
+</div>
 <section
   data-marimo-lens-inputs="revenue-data"
   data-marimo-lens-label="Quarterly revenue"
@@ -50,7 +52,9 @@ rendered regions to their existing notebook input hosts:
 
 `STUDIO_RESULT_SELECTOR` covers connected `marimo-cell`, `marimo-output`, and
 `mo-value` hosts, parents containing hidden value hosts, and regions annotated
-with `data-marimo-lens-inputs`. Studio also scopes default HTML picking to
+with `data-marimo-lens-inputs`. Lens prefers such a parent over every host
+inside it, so group hosts that only feed page code in a hidden container. A
+hidden host placed directly in `#app-shell` makes the whole page one target. Studio also scopes default HTML picking to
 `#app-shell`. Ordinary HTML is selectable without annotation. Lens frames the
 nearest semantic region or block and retains the clicked child's bounded DOM
 hint. Set `data-marimo-lens-scope=".card, header, figure"` on the shell to customize

@@ -130,7 +130,9 @@ keeps at least one view.
 
 A running Studio server holds the views it serves. `view rename` and
 `view remove` in another terminal then report `view-in-use` with the server's
-process ID. Rename or remove the view from that Studio session instead.
+process ID. Remove the view from the view menu, rename it in code mode with
+[`View.rename()`](../reference/python-api.md#view), or stop the server and run
+the command again.
 
 ## Files in a view project
 

@@ -73,10 +73,6 @@ filter, and draw the values it receives. Anything that needs Python, or that
 several views share, such as a chart or a control, goes in the notebook, so
 every view shows the same one.
 
-You change a font in a view and a formula in the notebook. A coding agent can
-redesign a view for a new audience without touching the cells that compute
-its results.
-
 ## Notebook results are building blocks
 
 A view can place three kinds of notebook

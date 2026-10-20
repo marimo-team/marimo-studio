@@ -18,12 +18,38 @@ STUDIO_SESSION_ID_KEY = "marimo_studio_session_id"
 STUDIO_NOTEBOOK_PATH_KEY = "marimo_studio_notebook_path"
 
 
+def code_mode_session_id(scope: Scope) -> str | None:
+    """Return the runtime session a code-mode request names.
+
+    Browser clients send ``Marimo-Session-Id``. ``marimo pair`` sends the
+    session's stable ID, which the server's session manager maps to the
+    runtime session.
+    """
+    headers = Headers(raw=list(scope.get("headers", [])))
+    session_id = headers.get("Marimo-Session-Id")
+    if session_id:
+        return session_id
+    stable_id = headers.get("Marimo-Stable-Session-Id")
+    state = getattr(scope.get("app"), "state", None)
+    manager = getattr(state, "session_manager", None)
+    if not stable_id or manager is None:
+        return None
+    return next(
+        (
+            str(runtime_id)
+            for runtime_id, session in manager.sessions.items()
+            if session.stable_id == stable_id
+        ),
+        None,
+    )
+
+
 def attach_code_mode_session(scope: Scope, notebook: Path) -> Scope:
     """Attach the calling Marimo session to a code-mode request scope."""
     updated = dict(scope)
     raw_meta = scope.get("meta")
     meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
-    session_id = Headers(raw=list(scope.get("headers", []))).get("Marimo-Session-Id")
+    session_id = code_mode_session_id(scope)
     if session_id:
         meta[STUDIO_SESSION_ID_KEY] = session_id
     meta[STUDIO_NOTEBOOK_PATH_KEY] = str(notebook.resolve())

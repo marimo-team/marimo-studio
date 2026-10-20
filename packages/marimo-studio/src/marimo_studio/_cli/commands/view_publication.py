@@ -77,7 +77,7 @@ def hold(
 )
 @json_option
 def release(view_name: str, target: Path | None, token: str, json_output: bool) -> None:
-    """Release a matching publication hold and allow current source to build."""
+    """Release the matching publication hold so current source builds."""
     result = asyncio.run(
         release_publication(resolve_notebook(target), view_name, token)
     )

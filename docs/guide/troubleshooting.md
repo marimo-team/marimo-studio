@@ -35,8 +35,10 @@ When Studio reports an unconfigured notebook or no view, run
 
 `marimo edit --sandbox=pixi` installs the notebook's environment with
 `pixi install --script`, which picks the newest Python that the notebook's
-`requires-python` admits. marimo depends on `loro`, which publishes no wheel
-for Python 3.15, so the install stops while it builds `loro` from source:
+`requires-python` admits. marimo then installs its own version and Studio into
+that environment when the kernel starts. marimo 0.25.1 and earlier depend on
+`loro`, which publishes no wheel for Python 3.15, so the kernel stops while it
+builds `loro` from source:
 
 ```text
 error: the configured Python interpreter version (3.15) is newer than PyO3's maximum supported version (3.14)

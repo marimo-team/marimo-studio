@@ -193,7 +193,7 @@ def preview(
     browser_client: str | None,
     json_output: bool,
 ) -> None:
-    """Print a standalone view URL to open with your preferred browser."""
+    """Print a standalone URL that opens one view in a browser."""
     try:
         connection = studio_server_connection(
             server_url,

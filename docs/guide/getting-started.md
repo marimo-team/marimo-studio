@@ -36,6 +36,12 @@ notebook has a view, the view menu offers **New view** for the next one.
 Notebook and Preview open side by side. The new page already shows every
 notebook cell that displays output.
 
+The same view can be created from a terminal instead:
+
+```console
+uvx marimo-studio view create dashboard --target analysis.py
+```
+
 ## Look at the files
 
 Studio saved the view as a
@@ -57,19 +63,19 @@ Studio watches the folder and rebuilds Preview whenever a build input, such as
 `index.html`, is saved.
 
 Commit `studio/` with the notebook. Build output goes to
-`__marimo__/studio/analysis/`, which Git ignores. Add a `DESIGN.md` to the view
-project when the view has an audience and visual direction worth recording.
-
-The same view can be created from a terminal:
-
-```console
-uvx marimo-studio view create dashboard --target analysis.py
-```
+`__marimo__/studio/analysis/`, which Git ignores.
 
 ## Place a notebook result
 
-Add a cell named `sales_summary` to the notebook and run it. In the saved
-notebook file it reads:
+Add a cell with this code and run it:
+
+```python
+summary = mo.md("## Revenue is on target")
+summary
+```
+
+Open the cell's actions menu, enter `sales_summary` in its **Name** field, and
+save. In the saved notebook file the cell reads:
 
 ```python
 @app.cell
@@ -96,6 +102,9 @@ If a later edit breaks the build, Preview keeps the last page that built and
 Source shows the error.
 
 ## Run the view
+
+Stop the editor with <kbd>Ctrl</kbd>+<kbd>C</kbd>, then serve the notebook as an
+app:
 
 ```console
 uvx --with marimo-studio marimo run analysis.py --sandbox

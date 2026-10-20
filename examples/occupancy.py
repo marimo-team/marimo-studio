@@ -14,8 +14,6 @@
 # runtimes = ["server", "wasm", "zero-python"]
 # show_cell_logs = false
 #
-# [tool.marimo-studio.cells]
-#
 # [tool.pixi.workspace]
 # channels = ["conda-forge"]
 #

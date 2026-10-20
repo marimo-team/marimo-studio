@@ -22,6 +22,7 @@ from marimo_studio._compat.code_mode import (
     active_notebook,
     attach_code_mode_session,
     code_mode_connection,
+    code_mode_session_id,
 )
 from marimo_studio._compat.patch import CallbackCloseHandle, ReversiblePatch
 
@@ -70,6 +71,9 @@ class PrivateCodeModeBridge:
 
     def open(self) -> CallbackCloseHandle:
         return _KERNEL_SOURCE_PATCH.open()
+
+    def session_id(self, scope: Scope) -> str | None:
+        return code_mode_session_id(scope)
 
     def attach_session(self, scope: Scope, notebook: Path) -> Scope:
         return attach_code_mode_session(scope, notebook)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -9,6 +10,7 @@ from click import unstyle
 from click.testing import CliRunner
 
 from marimo_studio._cli import cli
+from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
     ProviderRegistry,
@@ -193,3 +195,31 @@ def test_starter_list_separates_human_records(
     assert "First starter." in first_record
     assert "example/second:default" in second_record
     assert "Second starter." in second_record
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (["starters"], ["doctor", "marimo-studio/latex"]),
+    ids=("starters", "doctor"),
+)
+def test_tool_availability_reports_a_target_with_invalid_metadata(
+    tmp_path: Path,
+    arguments: list[str],
+) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        "# /// script\n"
+        '# dependencies = ["marimo"]\n'
+        "#\n"
+        "# [tool.pixi.dependencies]\n"
+        "# tectonic =\n"
+        "# ///\n"
+        "import marimo\n"
+        "app = marimo.App()\n",
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(cli, [*arguments, "--target", str(notebook)])
+
+    assert isinstance(result.exception, ConfigurationError)
+    assert "Notebook has invalid PEP 723 metadata" in str(result.exception)

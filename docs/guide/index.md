@@ -5,10 +5,12 @@ description: Build views of a marimo notebook, place its results, share the view
 
 # Guide
 
-New to Studio? Read [What is Studio?](../what-is-studio.md) and
-[How Studio works](../how-studio-works.md), then build a first view in
-[Getting started](getting-started.md) or ask a coding agent for one. The
-[glossary](../reference/glossary.md) defines every term the guides use.
+New to Studio? Build a first view in [Getting started](getting-started.md) or
+ask a [coding agent](coding-agents.md) for one.
+[What is Studio?](../what-is-studio.md) explains the model, and
+[How Studio works](../how-studio-works.md) shows how a page receives notebook
+results. The [glossary](../reference/glossary.md) defines every term the guides
+use.
 
 ## Build views
 

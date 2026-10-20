@@ -15,6 +15,7 @@ from marimo_studio._compat.code_mode import (
     STUDIO_NOTEBOOK_PATH_KEY,
     STUDIO_SESSION_ID_KEY,
     attach_code_mode_session,
+    code_mode_session_id,
 )
 from marimo_studio._delivery.urls import (
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
@@ -94,9 +95,19 @@ def test_code_mode_routes_receive_the_calling_session(
     }
 
 
+@pytest.mark.parametrize(
+    "header",
+    [
+        (b"marimo-session-id", b"s_123456"),
+        # `marimo pair execute` names the session by its stable ID.
+        (b"marimo-stable-session-id", b"sess_stable"),
+    ],
+    ids=["browser", "pair"],
+)
 def test_directory_server_code_mode_resolves_the_calling_session_notebook(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    header: tuple[bytes, bytes],
 ) -> None:
     captured: list[Scope] = []
 
@@ -119,10 +130,16 @@ def test_directory_server_code_mode_resolves_the_calling_session_notebook(
         "raw_path": b"/api/kernel/execute",
         "root_path": "",
         "query_string": b"",
-        "headers": [(b"marimo-session-id", b"s_123456")],
+        "headers": [header],
         "server": ("testserver", 80),
         "client": ("testclient", 1),
-        "app": SimpleNamespace(),
+        "app": SimpleNamespace(
+            state=SimpleNamespace(
+                session_manager=SimpleNamespace(
+                    sessions={"s_123456": SimpleNamespace(stable_id="sess_stable")}
+                )
+            )
+        ),
     }
 
     async def receive() -> Message:
@@ -134,6 +151,7 @@ def test_directory_server_code_mode_resolves_the_calling_session_notebook(
     asyncio.run(middleware(scope, receive, send))
 
     assert captured[0]["meta"][STUDIO_NOTEBOOK_PATH_KEY] == str(notebook_path.resolve())
+    assert captured[0]["meta"][STUDIO_SESSION_ID_KEY] == "s_123456"
 
 
 def test_editor_transport_binds_its_marimo_session_to_the_studio_tab(
@@ -330,7 +348,10 @@ def _adapters(location: Any, *, directory: bool = False) -> ServerAdapters:
             session_state=sessions,
             sessions=SimpleNamespace(claim_editor_lifetime=lambda _context: object()),
             persistence=SimpleNamespace(enable=lambda _location: None),
-            code_mode=SimpleNamespace(attach_session=attach_code_mode_session),
+            code_mode=SimpleNamespace(
+                session_id=code_mode_session_id,
+                attach_session=attach_code_mode_session,
+            ),
             browser=SimpleNamespace(),
         ),
     )

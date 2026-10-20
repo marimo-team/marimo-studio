@@ -68,6 +68,23 @@ def test_other_output_data_carries_no_representation(
     assert output_representation(mimetype, data) is None
 
 
+@pytest.mark.parametrize(
+    "mimetype",
+    ["image/svg+xml", "application/vnd.marimo+mimebundle"],
+)
+def test_a_cell_svg_kept_as_text_decodes_for_an_accepting_render(
+    mimetype: str,
+) -> None:
+    # marimo keeps an object's _repr_svg_ as the markup itself.
+    markup = SVG.data.decode()
+    data = json.dumps({"image/svg+xml": markup}) if "mimebundle" in mimetype else markup
+
+    media = output_representation(mimetype, data, ("image/png", "image/svg+xml"))
+
+    assert media == SVG
+    assert output_representation("image/svg+xml", markup) is None
+
+
 def test_the_browser_bridge_sources_run_with_only_the_standard_library(
     tmp_path: Path,
 ) -> None:

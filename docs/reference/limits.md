@@ -123,8 +123,7 @@ containers with a larger `--shm-size`. A value that does not fit travels
 inline and takes longer to load.
 
 The Browser runtime passes Arrow values from its worker as base64 text, which
-caps a value read there at 64 MiB of Arrow. A 60 MB value took about 8 seconds
-to appear in Chromium on a Linux workstation.
+caps a value read there at 64 MiB of Arrow.
 `marimo-studio validate --level runtime` applies the Python runtime budgets.
 
 The Prepared runtime stores each value as a
@@ -159,7 +158,7 @@ provider API](provider-api.md) defines the record responsibilities.
 
 | Operation                                                          |     Default |                                                       Accepted range or budget |
 | ------------------------------------------------------------------ | ----------: | -----------------------------------------------------------------------------: |
-| Runtime inspection and validation                                  |  60 seconds |                                                          0 through 300 seconds |
+| Runtime inspection and validation                                  |  60 seconds |                                              Greater than 0, up to 300 seconds |
 | Prepared export                                                    |  30 seconds |                                                              Positive duration |
 | Provider runner command                                            | 120 seconds | Finite positive duration within the request's shared 120-second command budget |
 | Third-party provider metadata, availability, and starter discovery |  10 seconds |                                             Fixed extension-operation deadline |

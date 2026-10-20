@@ -139,6 +139,36 @@ def test_studio_runs_in_the_activated_pixi_workspace(
     assert command in result.stderr
 
 
+def test_status_in_a_pixi_workspace_names_a_pixi_create_command(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = _pixi_notebook(notebook_path)
+    monkeypatch.setenv("PIXI_PROJECT_MANIFEST", str(manifest))
+    monkeypatch.setenv("CONDA_PREFIX", sys.prefix)
+
+    result = CliRunner().invoke(cli, ["status", "--target", str(notebook_path)])
+
+    assert result.exit_code == 0, result.output
+    command = shell_command(
+        [
+            "pixi",
+            "run",
+            "--manifest-path",
+            str(manifest),
+            "-x",
+            "marimo-studio",
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path.resolve()),
+        ]
+    )
+    assert f"create {command}" in result.stderr
+    assert "uvx" not in result.stderr
+
+
 def test_studio_outside_the_pixi_workspace_names_the_command_to_run(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

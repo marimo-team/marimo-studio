@@ -109,6 +109,26 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     assert report.joinpath("index.html").is_file()
 
 
+def test_view_setup_writes_no_alias_table_for_named_cells(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        f'import marimo\n__generated_with = "{marimo.__version__}"\n'
+        "app = marimo.App()\n\n\n"
+        "@app.cell\n"
+        "def total():\n"
+        "    total = 42\n"
+        "    total\n"
+        "    return (total,)\n",
+        encoding="utf-8",
+    )
+
+    prepare_view(notebook)
+
+    header = notebook.read_text(encoding="utf-8").partition("\n# ///\n")[0]
+    assert "[tool.marimo-studio]" in header
+    assert "[tool.marimo-studio.cells]" not in header
+
+
 @pytest.mark.skipif(
     os.name == "nt" or os.geteuid() == 0,
     reason="directory modes do not restrict listing on Windows or for root",

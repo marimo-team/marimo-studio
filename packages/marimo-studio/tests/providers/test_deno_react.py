@@ -334,6 +334,7 @@ export const App = () => {
       </output>
       <marimo-cell name="summary" />
       <marimo-output value="rows" />
+      <marimo-output value="chart" accept="image/svg+xml image/png" />
     </main>
   );
 };

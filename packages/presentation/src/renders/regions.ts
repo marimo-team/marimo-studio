@@ -13,6 +13,7 @@ const VIDEO_EVENTS = ["timeupdate", "seeked", "play", "pause", "loadedmetadata",
 // Lens bounds the notebook sources of one target.
 const MAX_SOURCES = 64;
 let sourceIds = 0;
+let regionHosts = 0;
 
 /** An element on screen that shows one bundle file, such as a PDF page or a video. */
 export interface RenderSurface {
@@ -203,6 +204,9 @@ export class RenderRegions {
   private nextElement = 0;
   private shown?: string;
   private published = new Map<string, string>();
+  private readonly regionPrefix = `marimo-render-region-${(regionHosts += 1)}`;
+  private regionKeys = new Map<string, number>();
+  private nextRegionKey = 0;
   private resize?: ResizeObserver;
   private frame = 0;
 
@@ -237,6 +241,10 @@ export class RenderRegions {
       this.resize.observe(this.host);
       surfaces.forEach((surface) => this.resize?.observe(surface.element));
     }
+    const ids = this.regionIds(record.regions, producerOf);
+    // A page can show the same file part on several surfaces, and each copy
+    // of a region needs its own ID for Lens to find it again.
+    const copies = new Map<string, number>();
     for (const surface of surfaces) {
       const files = new Set([surface.file, ...(surface.poster ? [surface.poster] : [])]);
       const regions = record.regions
@@ -256,6 +264,10 @@ export class RenderRegions {
       Object.assign(element.style, { position: "absolute", pointerEvents: "none" });
       const shown = regions.map((region) => {
         const box = this.regionElement(region, producerOf);
+        const id = ids.get(region)!;
+        const copy = copies.get(id) ?? 0;
+        copies.set(id, copy + 1);
+        box.id = copy === 0 ? id : `${id}-copy-${copy}`;
         element.append(box);
         return { region, element: box };
       });
@@ -405,6 +417,44 @@ export class RenderRegions {
         this.published.set(attribute, value);
       }
     }
+  }
+
+  /**
+   * Name each region by what it shows rather than where, so a selection made
+   * before the notebook recomputes a value stays attached to the same part of
+   * the file. Lens finds a target again by its ID. Regions that show the same
+   * reads in the same place of the source are numbered in bundle order.
+   */
+  private regionIds(
+    regions: readonly RenderRegion[],
+    producerOf: ProducerOf,
+  ): Map<RenderRegion, string> {
+    const ids = new Map<RenderRegion, string>();
+    const occurrences = new Map<string, number>();
+    // Keep the numbers of the keys this render shows, so the map stays as
+    // large as one render while a region that renders again keeps its ID.
+    const shown = new Map<string, number>();
+    for (const region of regions) {
+      const key = JSON.stringify([
+        region.file,
+        region.page,
+        region.reads,
+        region.reads.map((read) => producerOf(read)?.cellId ?? null),
+        region.label,
+        region.source,
+      ]);
+      let known = this.regionKeys.get(key) ?? shown.get(key);
+      if (known === undefined) {
+        known = this.nextRegionKey;
+        this.nextRegionKey += 1;
+      }
+      shown.set(key, known);
+      const occurrence = occurrences.get(key) ?? 0;
+      occurrences.set(key, occurrence + 1);
+      ids.set(region, `${this.regionPrefix}-${known}-${occurrence}`);
+    }
+    this.regionKeys = shown;
+    return ids;
   }
 
   private regionElement(region: RenderRegion, producerOf: ProducerOf): HTMLElement {

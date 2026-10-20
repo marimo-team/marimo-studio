@@ -33,7 +33,8 @@ Examples:
   marimo-studio status --target analysis.py
   marimo-studio view create dashboard --target analysis.py
 
-Default Vanilla authoring:
+\b
+Open a notebook with Studio:
   uvx --with {_STUDIO_REQUIREMENT} marimo edit analysis.py --sandbox --watch
 """,
     no_args_is_help=True,

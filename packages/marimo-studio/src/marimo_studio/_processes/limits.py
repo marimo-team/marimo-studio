@@ -9,14 +9,17 @@ RUNTIME_SHUTDOWN_GRACE = 10.0
 
 def validate_runtime_timeout(value: object) -> None:
     """Reject a runtime deadline outside the supported finite range."""
-    message = f"timeout must be a finite number between 0 and {MAX_RUNTIME_TIMEOUT:g}"
+    message = (
+        "timeout must be a finite number greater than 0 and at most "
+        f"{MAX_RUNTIME_TIMEOUT:g}"
+    )
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(message)
     try:
         finite = math.isfinite(value)
     except (OverflowError, ValueError):
         raise ValueError(message) from None
-    if not finite or not 0 <= value <= MAX_RUNTIME_TIMEOUT:
+    if not finite or not 0 < value <= MAX_RUNTIME_TIMEOUT:
         raise ValueError(message)
 
 

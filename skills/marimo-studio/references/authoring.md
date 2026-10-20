@@ -107,6 +107,26 @@ await view.write(
 )
 ```
 
+## Rename or replace a view
+
+Rename a view to change its name and URL. It keeps its source and artifacts,
+reads as stale until the next build, and stays the default if it was. Show it
+under the new name in a later execution:
+
+```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
+summary = await workspace.view("report").rename("summary")
+await summary.build()
+```
+
+`make_default()` serves a view at `/`. To move a view to another starter under
+the same name, create the new view under a temporary name and show it. In a
+later execution, remove the old view and rename the new one to the old name.
+Removing the default view promotes the first remaining view, so call
+`make_default()` on the renamed view when the old view was the default.
+
 ## Save against the version you read
 
 Read each affected file immediately before writing it. For a Vanilla view:

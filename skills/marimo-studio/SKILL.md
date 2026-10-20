@@ -42,11 +42,12 @@ uvx --with marimo-studio marimo pair --help
 uvx --with marimo-studio marimo pair notebook list
 ```
 
-Pick the user's notebook and pass its server URL and absolute `path` to every
-execution. Run each Python example below as one execution:
+Pick the user's notebook and pass its server URL and its session's
+`session_id` to every execution. Run each Python example below as one
+execution:
 
 ```console
-uvx --with marimo-studio marimo pair execute --url <URL> --file <PATH> --code-file - <<'PY'
+uvx --with marimo-studio marimo pair execute --url <URL> --session <SESSION_ID> --code-file - <<'PY'
 import marimo_studio
 print(await marimo_studio.agent.current_workspace().status())
 PY
@@ -54,7 +55,7 @@ PY
 
 The list shows local servers started with `--no-token`. For a server that
 requires a token, ask the user for its URL and a token file. List that server
-to read the notebook's absolute `path`, and pass `--token-file <PATH>` to every
+to read the notebook's `session_id`, and pass `--token-file <PATH>` to every
 `pair` command:
 
 ```console
@@ -62,23 +63,8 @@ uvx --with marimo-studio marimo pair notebook list --url <URL> --token-file <PAT
 ```
 
 In a [marimohub](https://marimo-team.github.io/marimo-studio/guide/marimohub)
-sandbox, such as an OpenCode agent or a VS Code terminal, the hub sets
-`MARIMOHUB_KERNEL_URL` and `MARIMOHUB_KERNEL_TOKEN_FILE`. The hub owns the
-session's server. Attach to it through the sandbox's own environment, which
-already includes Studio, and pass both values to every `pair` command. Do not
-start another server or disable authentication:
-
-```console
-kernel_args=(--url "$MARIMOHUB_KERNEL_URL")
-if [[ -n "${MARIMOHUB_KERNEL_TOKEN_FILE:-}" ]]; then
-  kernel_args+=(--token-file "$MARIMOHUB_KERNEL_TOKEN_FILE")
-fi
-uv run --no-sync marimo pair notebook list "${kernel_args[@]}"
-```
-
-In a hub session, check `status().persistence` before you create a view. When
-it is `"source"` or `"none"`, tell the user that the hub discards view files
-when the session ends.
+sandbox, attach to the hub's server as [setup](references/setup.md#marimohub-sandboxes)
+describes.
 
 Outside marimohub, when the notebook is not running, start it in the background.
 For a topic with no notebook, choose a new file name and marimo creates the
@@ -94,15 +80,9 @@ file. `--no-token` serves the editor on localhost without an access token,
 which lets `pair notebook list` find it. Studio needs `marimo-studio` in the
 marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
-Notebook Kit starters, and its `typst` extra enables the Typst starter. The
-Quarto starter needs the `quarto` command from
-https://quarto.org/docs/get-started/ or `pixi global install quarto`. The
-LaTeX starter needs Tectonic. Add `tectonic = ">=0.15"` under
-`[tool.pixi.dependencies]` in the notebook's `# /// script` block, cap
-`requires-python` below 3.15, and open the notebook with `--sandbox=pixi` in
-place of `--sandbox`. Studio then runs Tectonic from the notebook's pixi
-environment. `pixi global install tectonic` provides it for every notebook. A notebook in a pixi workspace runs Studio through
-`pixi run marimo edit notebook.py --no-sandbox --watch`.
+Notebook Kit starters. For a starter that `starters()` reports unavailable,
+follow its `availability.action` and the matching entry in
+[gotchas](references/gotchas.md).
 `help(marimo._code_mode)` then lists Studio as the `studio` capability, and
 sandboxed kernels import the same Studio as the server. For views across
 several notebooks, serve their folder as
@@ -145,6 +125,9 @@ When a frontend or presentation framework is requested, inspect installed
 starters and their availability:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
 starters = await workspace.starters()
 for starter in starters:
     print(starter.id, starter.title, starter.availability)
@@ -160,6 +143,10 @@ unavailable requirements before building. For an ordinary dashboard,
 the default starter creates an editable HTML page with notebook output hosts:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
+status = await workspace.status()
 if any(item.name == "dashboard" for item in status.views):
     view = workspace.view("dashboard")
 else:
@@ -176,23 +163,8 @@ import marimo_studio
 await marimo_studio.agent.current_workspace().view("dashboard").show()
 ```
 
-Rename a view to change its name and URL. It keeps its source and artifacts,
-reads as stale until the next build, and stays the default if it was. Show it
-under the new name in a later execution:
-
-```python
-import marimo_studio
-
-workspace = marimo_studio.agent.current_workspace()
-summary = await workspace.view("report").rename("summary")
-await summary.build()
-```
-
-`make_default()` serves a view at `/`. To move a view to another starter under
-the same name, create the new view under a temporary name and show it. In a
-later execution, remove the old view and rename the new one to the old name.
-Removing the default view promotes the first remaining view, so call
-`make_default()` on the renamed view when the old view was the default.
+To rename a view or move it to another starter, read
+[authoring](references/authoring.md#rename-or-replace-a-view).
 
 For a notebook outside a Python project, the first view adds a
 [PEP 723](https://peps.python.org/pep-0723/) script header, the notebook's
@@ -243,6 +215,9 @@ Discover available cells with a compact inventory, then inspect the relevant
 producers before changing notebook results or projecting them:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
 notebook = await workspace.inspect_notebook()
 for cell in notebook.cells:
     print(cell.name, cell.definitions, cell.has_output_expression)
@@ -252,6 +227,9 @@ Print selected fields. The full inspection record also contains the complete
 saved notebook. Read code for the chosen selector:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
 producer = await workspace.inspect_notebook(
     selectors=("summary",), include_code=True, context="upstream"
 )
@@ -267,6 +245,9 @@ Use guarded writes for existing editable documents. This example changes a
 heading in a Vanilla view after reading its current content:
 
 ```python
+import marimo_studio
+
+view = marimo_studio.agent.current_workspace().view("dashboard")
 document = await view.read("index.html")
 updated = document.content.replace("Current heading", "Quarterly revenue")
 await view.write("index.html", updated, expected_revision=document.revision)
@@ -298,6 +279,9 @@ project's flags, such as `--package-json` for Svelte, then build:
 import subprocess
 import sys
 
+import marimo_studio
+
+view = marimo_studio.agent.current_workspace().view("dashboard")
 root = (await view.inspect()).root
 add = ["add", "--frozen=false", "--save-exact", "npm:vega-embed@6"]
 subprocess.run([sys.executable, "-m", "deno", *add], cwd=root, check=True)

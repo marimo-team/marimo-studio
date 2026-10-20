@@ -27,6 +27,7 @@ from marimo_studio.errors._internal import ArtifactIntegrityError
 from marimo_studio.view_providers import (
     JsonValue,
     ProjectDiagnostic,
+    ProviderAvailability,
     ProviderCancellation,
     RenderRegion,
     RenderRequest,
@@ -56,9 +57,34 @@ _JSON_HINT = (
 
 
 class Renderer(Protocol):
+    key: str
     can_render: bool
 
+    def availability(self) -> ProviderAvailability: ...
+
     def render(self, request: RenderRequest) -> RenderResult: ...
+
+
+def _unavailable(renderer: Renderer) -> DiagnosticsError | None:
+    """Explain a failed render by a missing provider requirement.
+
+    A server can start without a provider's extra and still serve a view an
+    earlier command built, so the first render is where the requirement shows.
+    """
+    availability = renderer.availability()
+    if availability.available:
+        return None
+    detail = f": {availability.reason.rstrip('.')}" if availability.reason else ""
+    return DiagnosticsError(
+        (
+            ProjectDiagnostic(
+                "provider-unavailable",
+                "error",
+                f"View provider {renderer.key!r} is unavailable{detail}.",
+                availability.action or "",
+            ),
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -372,7 +398,7 @@ def run_render(
         except MarimoStudioError as error:
             if cancellation.cancelled:
                 raise
-            raise DiagnosticsError(
+            raise _unavailable(renderer) or DiagnosticsError(
                 (
                     ProjectDiagnostic(
                         "render-failed",
@@ -385,7 +411,7 @@ def run_render(
             ) from error
         errors = tuple(item for item in result.diagnostics if item.severity == "error")
         if result.main is None or errors:
-            raise DiagnosticsError(
+            raise _unavailable(renderer) or DiagnosticsError(
                 errors
                 or (
                     ProjectDiagnostic(

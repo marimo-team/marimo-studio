@@ -137,7 +137,7 @@ def test_isolated_workers_resolve_the_parent_output_directory(
 
 @pytest.mark.parametrize(
     "timeout",
-    (-1, float("nan"), MAX_RUNTIME_TIMEOUT + 1, 10**400),
+    (-1, 0, float("nan"), MAX_RUNTIME_TIMEOUT + 1, 10**400),
 )
 def test_isolated_probe_rejects_an_invalid_timeout(
     tmp_path: Path,

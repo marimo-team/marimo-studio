@@ -22,10 +22,14 @@ The starter defines `observeMarimoValue` inside the `index.html` module script.
 Keep it inline or move it to a JavaScript file referenced directly from the
 entry document. Use it when page JavaScript consumes a notebook value or eager
 dataframe. Keep the corresponding `mo-value` host in authored HTML so Studio
-can inspect and authorize its selector.
+can inspect and authorize its selector. Group hosts that only feed page code in
+a hidden container. Lens selects the parent of a hidden host, so a host placed
+directly in `#app-shell` makes the whole page one selection target.
 
 ```html
-<span id="rows-data" hidden mo-value="rows"></span>
+<div hidden>
+  <span id="rows-data" hidden mo-value="rows"></span>
+</div>
 ```
 
 ```js
@@ -94,21 +98,6 @@ versioned URL for maintained project source:
 ```js
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 ```
-
-Choose the URL form that matches the dependency source:
-
-- Latest npm release for deliberate experiments:
-  `import * as d3 from "https://cdn.jsdelivr.net/npm/d3/+esm";`
-- Versioned npm package:
-  `import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";`
-- Concise statistical charts:
-  `import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";`
-- Tabular transformation:
-  `import * as aq from "https://cdn.jsdelivr.net/npm/arquero@8/+esm";`
-- Modular charting from an exported package subpath:
-  `import * as echarts from "https://cdn.jsdelivr.net/npm/echarts@6/core/+esm";`
-- CSV parsing from JSR through esm.sh:
-  `import { parse as parseCsv } from "https://esm.sh/jsr/@std/csv";`
 
 Remote modules require browser network access and a hosting content security
 policy that allows the selected CDN. Keep all dependency origins explicit and

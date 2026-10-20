@@ -494,15 +494,23 @@ def set_cell_bindings(
     remove: Iterable[str] = (),
 ) -> None:
     """Set cell aliases in a mutable Studio configuration."""
-    cells = config.setdefault("cells", tomlkit.table())
+    removed = tuple(remove)
+    cells = config.get("cells")
+    if cells is None:
+        if not bindings:
+            return
+        cells = tomlkit.table()
+        config["cells"] = cells
     if not isinstance(cells, MutableMapping):
         raise ConfigurationError("cells must be a TOML table")
-    for alias in remove:
+    for alias in removed:
         cells.pop(alias, None)
     for alias, ref in bindings.items():
         value = tomlkit.inline_table()
         value["ref"] = str(ref)
         cells[alias] = value
+    if removed and not cells:
+        del config["cells"]
 
 
 def configured_notebook_source(
@@ -537,14 +545,12 @@ def configured_notebook_source(
     if config is None:
         config = tomlkit.table()
         config["default"] = default_view
-        config["cells"] = tomlkit.table()
         tool["marimo-studio"] = config
     elif not isinstance(config, MutableMapping):
         raise ConfigurationError("[tool.marimo-studio] must be a TOML table")
     else:
         if config.get("default") != default_view:
             config["default"] = default_view
-        config.setdefault("cells", tomlkit.table())
     if "dependencies" in document or project_environment(path) is None:
         _set_provider_dependency_ownership(
             document,
