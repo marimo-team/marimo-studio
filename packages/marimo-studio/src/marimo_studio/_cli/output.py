@@ -184,34 +184,27 @@ def render_status(result: StudioOverview) -> None:
     for view in result.views:
         suffix = " (default)" if view.default else ""
         echo(f"  {light_blue(view.name)}{suffix}\n    {view.path}")
-    if result.state == "unconfigured":
-        command = _uvx_command(
-            result.launch_requirements,
-            [
-                "marimo-studio",
-                "view",
-                "create",
-                "dashboard",
-                "--target",
-                str(result.notebook),
-            ],
-            executable_requirement=result.launch_requirements[0],
+    view = "dashboard" if result.state == "unconfigured" else result.default_view
+    if result.state in {"unconfigured", "needs-view"} and view is not None:
+        _echo_next_command(
+            "create",
+            _studio_command(
+                result, ["view", "create", view, "--target", str(result.notebook)]
+            ),
         )
-        _echo_next_command("create", command)
-    elif result.state == "needs-view" and result.default_view is not None:
-        command = _uvx_command(
-            result.launch_requirements,
-            [
-                "marimo-studio",
-                "view",
-                "create",
-                result.default_view,
-                "--target",
-                str(result.notebook),
-            ],
-            executable_requirement=result.launch_requirements[0],
-        )
-        _echo_next_command("create", command)
+
+
+def _studio_command(result: StudioOverview, arguments: list[str]) -> str:
+    """Return the Studio command for the notebook's pixi workspace or uvx."""
+    project = project_environment(result.notebook)
+    if project is not None and project.manager == "pixi":
+        # Studio refuses to run outside the pixi workspace that owns a notebook.
+        return shell_command(pixi_run_command(project, ["marimo-studio", *arguments]))
+    return _uvx_command(
+        result.launch_requirements,
+        ["marimo-studio", *arguments],
+        executable_requirement=result.launch_requirements[0],
+    )
 
 
 def render_view_document(document: ViewDocument) -> None:
