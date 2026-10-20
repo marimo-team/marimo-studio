@@ -61,7 +61,7 @@ export const startStaticPresentation = (registry: RuntimeRegistry): void => {
     setRuntimeConnectionState("error", {
       code: "static-runtime-failed",
       message: errorMessage(cause),
-      hint: "Rebuild the exported view, then reload the page.",
+      hint: "Reload the page. If the error stays, check that the server returns every file of the exported folder, or export the view again.",
     });
     console.error("marimo-studio static runtime error", cause);
   });
