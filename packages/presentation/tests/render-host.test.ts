@@ -713,6 +713,64 @@ test("a newer bundle replaces the regions, and a removed host releases them", as
   expect(host.hasAttribute("data-marimo-lens-inputs")).toBe(false);
 });
 
+test("a recomputed render keeps the target ID of each region it shows again", async () => {
+  commitRenderReads();
+  const total = { reads: ["summary"], label: "Total" };
+  renders.push(
+    () => json(bundle("a", { regions: [region({ ...total })] })),
+    () =>
+      json(
+        bundle("b", {
+          regions: [
+            region({ ...total, rect: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 } }),
+            region({ reads: ["chart"] }),
+          ],
+        }),
+      ),
+  );
+  const { host } = mount();
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(1));
+  const [before] = regionTargets(host);
+
+  notifyNotebookResults();
+
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(2));
+  const labelled = regionTargets(host).find((item) => item.dataset.marimoLensLabel === "Total");
+  const chart = regionTargets(host).find((item) => item.dataset.marimoLensLabel === "chart");
+  expect(labelled).not.toBe(before);
+  expect(labelled?.id).toBe(before?.id);
+  expect(labelled?.style.left).toBe("10%");
+  expect(chart?.id).toBeTruthy();
+  expect(chart?.id).not.toBe(before?.id);
+});
+
+test("each copy of a file part keeps its own region target ID", async () => {
+  commitRenderReads();
+  renders.push(
+    () => json(bundle("a", { regions: [region({ reads: ["chart"] })] })),
+    () => json(bundle("b", { regions: [region({ reads: ["chart"] })] })),
+  );
+  const { host } = mount(
+    `<marimo-output render="figure.py"><img alt="Figure"><img alt="Thumbnail"></marimo-output>`,
+  );
+  const present = () => {
+    for (const image of host.querySelectorAll("img")) {
+      image.src = host.marimoRender!.files[0]!.url;
+    }
+  };
+  host.addEventListener("marimo-output-ready", present);
+  host.addEventListener("marimo-output-updated", present);
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(2));
+  const before = regionTargets(host).map((item) => item.id);
+
+  notifyNotebookResults();
+
+  await vi.waitFor(() => expect(host.marimoRender?.bundle).toBe("b".repeat(64)));
+  await vi.waitFor(() => expect(regionTargets(host)).toHaveLength(2));
+  expect(regionTargets(host).map((item) => item.id)).toEqual(before);
+  expect(new Set(before).size).toBe(2);
+});
+
 test("regions keep their targets until their producers change", async () => {
   commitRenderReads();
   renders.push(() => json(bundle("a", { regions: [region({ reads: ["chart"] })] })));
