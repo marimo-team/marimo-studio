@@ -156,6 +156,7 @@ async def probe_runtime_in_worker(
                         query_params=query_params,
                         file_key=str(path),
                         auto_instantiate=True,
+                        main=True,
                     ),
                     timeout=max(0, deadline - loop.time()),
                 )

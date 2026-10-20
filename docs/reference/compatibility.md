@@ -62,7 +62,7 @@ you keep into the folder Studio uses, then remove the old folder.
 | Component                                           | Contract                                                                                      |
 | --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Python                                              | 3.10 through 3.14                                                                             |
-| marimo                                              | 0.25.1                                                                                        |
+| marimo                                              | 0.25.2                                                                                        |
 | [Deno](https://docs.deno.com/)                      | 2.9.5 or newer from the `deno` extra for React, Reveal.js, Svelte, and Notebook Kit authoring |
 | [uv](https://docs.astral.sh/uv/)                    | Required when the CLI must prepare or re-enter a notebook or provider environment             |
 | [pixi](https://pixi.prefix.dev/)                    | Optional. 0.80 or newer runs pixi workspaces, `--sandbox=pixi` notebooks, and their tools     |

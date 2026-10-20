@@ -307,26 +307,26 @@ def _path_beneath(path: str, base: str) -> str | None:
 def config_manager_at_notebook(config_manager: Any, notebook: Path) -> Any:
     from marimo._config.manager import (
         MarimoConfigManager,
-        ProjectConfigManager,
-        ScriptConfigManager,
+        PyprojectConfigReader,
+        ScriptConfigReader,
     )
 
     partials: list[Any] = []
     has_project = False
     has_script = False
     for partial in config_manager.partials:
-        if isinstance(partial, ProjectConfigManager):
-            partials.append(ProjectConfigManager(str(notebook)))
+        if isinstance(partial, PyprojectConfigReader):
+            partials.append(PyprojectConfigReader(str(notebook)))
             has_project = True
-        elif isinstance(partial, ScriptConfigManager):
-            partials.append(ScriptConfigManager(str(notebook)))
+        elif isinstance(partial, ScriptConfigReader):
+            partials.append(ScriptConfigReader(str(notebook)))
             has_script = True
         else:
             partials.append(partial)
     if not has_project:
-        partials.insert(0, ProjectConfigManager(str(notebook)))
+        partials.insert(0, PyprojectConfigReader(str(notebook)))
     if not has_script:
-        partials.insert(1, ScriptConfigManager(str(notebook)))
+        partials.insert(1, ScriptConfigReader(str(notebook)))
     return MarimoConfigManager(
         config_manager.user_config_mgr,
         *partials,

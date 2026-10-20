@@ -182,7 +182,6 @@ const patchedFiles = [
   "frontend/src/plugins/impl/anywidget/model.ts",
   "frontend/src/plugins/impl/anywidget/registry.ts",
   "frontend/src/plugins/impl/anywidget/runtime.ts",
-  "frontend/src/plugins/impl/common/labeled.tsx",
 ];
 
 const assertMarimoPatch = async (path: string) => {

@@ -294,9 +294,9 @@ const studioDocumentMutationGeneration = () => generation;
 const studioReportDocumentSave = (captured, succeeded) =>
   reports.push([captured, succeeded]);
 const studioFlushBeforeDocumentSave = studioFlushDocumentChanges;
-const br = async () => {{}};
+const $t = async () => {{}};
 const n = () => ({{}});
-const PA = (value) => value;
+const Qf = (value) => value;
 const e = () => ({{
   POST(url, options) {{
     requests.push([url, options.body, generation]);
@@ -377,7 +377,7 @@ def test_native_document_queue_holds_edits_until_save_settles(
     cells = next(assets.glob("cells-*.js")).read_bytes()
     adapted = _serialize_document_transactions(cells).decode()
     start = adapted.index("var marimoStudioPendingTransactions=[];")
-    end = adapted.index("function Bj(", start)
+    end = adapted.index("function Pj(", start)
     native_queue = adapted[start:end]
     script = f"""
 import assert from "node:assert/strict";
@@ -385,17 +385,17 @@ import assert from "node:assert/strict";
 var marimoStudioAwaitDocumentMutation, marimoStudioDocumentMutationGeneration;
 var marimoStudioReportDocumentSave, marimoStudioFlushDocumentChanges;
 var marimoStudioFlushBeforeDocumentSave;
-const Cj = (changes) => changes;
-const te = (callback) => Object.assign(callback, {{ cancel() {{}} }});
-class li {{
+const _j = (changes) => changes;
+const ne = (callback) => Object.assign(callback, {{ cancel() {{}} }});
+class si {{
   constructor() {{
     this.promise = new Promise((resolve) => {{ this.resolve = resolve; }});
   }}
 }}
 const events = [];
-const saveStarted = new li();
-const saveRelease = new li();
-const Vr = () => ({{
+const saveStarted = new si();
+const saveRelease = new si();
+const zr = () => ({{
   async sendDocumentTransaction(request) {{
     assert.match(request.studioOperationId, /^[a-z0-9-]{{16,128}}$/);
     events.push(request.changes[0].code);
@@ -420,12 +420,12 @@ const requests = createStudioDocumentRequests({{
   params: () => ({{}}),
   handleResponse: (value) => value,
 }});
-wj.push({{type: "set-code", cellId: "cell", code: "before save"}});
-const saving = zj(() => requests.sendSave({{}}));
+vj.push({{type: "set-code", cellId: "cell", code: "before save"}});
+const saving = Nj(() => requests.sendSave({{}}));
 await saveStarted.promise;
 assert.deepEqual(events, ["before save", "save started"]);
-wj.push({{type: "set-code", cellId: "cell", code: "during save"}});
-const flushing = Pj();
+vj.push({{type: "set-code", cellId: "cell", code: "during save"}});
+const flushing = Oj();
 await Promise.resolve();
 assert.deepEqual(events, ["before save", "save started"]);
 saveRelease.resolve();
@@ -525,7 +525,7 @@ const initial = """
 const apply = (operation, data) => {
   window.location.href = initial;
   historyEntries.length = 0;
-  Yf[operation](data);
+  Tn[operation](data);
   return { href: window.location.href, writes: historyEntries.length };
 };
 const results = {
@@ -636,8 +636,8 @@ console.log(JSON.stringify(results));
 def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
     tmp_path: Path,
 ) -> None:
-    asset = tmp_path / "RunButton-test.js"
-    asset.write_bytes(b"const extensions = [im.of(Yt())];")
+    asset = tmp_path / "cell-editor-test.js"
+    asset.write_bytes(b"const extensions = [id.of(bn())];")
     observed_scope: dict[str, object] = {}
     messages: list[Message] = []
 
@@ -659,8 +659,8 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
             "http_version": "1.1",
             "method": "GET",
             "scheme": "http",
-            "path": "/assets/RunButton-test.js",
-            "raw_path": b"/assets/RunButton-test.js",
+            "path": "/assets/cell-editor-test.js",
+            "raw_path": b"/assets/cell-editor-test.js",
             "query_string": b"",
             "root_path": "",
             "headers": [
@@ -679,7 +679,7 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
             scope,
             receive,
             send,
-            resource_path="/assets/RunButton-test.js",
+            resource_path="/assets/cell-editor-test.js",
             eager_runtime=False,
         )
     )
@@ -693,7 +693,7 @@ def test_cell_editor_rewrite_disables_path_send_and_partial_responses(
         for message in messages
         if message["type"] == "http.response.body"
     )
-    assert body == b"const extensions = [e.copilot===`github`?im.of(Yt()):[]];"
+    assert body == b"const extensions = [e.copilot===`github`?id.of(bn()):[]];"
 
 
 def test_editor_root_rewrite_requires_a_complete_identity_response() -> None:
@@ -829,7 +829,7 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
     app = _marimo_app(notebook, programmatic=True)
     _edit_mode(app)
     assets = Path(marimo.__file__).parent / "_static" / "assets"
-    cell_editor = next(assets.glob("RunButton-*.js"))
+    cell_editor = next(assets.glob("cell-editor-*.js"))
     runtime_config = next(
         path for path in assets.glob("config-*.js") if b"getLSPURL" in path.read_bytes()
     )
@@ -841,13 +841,13 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
     index = next(
         path
         for path in assets.glob("index-*.js")
-        if b"sendRun:async t=>(await br(),e().POST(`/api/kernel/run`"
+        if b"sendRun:async t=>(await $t(),e().POST(`/api/kernel/run`"
         in path.read_bytes()
     )
     panels = next(
         path
         for path in assets.glob("panels-*.js")
-        if b"var Yf={append:" in path.read_bytes()
+        if b"var Tn={append:" in path.read_bytes()
     )
     session = next(
         path
@@ -900,13 +900,13 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
     assert native[4].content == panels.read_bytes()
     assert native[5].content == session.read_bytes()
     assert b't.has("marimo_studio_editor")' in before[5].content
-    assert native[0].content.count(b"e.copilot===`github`?im.of(Yt()):[]") == 1
+    assert native[0].content.count(b"e.copilot===`github`?id.of(bn()):[]") == 1
     for response in (*before, *after, *native):
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
         for header in ("accept-ranges", "content-range", "etag", "last-modified"):
             assert header not in response.headers
-    assert before[0].content.count(b"e.copilot===`github`?im.of(Yt()):[]") == 1
+    assert before[0].content.count(b"e.copilot===`github`?id.of(bn()):[]") == 1
     assert before[1].content.count(b'"/_marimo-studio/editor/lsp/","/lsp/"') == 1
     assert _DOCUMENT_RUNTIME in before[2].content
     assert b"this.options.onConnectionFailure" in before[2].content

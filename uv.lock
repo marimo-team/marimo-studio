@@ -40,7 +40,7 @@ dev = [
     { name = "basedpyright", specifier = ">=1.39.10" },
     { name = "deno", specifier = "==2.9.5" },
     { name = "httpx2", specifier = ">=2.9" },
-    { name = "marimo", extras = ["recommended"], specifier = "==0.25.1" },
+    { name = "marimo", extras = ["recommended"], specifier = "==0.25.2" },
     { name = "marimo-lens", specifier = ">=0.2.3" },
     { name = "matplotlib", specifier = ">=3.10" },
     { name = "pandas", specifier = ">=2.2.2" },
@@ -1747,7 +1747,7 @@ wheels = [
 
 [[package]]
 name = "marimo"
-version = "0.25.1"
+version = "0.25.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click", marker = "sys_platform != 'emscripten'" },
@@ -1773,9 +1773,9 @@ dependencies = [
     { name = "websockets", version = "16.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'emscripten'" },
     { name = "websockets", version = "17.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f8/7b/29895b0d747758da46a051f57c594634ab02f3993d5eab2f2e49ce4f144f/marimo-0.25.1.tar.gz", hash = "sha256:934db2ceb6c2b8c9ae3514a7a22e6b22ecf54fabea0b6138aed1980f8f1536ff", size = 50186739, upload-time = "2026-10-01T21:01:28.262Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/d6/f4aae3466a41d34952ac84a4b9bcd83744da592b496c98e34ccd2a0f20d9/marimo-0.25.2.tar.gz", hash = "sha256:3cfa38ac84c66625e1f7cb7dc81a41ebd592244000ffe37effb28a91765056b0", size = 38844392, upload-time = "2026-10-19T20:10:30.145Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/e6/695f462fd473981325146edde01c12390413ebaa33c1f0b49191d6b55f86/marimo-0.25.1-py3-none-any.whl", hash = "sha256:dec4a87bc5db16b85181ba4880e67bb55485912b7ef26748a0bbf052c59203fd", size = 50850300, upload-time = "2026-10-01T21:01:24.577Z" },
+    { url = "https://files.pythonhosted.org/packages/06/5c/c26a57aefe28fceab762ad104744c1af18a4b62809629897722c866bbd2f/marimo-0.25.2-py3-none-any.whl", hash = "sha256:7acb7a433755c6d965c03e07725477ab63804f6667ba9e37e4da582f358018c7", size = 39465510, upload-time = "2026-10-19T20:10:25.147Z" },
 ]
 
 [package.optional-dependencies]
@@ -1795,7 +1795,7 @@ recommended = [
 
 [[package]]
 name = "marimo-export"
-version = "0.2.1"
+version = "0.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-plugins" },
@@ -1810,11 +1810,12 @@ dependencies = [
     { name = "psutil", marker = "sys_platform != 'android' and sys_platform != 'emscripten'" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "tomlkit" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0e/2d/7acf62cca3a109e4f20597662f73e52bae0b323954d9c4a6815f40df9cb6/marimo_export-0.2.1.tar.gz", hash = "sha256:8c85f62111fa1066072ce450a0a7533c8734f3bf43f0aac213d36449af69e618", size = 288337, upload-time = "2026-10-16T11:26:35.649Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/5a/9348500af87b7f892ae701a1c88de3cc912c5085e6fdb4827f96fce707eb/marimo_export-0.2.2.tar.gz", hash = "sha256:f9918e81bc43f8d9f42a237f21c21e8e42750b02c3fcebe2119c3f1688e4a523", size = 289085, upload-time = "2026-10-20T06:46:06.823Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/77/b0/a446dd1e3e40eecaf5e0f0615fbbd10b42b1cbd8bd3dfd2ddd1ace1824ba/marimo_export-0.2.1-py3-none-any.whl", hash = "sha256:0154c994d62e3d43eee544d9502ef5a773123b190665e1fc86fa617c3a4ac01d", size = 373634, upload-time = "2026-10-16T11:26:34.526Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/14/ea239b698b56774b3bc28f74e21f197a267cd932f0f01851b67a26e04bcc/marimo_export-0.2.2-py3-none-any.whl", hash = "sha256:05e9ae47b90f3597c947a701f0dbb6063d0483dcd83aba0c3dcd60bf516e4ab5", size = 374297, upload-time = "2026-10-20T06:46:04.971Z" },
 ]
 
 [[package]]
@@ -1875,8 +1876,8 @@ requires-dist = [
     { name = "click", specifier = ">=8.2" },
     { name = "deno", marker = "extra == 'deno'", specifier = ">=2.9.5" },
     { name = "htpy", specifier = ">=26.5.1" },
-    { name = "marimo", specifier = "==0.25.1" },
-    { name = "marimo-export", specifier = ">=0.2.1" },
+    { name = "marimo", specifier = "==0.25.2" },
+    { name = "marimo-export", specifier = ">=0.2.2" },
     { name = "marimo-lens", marker = "extra == 'lens'", specifier = ">=0.2.3" },
     { name = "marimo-studio", extras = ["deno", "lens"], marker = "extra == 'recommended'", editable = "packages/marimo-studio" },
     { name = "markupsafe", specifier = ">=3" },
