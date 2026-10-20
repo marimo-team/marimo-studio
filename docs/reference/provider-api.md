@@ -1106,15 +1106,8 @@ and `preview` name listed files, and `preview` differs from `main`. Return no
 `main`, with an error diagnostic, when the render fails. Warning diagnostics
 publish with the files.
 
-`RenderResult.regions` locates parts of the published files. A region's
-`file` names a listed PDF, `image/*`, or `video/*` file. A PDF region names
-its `page`, counted from 1. A video region shows from `start` until `end`
-seconds, from the first frame when `start` is `None`, and until the video ends
-when `end` is `None`. `Rect` coordinates are fractions from 0 to 1 of the
-surface's width and height, from its top left corner. A region without a
-`source` takes the source of the read site of its first read, and a region
-without a `label` shows its first read. Studio keeps the first 64 reads of a
-region and the first 4,096 regions of a render.
+`RenderResult.regions` locates parts of the published files, as
+[Locate parts of rendered files](#locate-parts-of-rendered-files) defines.
 
 ### Commands and cancellation
 

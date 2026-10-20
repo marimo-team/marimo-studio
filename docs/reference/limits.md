@@ -123,8 +123,7 @@ containers with a larger `--shm-size`. A value that does not fit travels
 inline and takes longer to load.
 
 The Browser runtime passes Arrow values from its worker as base64 text, which
-caps a value read there at 64 MiB of Arrow. A 60 MB value took about 8 seconds
-to appear in Chromium on a Linux workstation.
+caps a value read there at 64 MiB of Arrow.
 `marimo-studio validate --level runtime` applies the Python runtime budgets.
 
 The Prepared runtime stores each value as a
