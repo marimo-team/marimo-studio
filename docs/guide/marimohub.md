@@ -25,7 +25,8 @@ MARIMOHUB_PERSIST_WORKSPACE=workspace
 ```
 
 With the default `source` value, the hub saves only `notebook.py` and
-`pyproject.toml`, and view files are lost when the session ends. Workspace
+`pyproject.toml`, and view files are lost when the session ends. A notebook
+imported with its folder keeps the whole workspace in either mode. Workspace
 persistence also saves hidden files such as `.env`, which any project member
 with read access can download. Keep credentials in the hub's
 [integration secrets](https://marimohub.docs.marimo.io/integration-secrets).
@@ -35,8 +36,10 @@ session, and **Add view** warns about them. For a Git-synced notebook, follow th
 [marimo-studio steps](https://marimohub.docs.marimo.io/apps#use-marimo-studio)
 and commit `notebook.py` and its views folder before you stop the session.
 
-The saved workspace leaves out `__marimo__/`, where Studio keeps build state by
-default, so each new session rebuilds every view.
+The saved workspace keeps `__marimo__/`, where Studio keeps build state by
+default, when it is within the hub's capture budget, and omits Studio's cache
+directories. A new session builds a view again when its saved build is missing
+or stale.
 
 Studio needs
 [supported storage](../reference/compatibility.md#workspace-storage) for the
@@ -86,8 +89,11 @@ and access to the npm registry. **Typst report** needs `marimo-studio[typst]`.
 **LaTeX article** needs Tectonic 0.15 or newer on `PATH`, and its first compile
 downloads TeX packages over the network.
 
-The sandbox image must provide marimo 0.25.2, the version Studio 0.4 runs on.
-See [Supported environment](../reference/compatibility.md#supported-environment).
+Each Studio release pins one marimo release, and the hub installs the
+notebook's dependencies beside the marimo of its sandbox image. Use an image
+whose marimo matches the Studio release the notebook declares, as
+[Supported environment](../reference/compatibility.md#supported-environment)
+lists.
 
 ## Create the first view
 
@@ -177,8 +183,8 @@ See
 
 Coding agents author views through Studio's agent API in the live notebook
 kernel, and `workspace.status()` reports in `persistence` whether the hub saves
-view files. In code mode, `view.preview_url()` returns the view's address on
-the sandbox's public URL. `MARIMOHUB_SANDBOX_AUTH=on` makes each sandbox's
+view files. In code mode, `view.preview_url(runtime="server")` returns the view's
+address on the sandbox's public URL. `MARIMOHUB_SANDBOX_AUTH=on` makes each sandbox's
 marimo require an access token, and with the exposure it decides who can open
 that URL:
 
