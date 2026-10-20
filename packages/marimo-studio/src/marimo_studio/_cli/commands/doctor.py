@@ -12,7 +12,7 @@ from marimo_studio._cli.catalog_output import render_provider
 from marimo_studio._cli.diagnostics import json_option
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.output import echo_json
-from marimo_studio._cli.targets import resolve_notebook
+from marimo_studio._cli.targets import resolve_notebook, resolve_tools_notebook
 from marimo_studio._validation.dependencies import diagnose_dependencies
 
 
@@ -57,7 +57,7 @@ def doctor(
         if not result.ok:
             raise click.exceptions.Exit(1)
         return
-    notebook = resolve_notebook(target) if target is not None else None
+    notebook = resolve_tools_notebook(target) if target is not None else None
     report = asyncio.run(diagnose_providers(provider, notebook))
     if json_output:
         echo_json(report.to_dict())

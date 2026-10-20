@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from marimo_studio._workspace.config import load_studio, load_studio_definition
+from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ConfigurationError
 
@@ -34,6 +35,19 @@ def resolve_notebook(target: str | Path | None) -> Path:
     notebook = path.resolve()
     if not notebook.exists():
         raise ConfigurationError(f"Target does not exist: {notebook}")
+    return notebook
+
+
+def resolve_tools_notebook(target: str | Path) -> Path:
+    """Resolve a notebook whose pixi metadata supplies provider tools.
+
+    Raises ``ConfigurationError`` for invalid metadata, which would otherwise
+    read as a notebook that declares no tools.
+    """
+    notebook = resolve_notebook(target)
+    if not notebook.is_file():
+        raise ConfigurationError(f"Notebook does not exist: {notebook}")
+    read_notebook_metadata(notebook)
     return notebook
 
 
