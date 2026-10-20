@@ -159,7 +159,7 @@ provider API](provider-api.md) defines the record responsibilities.
 
 | Operation                                                          |     Default |                                                       Accepted range or budget |
 | ------------------------------------------------------------------ | ----------: | -----------------------------------------------------------------------------: |
-| Runtime inspection and validation                                  |  60 seconds |                                                          0 through 300 seconds |
+| Runtime inspection and validation                                  |  60 seconds |                                              Greater than 0, up to 300 seconds |
 | Prepared export                                                    |  30 seconds |                                                              Positive duration |
 | Provider runner command                                            | 120 seconds | Finite positive duration within the request's shared 120-second command budget |
 | Third-party provider metadata, availability, and starter discovery |  10 seconds |                                             Fixed extension-operation deadline |
