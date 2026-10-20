@@ -96,6 +96,7 @@ def test_guide_report_provider_publishes_the_notebook_cells() -> None:
     page = view.published[PurePosixPath("index.html")].decode()
     assert '<marimo-cell name="' in page
     assert "data-marimo-studio-site" in page
+    assert "<title>Check 0</title>" in page
 
 
 @pytest.mark.usefixtures("acme_views")

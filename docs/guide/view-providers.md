@@ -215,7 +215,7 @@ class ReportProvider:
         )
         page = f"""<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>{html.escape(context.view_name)}</title></head>
+  <head><meta charset="utf-8"><title>{html.escape(context.title)}</title></head>
   <body>
     <main id="app-shell">
 {hosts}
@@ -263,8 +263,11 @@ describes. Studio keeps the starter list for the life of the process.
 
 ### `create()`: write the starting files
 
-`create()` runs once per new view. It receives the saved notebook in `context.notebook` and returns every file of the new project in a
-`StarterPlan`. `ReportProvider` writes one `<marimo-cell>` host into
+`create()` receives the saved notebook in `context.notebook` and returns every
+file of the new project in a `StarterPlan`. Studio writes the files. When
+creating the view adds Studio configuration or cell aliases to the notebook,
+Studio calls `create()` again with the configured notebook, so return the same
+plan for the same notebook. `ReportProvider` writes one `<marimo-cell>` host into
 `index.html` for each cell in `context.output_cells`, and adds `AGENTS.md`.
 
 `context.output_cells` lists the cells that may display output. It leaves out
