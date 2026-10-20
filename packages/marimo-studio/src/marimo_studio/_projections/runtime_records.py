@@ -106,17 +106,26 @@ class RenderedOutput:
         }
 
 
+def _textual(mimetype: str) -> bool:
+    kind, _, subtype = mimetype.partition("/")
+    return (
+        kind == "text"
+        or subtype.endswith(("+xml", "+json"))
+        or mimetype == "application/json"
+    )
+
+
 def output_representation(
     mimetype: str,
     data: object,
     accept: tuple[str, ...] = (),
 ) -> Representation | None:
-    """Decode marimo output data as base64 media.
+    """Decode marimo output data as media bytes.
 
     Without ``accept``, the output must be one media item, as ``media_output()``
     writes it. With ``accept``, a cell's output, possibly a mimebundle of several
-    types, yields the first listed type it carries. Returns None when the output
-    carries no such media.
+    types, yields the first listed type it carries, and text media may be the
+    text itself. Returns None when the output carries no such media.
     """
     size: object = None
     if mimetype == MIMEBUNDLE:
@@ -140,13 +149,21 @@ def output_representation(
         return None
     if not isinstance(data, str):
         return None
-    header, comma, payload = data.partition(",")
-    if header != f"data:{mimetype};base64" or not comma:
-        return None
-    try:
-        content = base64.b64decode(payload, validate=True)
-    except ValueError:
-        return None
+    if accept and _textual(mimetype) and not data.startswith("data:"):
+        # marimo keeps a cell's text media, such as an object's _repr_svg_, as
+        # the text itself, and encodes binary media as data URLs.
+        try:
+            content = data.encode("utf-8")
+        except UnicodeEncodeError:
+            return None
+    else:
+        header, comma, payload = data.partition(",")
+        if header != f"data:{mimetype};base64" or not comma:
+            return None
+        try:
+            content = base64.b64decode(payload, validate=True)
+        except ValueError:
+            return None
     if not content:
         return None
     sizes = size if isinstance(size, dict) else {}
