@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractContextManager
 from hashlib import sha256
 from pathlib import Path
@@ -221,6 +222,18 @@ def load_static_notebook(path: Path, source: str) -> StaticNotebook:
 
     ``path`` selects Marimo's notebook format and names the app.
     """
+    from marimo._runtime.context.types import runtime_context_installed
+
+    if not runtime_context_installed():
+        return _load_static_notebook(path, source)
+    # marimo prefixes the cell IDs of an app built inside a running kernel.
+    # Its runtime context is thread-local, so a fresh thread assigns the IDs
+    # that the editor and Studio's runtime worker use for the saved notebook.
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(_load_static_notebook, path, source).result()
+
+
+def _load_static_notebook(path: Path, source: str) -> StaticNotebook:
     from marimo._ast.compiler import ends_with_semicolon
     from marimo._ast.scanner import scan_notebook
     from marimo._convert.common import get_markdown_from_cell

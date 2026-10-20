@@ -18,6 +18,7 @@ from marimo_studio._compat.kernel_values.authorization import (
 from marimo_studio._compat.kernel_values.kernel import _KernelBridgeLifespan
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.runtime_probe import probe_runtime_in_worker
+from marimo_studio._notebook.inspection import InspectionResult, inspect_runtime
 
 from .values_test_support import (
     _encoded_json,
@@ -395,3 +396,33 @@ if __name__ == "__main__":
 
     assert result.outputs.errors["label"].code == "output-media-unavailable"
     assert "label" not in result.outputs.outputs
+
+
+def test_runtime_inspection_from_a_kernel_thread_reports_every_cell(
+    notebook_path: Path,
+) -> None:
+    # Code mode inspects from the kernel thread, where marimo prefixes the
+    # cell IDs of any app it compiles, and the probe reports saved cell IDs.
+    from marimo._runtime.context.types import initialize_context, teardown_context
+
+    results: list[InspectionResult] = []
+
+    def inspect_in_kernel() -> None:
+        initialize_context(cast(Any, object()))
+        try:
+            results.append(asyncio.run(inspect_runtime(notebook_path)))
+        finally:
+            teardown_context()
+
+    thread = threading.Thread(target=inspect_in_kernel)
+    thread.start()
+    thread.join()
+
+    (result,) = results
+    assert result.runtime is not None
+    assert [cell.runtime_id for cell in result.cells] == [
+        cell.runtime_id
+        for cell in load_static_notebook(
+            notebook_path, notebook_path.read_text(encoding="utf-8")
+        ).cells
+    ]
