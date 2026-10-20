@@ -34,12 +34,28 @@ from marimo_studio._cli.output import (
 )
 from marimo_studio._cli.targets import resolve_environment_target, resolve_notebook
 from marimo_studio._views.sources import admit_source_owner, source_path
-from marimo_studio._workspace.project_manifest import VIEW_MANIFEST_PATH
+from marimo_studio._workspace.config import load_studio_definition
+from marimo_studio._workspace.project_manifest import (
+    VIEW_MANIFEST_PATH,
+    load_view_project,
+)
+from marimo_studio.errors import ConfigurationError
 
 
 def _bootstrap_provider_environment(environment: EnvironmentTarget) -> None:
     if provider_bootstrap_required(environment):
         raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
+
+
+def _manifest_unreadable(notebook: Path, view_name: str) -> bool:
+    definition = load_studio_definition(notebook)
+    try:
+        load_view_project(
+            definition.view_root / view_name, locations=definition.locations
+        )
+    except ConfigurationError:
+        return True
+    return False
 
 
 @click.command("inspect", cls=ColoredCommand)
@@ -60,7 +76,13 @@ def inspect(
     """
     notebook = resolve_notebook(target)
     environment = resolve_environment_target(target, notebook)
-    _bootstrap_provider_environment(environment)
+    try:
+        _bootstrap_provider_environment(environment)
+    except ConfigurationError:
+        # A view.toml that fails to load names no provider to install, and
+        # inspection reports it as a repair record from this environment.
+        if not _manifest_unreadable(notebook, view_name):
+            raise
     result = asyncio.run(inspect_view(notebook, view_name))
     if json_output:
         echo_json(result.to_dict())

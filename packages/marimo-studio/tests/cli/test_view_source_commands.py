@@ -457,6 +457,50 @@ def test_view_manifest_read_and_write_repair_a_malformed_manifest_without_bootst
     assert json.loads(written.stdout)["content"] == repaired
 
 
+@pytest.mark.parametrize("malformed", ["schema = [\n", "schema = 2\n"])
+def test_view_inspect_reports_a_malformed_manifest_as_a_repair_record(
+    notebook_path: Path,
+    malformed: str,
+) -> None:
+    setup = prepare_view(notebook_path)
+    setup.root.joinpath("view.toml").write_text(malformed, encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli,
+        ["view", "inspect", "dashboard", "--target", str(notebook_path), "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert [item["code"] for item in payload["diagnostics"]] == [
+        "view-manifest-invalid"
+    ]
+    assert [item["path"] for item in payload["documents"]] == ["view.toml"]
+
+
+def test_view_inspect_reports_an_environment_error_for_an_intact_view(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+
+    def unresolvable(_target: object) -> bool:
+        raise ConfigurationError("uv must select a different target Python")
+
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view_source.provider_bootstrap_required",
+        unresolvable,
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["view", "inspect", "dashboard", "--target", str(notebook_path), "--json"],
+    )
+
+    assert isinstance(result.exception, ConfigurationError)
+    assert "different target Python" in str(result.exception)
+
+
 def test_view_manifest_repair_rejects_a_changed_sibling_catalog(
     notebook_path: Path,
 ) -> None:
