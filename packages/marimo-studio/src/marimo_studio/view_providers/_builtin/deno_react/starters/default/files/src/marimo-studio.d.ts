@@ -18,7 +18,10 @@ declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
       "marimo-cell": _MarimoHostAttributes & { name: string };
-      "marimo-output": _MarimoHostAttributes & { value: string };
+      "marimo-output": _MarimoHostAttributes & {
+        value: string;
+        accept?: string;
+      };
     }
   }
 }
