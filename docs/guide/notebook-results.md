@@ -46,7 +46,7 @@ An **output** or a **value** is named by a variable that a cell defines, and a
 [value selector](../reference/glossary.md#value-selector) can step into it:
 
 ```text
-summary.total
+totals.rooms
 rows[0]
 results["overview"]
 ```
@@ -93,8 +93,15 @@ a table places nothing there, so read its value instead:
 `marimo-output` renders one Python object with marimo's own renderer, even an
 object that no cell displays:
 
+```python
+@app.cell
+def rooms(mo):
+    room_table = mo.ui.table([{"room": "A", "in_use": 12}, {"room": "B", "in_use": 30}])
+    return (room_table,)
+```
+
 ```html
-<marimo-output value="selected_roster"></marimo-output>
+<marimo-output value="room_table"></marimo-output>
 ```
 
 In a document, an output must have an image form. `marimo_output()` and
@@ -123,8 +130,15 @@ the notebook set:
 
 On a page, `mo-value` writes a number, text, or boolean into the element:
 
+```python
+@app.cell
+def occupancy():
+    totals = {"day": "2026-10-20", "rooms": 42, "visits": 1250}
+    return (totals,)
+```
+
 ```html
-<p>Rooms in use: <strong mo-value="summary.rooms"></strong></p>
+<p>Rooms in use: <strong mo-value="totals.rooms"></strong></p>
 ```
 
 Page code can also read the value and draw it however it likes. The host
@@ -132,15 +146,15 @@ exposes the current value as `host.marimoValue` and dispatches
 `marimo-value-updated` whenever it changes:
 
 ```html
-<span id="summary-data" hidden mo-value="summary"></span>
-<output id="summary-total"></output>
+<span id="totals-data" hidden mo-value="totals"></span>
+<output id="visits"></output>
 
 <script type="module">
-  const host = document.querySelector("#summary-data");
-  const output = document.querySelector("#summary-total");
+  const host = document.querySelector("#totals-data");
+  const output = document.querySelector("#visits");
 
   const render = (value) => {
-    output.value = value.total.toLocaleString();
+    output.value = value.visits.toLocaleString();
   };
 
   host.addEventListener("marimo-value-updated", (event) => {
@@ -166,11 +180,11 @@ A document reads a value while it renders:
 ```typst [Typst]
 #import "marimo.typ": marimo_value
 
-Rooms in use: #marimo_value("summary.rooms", default: 0)
+Rooms in use: #marimo_value("totals.rooms", default: 0)
 ```
 
 ```latex [LaTeX]
-Rooms in use on \marimodate{summary.day}: \marimonum{summary.rooms}.
+Rooms in use on \marimodate{totals.day}: \marimonum{totals.rooms}.
 ```
 
 :::
