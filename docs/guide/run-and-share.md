@@ -20,13 +20,17 @@ a static site with saved results:
 export` writes a static site with the Prepared runtime by default, or with the
 Browser runtime. The Studio editor can preview all three.
 
-Choose the runtimes a notebook offers in its configuration:
+Choose the runtimes a notebook offers in the `[tool.marimo-studio]` table of
+its `# /// script` header, or of the project's `pyproject.toml` as
+[Configuration](../reference/configuration.md#project-settings) shows:
 
-```toml
-[tool.marimo-studio]
-default = "dashboard"
-runtime = "server"
-runtimes = ["server", "wasm", "zero-python"]
+```python
+# /// script
+# [tool.marimo-studio]
+# default = "dashboard"
+# runtime = "server"
+# runtimes = ["server", "wasm", "zero-python"]
+# ///
 ```
 
 `runtime` is the default and must be `server` or `wasm`, because it also
