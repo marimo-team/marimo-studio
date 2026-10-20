@@ -42,11 +42,12 @@ uvx --with marimo-studio marimo pair --help
 uvx --with marimo-studio marimo pair notebook list
 ```
 
-Pick the user's notebook and pass its server URL and absolute `path` to every
-execution. Run each Python example below as one execution:
+Pick the user's notebook and pass its server URL and its session's
+`session_id` to every execution. Run each Python example below as one
+execution:
 
 ```console
-uvx --with marimo-studio marimo pair execute --url <URL> --file <PATH> --code-file - <<'PY'
+uvx --with marimo-studio marimo pair execute --url <URL> --session <SESSION_ID> --code-file - <<'PY'
 import marimo_studio
 print(await marimo_studio.agent.current_workspace().status())
 PY
@@ -54,7 +55,7 @@ PY
 
 The list shows local servers started with `--no-token`. For a server that
 requires a token, ask the user for its URL and a token file. List that server
-to read the notebook's absolute `path`, and pass `--token-file <PATH>` to every
+to read the notebook's `session_id`, and pass `--token-file <PATH>` to every
 `pair` command:
 
 ```console

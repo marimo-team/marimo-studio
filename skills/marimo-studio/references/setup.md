@@ -15,13 +15,13 @@ Reuse instructions while the environment and installation remain the same.
 `uvx --with marimo-studio marimo pair notebook list` reports local servers
 started with `--no-token`, with their notebooks and sessions. Target the
 notebook the user opened in Studio with
-`marimo pair execute --url <URL> --file <PATH>`, passing the absolute `path`
-from that list. A relative file resolves against the
-agent's working directory. A notebook has a session once a browser opens it,
+`marimo pair execute --url <URL> --session <SESSION_ID>`, passing the
+`session_id` of that notebook's session from the list. A restarted notebook
+gets a new `session_id`, so list again after a restart. A notebook has a
+session once a browser opens it,
 and `view.show()` needs that open Studio tab. A server that requires a token
 stays out of the list. Ask the user for its URL and a token file, then run
-`pair notebook list --url <URL> --token-file <PATH>` to read its notebook
-paths. Pass `--token-file <PATH>` to every `pair` command, or rely on
+`pair notebook list --url <URL> --token-file <PATH>` to read its sessions. Pass `--token-file <PATH>` to every `pair` command, or rely on
 `MARIMO_TOKEN` when the user has set it.
 
 ## Serve several notebooks
@@ -35,7 +35,7 @@ uvx --with "marimo-studio[deno]" marimo edit notebooks/ --sandbox --watch --no-t
 Each notebook gets its own sandboxed kernel when a browser opens its Studio
 tab at `/?file=<file>`, or a named view at `/studio/<view>/?file=<file>`,
 where `<file>` is the path relative to the served folder. Pass each notebook's
-absolute `path` from `pair notebook list` to `--file`. Views belong to their
+`session_id` from `pair notebook list` to `--session`. Views belong to their
 notebook, so two notebooks can each own a view with the same name. Keep an
 editor tab open for every notebook you pair with.
 
