@@ -63,23 +63,8 @@ uvx --with marimo-studio marimo pair notebook list --url <URL> --token-file <PAT
 ```
 
 In a [marimohub](https://marimo-team.github.io/marimo-studio/guide/marimohub)
-sandbox, such as an OpenCode agent or a VS Code terminal, the hub sets
-`MARIMOHUB_KERNEL_URL` and `MARIMOHUB_KERNEL_TOKEN_FILE`. The hub owns the
-session's server. Attach to it through the sandbox's own environment, which
-already includes Studio, and pass both values to every `pair` command. Do not
-start another server or disable authentication:
-
-```console
-kernel_args=(--url "$MARIMOHUB_KERNEL_URL")
-if [[ -n "${MARIMOHUB_KERNEL_TOKEN_FILE:-}" ]]; then
-  kernel_args+=(--token-file "$MARIMOHUB_KERNEL_TOKEN_FILE")
-fi
-uv run --no-sync marimo pair notebook list "${kernel_args[@]}"
-```
-
-In a hub session, check `status().persistence` before you create a view. When
-it is `"source"` or `"none"`, tell the user that the hub discards view files
-when the session ends.
+sandbox, attach to the hub's server as [setup](references/setup.md#marimohub-sandboxes)
+describes.
 
 Outside marimohub, when the notebook is not running, start it in the background.
 For a topic with no notebook, choose a new file name and marimo creates the
@@ -95,15 +80,9 @@ file. `--no-token` serves the editor on localhost without an access token,
 which lets `pair notebook list` find it. Studio needs `marimo-studio` in the
 marimo server's environment, as in that command or the notebook project's
 dependencies. Its `deno` extra enables the React, Reveal.js, Svelte, and
-Notebook Kit starters, and its `typst` extra enables the Typst starter. The
-Quarto starter needs the `quarto` command from
-https://quarto.org/docs/get-started/ or `pixi global install quarto`. The
-LaTeX starter needs Tectonic. Add `tectonic = ">=0.15"` under
-`[tool.pixi.dependencies]` in the notebook's `# /// script` block, cap
-`requires-python` below 3.15, and open the notebook with `--sandbox=pixi` in
-place of `--sandbox`. Studio then runs Tectonic from the notebook's pixi
-environment. `pixi global install tectonic` provides it for every notebook. A notebook in a pixi workspace runs Studio through
-`pixi run marimo edit notebook.py --no-sandbox --watch`.
+Notebook Kit starters. For a starter that `starters()` reports unavailable,
+follow its `availability.action` and the matching entry in
+[gotchas](references/gotchas.md).
 `help(marimo._code_mode)` then lists Studio as the `studio` capability, and
 sandboxed kernels import the same Studio as the server. For views across
 several notebooks, serve their folder as
@@ -184,23 +163,8 @@ import marimo_studio
 await marimo_studio.agent.current_workspace().view("dashboard").show()
 ```
 
-Rename a view to change its name and URL. It keeps its source and artifacts,
-reads as stale until the next build, and stays the default if it was. Show it
-under the new name in a later execution:
-
-```python
-import marimo_studio
-
-workspace = marimo_studio.agent.current_workspace()
-summary = await workspace.view("report").rename("summary")
-await summary.build()
-```
-
-`make_default()` serves a view at `/`. To move a view to another starter under
-the same name, create the new view under a temporary name and show it. In a
-later execution, remove the old view and rename the new one to the old name.
-Removing the default view promotes the first remaining view, so call
-`make_default()` on the renamed view when the old view was the default.
+To rename a view or move it to another starter, read
+[authoring](references/authoring.md#rename-or-replace-a-view).
 
 For a notebook outside a Python project, the first view adds a
 [PEP 723](https://peps.python.org/pep-0723/) script header, the notebook's
