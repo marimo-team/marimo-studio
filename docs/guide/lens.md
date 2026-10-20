@@ -75,7 +75,7 @@ What the selection traces to depends on how the view shows the part:
 | A value                       | `<strong mo-value="summary.orders">`                      | The value selector `summary.orders` and the cell `summary`                                                |
 | A chart that page code draws  | An element with `data-marimo-lens-inputs`                 | The hosts it lists, with their selectors and cells                                                        |
 | Part of a PDF or a video      | A [render region](../reference/glossary.md#render-region) | The value selector, such as `report.rows[2].orders`, its cell, and the source line, such as `main.typ:41` |
-| Text or layout with no inputs | Any element inside `#app-shell`                           | Its source file, with no notebook cells                                                                   |
+| Text or layout with no inputs | Any element inside `#app-shell`                           | The view page, with no notebook cells                                                                     |
 
 Lens follows marimo's
 [dataflow graph](https://docs.marimo.io/guides/editor_features/dataflow/) from
@@ -107,7 +107,9 @@ of target:
   selects the boxes.
 - **Authored content.** Headings, prose, and layout read no results. Lens
   selects them by their nearest section or card, and the selection names the
-  source file so the agent edits the view.
+  view page with no notebook cells, so the agent edits the view. An authored
+  region can also name its source file, as
+  [Mark authored regions](#mark-authored-regions) shows.
 
 ## Make page code selectable
 
@@ -197,7 +199,7 @@ app shell:
 ```
 
 Give a region its own identity with `data-marimo-lens-target` and a stable
-`id`, so Lens can reconnect feedback after a rebuild:
+`id`, so Lens can reconnect feedback when a rebuild updates the page in place:
 
 ```html
 <header
@@ -212,6 +214,10 @@ Give a region its own identity with `data-marimo-lens-target` and a stable
 
 `data-marimo-lens-render-source` names the file that holds the region. Add
 `data-marimo-lens-inputs` when the region also shows notebook results.
+
+A page with its own `<script>` elements reloads when a rebuild changes its
+markup. Selections made before the reload stay open, and their targets show as
+unavailable.
 
 ## Mark parts of a PDF
 
