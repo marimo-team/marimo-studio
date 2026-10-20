@@ -146,6 +146,9 @@ When a frontend or presentation framework is requested, inspect installed
 starters and their availability:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
 starters = await workspace.starters()
 for starter in starters:
     print(starter.id, starter.title, starter.availability)
@@ -161,6 +164,10 @@ unavailable requirements before building. For an ordinary dashboard,
 the default starter creates an editable HTML page with notebook output hosts:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
+status = await workspace.status()
 if any(item.name == "dashboard" for item in status.views):
     view = workspace.view("dashboard")
 else:
@@ -244,6 +251,9 @@ Discover available cells with a compact inventory, then inspect the relevant
 producers before changing notebook results or projecting them:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
 notebook = await workspace.inspect_notebook()
 for cell in notebook.cells:
     print(cell.name, cell.definitions, cell.has_output_expression)
@@ -253,6 +263,9 @@ Print selected fields. The full inspection record also contains the complete
 saved notebook. Read code for the chosen selector:
 
 ```python
+import marimo_studio
+
+workspace = marimo_studio.agent.current_workspace()
 producer = await workspace.inspect_notebook(
     selectors=("summary",), include_code=True, context="upstream"
 )
@@ -268,6 +281,9 @@ Use guarded writes for existing editable documents. This example changes a
 heading in a Vanilla view after reading its current content:
 
 ```python
+import marimo_studio
+
+view = marimo_studio.agent.current_workspace().view("dashboard")
 document = await view.read("index.html")
 updated = document.content.replace("Current heading", "Quarterly revenue")
 await view.write("index.html", updated, expected_revision=document.revision)
@@ -299,6 +315,9 @@ project's flags, such as `--package-json` for Svelte, then build:
 import subprocess
 import sys
 
+import marimo_studio
+
+view = marimo_studio.agent.current_workspace().view("dashboard")
 root = (await view.inspect()).root
 add = ["add", "--frozen=false", "--save-exact", "npm:vega-embed@6"]
 subprocess.run([sys.executable, "-m", "deno", *add], cwd=root, check=True)
