@@ -16,7 +16,14 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors._internal import RuntimeSyncRequiredError
-from marimo_studio.view_providers import RenderRequest, RenderResult, Representation
+from marimo_studio.view_providers import (
+    ProjectDiagnostic,
+    ProviderAvailability,
+    RenderRequest,
+    RenderResult,
+    Representation,
+)
+from marimo_studio.view_providers._builtin import typst as typst_module
 from marimo_studio.view_providers._builtin.typst import provider as typst
 
 from ..app_helpers import configured as _configured
@@ -292,6 +299,45 @@ def test_an_output_that_cannot_be_decoded_renders_the_template_default(
     assert response.status_code == 200
     assert response.json()["absent"] == ["chart"]
     assert renders == [{"doubled": 1}]
+
+
+def test_a_render_without_the_provider_requirement_names_its_install_action(
+    notebook: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A server started without the typst extra still serves the view a CLI
+    # build published, and its compiler subprocess fails to import typst.
+    monkeypatch.setattr(
+        typst,
+        "availability",
+        lambda: ProviderAvailability(
+            False,
+            reason="The typst Python package is not installed.",
+            action="Install marimo-studio[typst], then restart marimo.",
+        ),
+    )
+    monkeypatch.setattr(
+        typst_module,
+        "_run_typst",
+        lambda *_: ProjectDiagnostic(
+            "typst-compile-failed",
+            "error",
+            "Typst stopped before it finished main.typ. "
+            "ModuleNotFoundError: No module named 'typst'",
+            "Fix main.typ, then save it to render again.",
+        ),
+    )
+    app = _marimo_app(notebook)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        response = _post(client, "report", {"doubled": 42})
+
+    assert response.status_code == 422
+    (diagnostic,) = response.json()["diagnostics"]
+    assert diagnostic["code"] == "provider-unavailable"
+    assert "typst Python package is not installed" in diagnostic["message"]
+    assert diagnostic["hint"] == "Install marimo-studio[typst], then restart marimo."
 
 
 @pytest.mark.parametrize(
