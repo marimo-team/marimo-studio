@@ -591,8 +591,8 @@ the command's error output.
 
 npm packages run code inside Vite, so `build()` grants Vite only the
 [Deno permissions](https://docs.deno.com/runtime/fundamentals/security/) a
-build needs. Deno denies everything else, including network access and files
-outside the build:
+build needs. Deno checks the file, network, and environment access of
+JavaScript code against these grants:
 
 | Flag                                        | Allows                                        |
 | ------------------------------------------- | --------------------------------------------- |
@@ -601,6 +601,12 @@ outside the build:
 | `--allow-env`, `--allow-sys=uid,osRelease`  | the environment and system details Vite reads |
 | `--allow-ffi` with Rollup's `.node` binding | loading Rollup's native bundler               |
 | `--allow-run` with the esbuild binary       | starting esbuild, which transforms the code   |
+
+Rollup's native binding and the esbuild process run outside those checks,
+with the operating-system authority of the Studio process, as Deno's
+[permissions that bypass the sandbox](https://docs.deno.com/runtime/fundamentals/security/#permissions-that-bypass-the-sandbox)
+describes. `deno.lock` pins both, so review a lockfile change before a build
+installs it.
 
 The Vite command receives `DENO_DIR` as its whole environment, so tokens and
 other variables from the Studio process stay out of the build. `--cached-only`
