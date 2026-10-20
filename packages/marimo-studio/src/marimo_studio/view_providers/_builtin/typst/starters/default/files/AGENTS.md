@@ -82,8 +82,8 @@ that output is an image, such as a cell that ends with a matplotlib figure:
 #figure(marimo_cell("revenue_plot", width: 100%), caption: [Revenue.])
 ```
 
-- Name the cell in the notebook, for example `def revenue_plot():` or
-  `@app.cell(name="revenue_plot")`.
+- Name the cell in the notebook by its function name, for example
+  `def revenue_plot():`.
 - The cell's output arrives in the format marimo shows, typically PNG for a
   matplotlib figure. Prefer `marimo_output()` with the figure's variable when a
   vector PDF matters.
