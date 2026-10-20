@@ -12,8 +12,6 @@
 # default = "explainer"
 # runtimes = ["server", "zero-python"]
 # show_cell_logs = false
-#
-# [tool.marimo-studio.cells]
 # ///
 
 import marimo
