@@ -29,6 +29,16 @@ from marimo_studio._workspace.python_project import project_environment
 from marimo_studio._workspace.tools import declares_pixi_environment
 
 
+def _location(path: object, line: int | None, column: int | None) -> str:
+    """Return ``path:line:column`` with only the parts a diagnostic knows."""
+    parts = [str(path)]
+    if line is not None:
+        parts.append(str(line))
+        if column is not None:
+            parts.append(str(column))
+    return ":".join(parts)
+
+
 def _uvx_command(
     requirements: tuple[str, ...],
     arguments: list[str],
@@ -129,7 +139,7 @@ def render_view_inspection(result: ViewInspection) -> None:
     echo(f"  {light_blue('diagnostics')}")
     for diagnostic in result.diagnostics:
         source = (
-            f" · {diagnostic.path}:{diagnostic.line}:{diagnostic.column}"
+            f" · {_location(diagnostic.path, diagnostic.line, diagnostic.column)}"
             if diagnostic.path is not None
             else ""
         )
@@ -296,9 +306,10 @@ def render_static_preflight(result: StaticPreflightReport) -> None:
     if result.issues:
         echo(f"  {light_blue('diagnostics')}")
         for issue in result.issues:
+            source = issue.source
             echo(
                 f"    {issue.severity} {issue.code}: {issue.message} "
-                f"({issue.source.path}:{issue.source.line}:{issue.source.column})"
+                f"({_location(source.path, source.line, source.column)})"
             )
             if issue.hint:
                 echo(f"      {light_blue('repair')} {issue.hint}")

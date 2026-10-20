@@ -501,6 +501,23 @@ def test_view_inspect_reports_an_environment_error_for_an_intact_view(
     assert "different target Python" in str(result.exception)
 
 
+def test_view_inspect_human_output_names_a_diagnostic_file_without_a_line(
+    notebook_path: Path,
+) -> None:
+    setup = prepare_view(notebook_path)
+    setup.root.joinpath("view.toml").write_text("schema = 2\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli,
+        ["view", "inspect", "dashboard", "--target", str(notebook_path)],
+    )
+
+    output = unstyle(result.output)
+    assert result.exit_code == 0, result.output
+    assert "view.toml · view.toml\n" in output
+    assert "None" not in output
+
+
 def test_view_manifest_repair_rejects_a_changed_sibling_catalog(
     notebook_path: Path,
 ) -> None:
