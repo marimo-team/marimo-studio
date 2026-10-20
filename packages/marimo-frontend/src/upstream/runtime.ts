@@ -38,7 +38,7 @@ export {
   runtimeConfigAtom,
 } from "@marimo-team/frontend/unstable_internal/core/runtime/config";
 export { store } from "@marimo-team/frontend/unstable_internal/core/state/jotai";
-export { WebSocketState } from "@marimo-team/frontend/unstable_internal/core/websocket/types";
+export { ConnectionState } from "@marimo-team/frontend/unstable_internal/core/websocket/types";
 export { useMarimoKernelConnection } from "@marimo-team/frontend/unstable_internal/core/websocket/useMarimoKernelConnection";
 export { initializePlugins } from "@marimo-team/frontend/unstable_internal/plugins/plugins";
 export { PyodideBridge } from "@marimo-team/frontend/unstable_internal/core/wasm/bridge";

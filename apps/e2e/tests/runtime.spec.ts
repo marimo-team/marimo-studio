@@ -517,8 +517,9 @@ test("keeps native output ownership isolated between server preview consumers", 
 
   await popout.close();
   const embeddedColumns = embeddedTable.getByRole("button", { name: "Columns" });
-  await embeddedColumns.click();
   await expect(embeddedColumns).toHaveAttribute("aria-expanded", "true");
+  await embeddedColumns.click();
+  await expect(embeddedColumns).toHaveAttribute("aria-expanded", "false");
 });
 
 test("refreshes a popout view and preserves its public query across reload", async ({

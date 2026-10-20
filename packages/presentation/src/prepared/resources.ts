@@ -40,6 +40,13 @@ const marimoModelBuffers = (buffers: readonly string[]): MarimoModelBuffer[] =>
     return buffer as MarimoModelBuffer;
   });
 
+type MarimoModelId = MarimoModelLifecycleNotification["model_id"];
+
+const marimoModelId = (modelId: string): MarimoModelId => {
+  // SAFETY: Marimo brands widget model IDs on the wire, and prepared exports carry those IDs unchanged.
+  return modelId as MarimoModelId;
+};
+
 const marimoModelMessage = (
   message: PreparedModelLifecycleNotification["message"],
 ): MarimoModelLifecycleNotification["message"] => {
@@ -67,7 +74,7 @@ const modelRecords = (
 ): readonly MarimoModelLifecycleNotification[] =>
   values.map(({ message, model_id }) => ({
     message: marimoModelMessage(message),
-    model_id,
+    model_id: marimoModelId(model_id),
   }));
 
 type PreparedUiValues = Parameters<PreparedPresentationHandle["uiValues"]["stage"]>[0];

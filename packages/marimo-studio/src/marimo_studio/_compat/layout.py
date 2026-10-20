@@ -132,17 +132,17 @@ _SYMBOLS = {
         _source_contract(
             "marimo._session.managers.kernel",
             "KernelManagerImpl.__init__",
-            "cab5c5e1db540f13bd6efa5475812786515223648944a724cccc4e0c76ddcbb6",
+            "ce028a6a594858b17c4965eeeeea40b2c5f9c196dd637195707816af0bac642c",
         ),
         _source_contract(
             "marimo._session.managers.ipc",
             "IPCKernelManagerImpl.__init__",
-            "a202968e6173c5eaa147820261b4f6db8a09241af46658f9f54787f4540ed6b1",
+            "583d040757a1a2653cdaf3879260b7b59ec00408a54ac7579c102cd06f751bdf",
         ),
         _source_contract(
             "marimo._session.managers.app_host",
             "AppHostKernelManager.__init__",
-            "014556ace181b9a55450149a7e303ac7d83e1cc6ea6dc08698137a08d21fcf43",
+            "391f98f4dea4cc159f2184d91371d04a6ed4cd431d505efab1accd065f918de7",
         ),
     ),
     "existing-session-attachment": (
@@ -173,7 +173,7 @@ _SYMBOLS = {
             "marimo._server.api.endpoints.ws.ws_session_connector",
             "SessionConnector._create_new_session",
             _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
-            "f226aecbc9b1f4505dab482fe3a90385d7e1449aea21928acc8427651d86c3ba",
+            "e5f82b9c224ffb8082b4c33e3eef653ab39304bf90b7786d667578153c9a8ed8",
         ),
         SymbolContract(
             "marimo._server.api.endpoints.ws_endpoint",
@@ -226,7 +226,7 @@ _SYMBOLS = {
         _source_contract(
             "marimo._session.notebook.file_manager",
             "AppFileManager.__init__",
-            "924f6026135619b264467e9c33619b254e6060c1dd0bc93694f077db311cac67",
+            "68bdd0aaac47b85a4e7824d498c545a4ab4fc09af887d1a5f46ad7a686892474",
         ),
         SymbolContract(
             "marimo._session.notebook.file_manager",
@@ -305,7 +305,7 @@ _SYMBOLS = {
         _source_contract(
             "marimo._session.session",
             "SessionImpl.__init__",
-            "6473a9377a00158029d74303b69bf5217f75d94c62d3b798f04dab181b6d5ac7",
+            "f25201eb57744c31a8c06c0f3c206a247372f4a1eee8193249c0c03e8139af1c",
         ),
     ),
     "sandbox-studio-runtime": (
@@ -482,8 +482,9 @@ _SYMBOLS = {
                 ("query_params", "POSITIONAL_OR_KEYWORD", False),
                 ("file_key", "POSITIONAL_OR_KEYWORD", False),
                 ("auto_instantiate", "POSITIONAL_OR_KEYWORD", False),
+                ("main", "KEYWORD_ONLY", False),
             ),
-            "3b32697185bf7c654232db4f3c570be8f74792ace851f3076ab38e4e168d40a9",
+            "c6a0d6eeec102f912d4a17c5cfa7d502ead957f979091a2b71f108ee5333969d",
         ),
         SymbolContract(
             "marimo._session.session",

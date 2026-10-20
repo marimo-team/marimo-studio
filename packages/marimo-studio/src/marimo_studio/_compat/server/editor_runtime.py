@@ -21,8 +21,7 @@ from marimo_studio._delivery.urls import (
 from marimo_studio.errors import ProtocolError
 
 _MOUNT_VALUE = "value: Object.freeze("
-# The pinned bundler names the cell editor completion chunk after RunButton.
-_CELL_EDITOR_ASSET = re.compile(r"^/assets/RunButton-[A-Za-z0-9_-]+\.js$")
+_CELL_EDITOR_ASSET = re.compile(r"^/assets/cell-editor-[A-Za-z0-9_-]+\.js$")
 _CONFIG_ASSET = re.compile(r"^/assets/config-[A-Za-z0-9_-]+\.js$")
 _CELLS_ASSET = re.compile(r"^/assets/cells-[A-Za-z0-9_-]+\.js$")
 _INDEX_ASSET = re.compile(r"^/assets/index-[A-Za-z0-9_-]+\.js$")
@@ -33,8 +32,8 @@ _REMOVE_SESSION_QUERY = b"t.has(s.kiosk)||t.delete(s.sessionId)"
 _RETAIN_EDITOR_SESSION_QUERY = (
     b't.has(s.kiosk)||t.has("marimo_studio_editor")||t.delete(s.sessionId)'
 )
-_COPILOT_EXTENSION = b"im.of(Yt())"
-_GATED_COPILOT_EXTENSION = b"e.copilot===`github`?im.of(Yt()):[]"
+_COPILOT_EXTENSION = b"id.of(bn())"
+_GATED_COPILOT_EXTENSION = b"e.copilot===`github`?id.of(bn()):[]"
 _COPILOT_LSP_URL = b"this.formatWsURL(`/lsp/${e}`)"
 _STUDIO_COPILOT_LSP_URL = (
     b"new URL(this.formatWsURL(`/lsp/${e}`).toString().replace("
@@ -46,8 +45,8 @@ _BOUNDED_LSP_RECONNECT = (
     b"setTimeout(()=>{this.isClosed||this.reconnect()},this.options.retryDelayMs)"
 )
 # Keep Marimo's save barrier and transaction queue around Studio admission.
-_DOCUMENT_CHANGE_QUEUE = b"var wj=[],Tj=[]"
-_NATIVE_DOCUMENT_TRANSACTION = b"await Vr().sendDocumentTransaction({changes:t})"
+_DOCUMENT_CHANGE_QUEUE = b"var vj=[],yj=[]"
+_NATIVE_DOCUMENT_TRANSACTION = b"await zr().sendDocumentTransaction({changes:t})"
 _ORDERED_DOCUMENT_TRANSACTION = (
     b"await marimoStudioSendDocumentTransaction({changes:t})"
 )
@@ -58,7 +57,7 @@ _ORDERED_DOCUMENT_CHANGE_QUEUE = b"""
 var marimoStudioPendingTransactions=[];
 var marimoStudioDocumentTransactions=createStudioDocumentTransactions({
   takeChanges:()=>marimoStudioPendingTransactions.shift()??[],
-  sendTransaction:request=>Vr().sendDocumentTransaction(request),
+  sendTransaction:request=>zr().sendDocumentTransaction(request),
 });
 function marimoStudioSendDocumentTransaction(request){
   marimoStudioPendingTransactions.push(request.changes);
@@ -67,33 +66,33 @@ function marimoStudioSendDocumentTransaction(request){
 marimoStudioAwaitDocumentMutation=marimoStudioDocumentTransactions.awaitMutation;
 marimoStudioDocumentMutationGeneration=marimoStudioDocumentTransactions.generation;
 marimoStudioReportDocumentSave=marimoStudioDocumentTransactions.reportSave;
-marimoStudioFlushDocumentChanges=Pj;
+marimoStudioFlushDocumentChanges=Oj;
 marimoStudioFlushBeforeDocumentSave=marimoStudioDocumentTransactions.flush;
-var wj=[],Tj=[]
+var vj=[],yj=[]
 """
-_CELLS_EXPORT = b",ak as zt};"
+_CELLS_EXPORT = b",$O as zt};"
 _ORDERED_CELLS_EXPORT = (
-    b",ak as zt,createStudioDocumentRequests as studioCreateDocumentRequests,"
+    b",$O as zt,createStudioDocumentRequests as studioCreateDocumentRequests,"
     b"marimoStudioAwaitDocumentMutation as studioAwaitDocumentMutation,"
     b"marimoStudioDocumentMutationGeneration as studioDocumentMutationGeneration,"
     b"marimoStudioFlushDocumentChanges as studioFlushDocumentChanges,"
     b"marimoStudioFlushBeforeDocumentSave as studioFlushBeforeDocumentSave,"
     b"marimoStudioReportDocumentSave as studioReportDocumentSave};"
 )
-_INDEX_CELLS_IMPORT = b'zt as en}from"./cells-'
+_INDEX_CELLS_IMPORT = b'za as Re}from"./cells-'
 _ORDERED_INDEX_CELLS_IMPORT = (
-    b"zt as en,studioCreateDocumentRequests,studioAwaitDocumentMutation,"
+    b"za as Re,studioCreateDocumentRequests,studioAwaitDocumentMutation,"
     b"studioFlushDocumentChanges,studioFlushBeforeDocumentSave,"
     b'studioDocumentMutationGeneration,studioReportDocumentSave}from"./cells-'
 )
 _NETWORK_SEND_SAVE = (
     b"sendSave:t=>e().POST(`/api/kernel/save`,{body:t,parseAs:`text`,params:n()})"
-    b".then(PA)"
+    b".then(Qf)"
 )
 _NETWORK_SEND_DOCUMENT_TRANSACTION = (
-    b"sendDocumentTransaction:async t=>(await br(),e().POST("
+    b"sendDocumentTransaction:async t=>(await $t(),e().POST("
     b"`/api/document/transaction`,"
-    b"{body:t,params:n()}).then(PA))"
+    b"{body:t,params:n()}).then(Qf))"
 )
 _NETWORK_REQUEST_FACTORY = b"n=()=>({header:t()});return{sendComponentValues:"
 _HOST_HANDOFF_QUERY_JSON = json.dumps(HOST_SESSION_HANDOFF_QUERY_PARAM).encode()
@@ -125,9 +124,9 @@ const marimoStudioDocumentRequests=studioCreateDocumentRequests({
   reportSave:(generation,succeeded)=>studioReportDocumentSave(generation,succeeded),
 }, {
   post:(...args)=>e().POST(...args),
-  waitForConnection:()=>br(),
+  waitForConnection:()=>$t(),
   params:()=>n(),
-  handleResponse:result=>PA(result),
+  handleResponse:result=>Qf(result),
   handoffAccepted:async()=>{
     if(marimoStudioHasNewHostHandoff())return true;
     await Promise.race([
@@ -147,14 +146,14 @@ _ORDERED_NETWORK_SEND_SAVE = (
     b"sendSave:request=>marimoStudioDocumentRequests.sendSave(request)"
 )
 _NETWORK_SEND_RUN = (
-    b"sendRun:async t=>(await br(),e().POST(`/api/kernel/run`,{body:t,params:n()})"
-    b".then(PA))"
+    b"sendRun:async t=>(await $t(),e().POST(`/api/kernel/run`,{body:t,params:n()})"
+    b".then(Qf))"
 )
 _ORDERED_NETWORK_SEND_RUN = (
     b"sendRun:request=>marimoStudioDocumentRequests.sendRun(request)"
 )
 _QUERY_PARAM_HANDLERS = (
-    b"var Yf={append:e=>{let t=new URL(window.location.href);t.searchParams."
+    b"var Tn={append:e=>{let t=new URL(window.location.href);t.searchParams."
     b"append(e.key,e.value),window.history.pushState({},``,`${t.pathname}${t"
     b".search}`)},set:e=>{let t=new URL(window.location.href);Array.isArray("
     b"e.value)?(t.searchParams.delete(e.key),e.value.forEach(n=>t.searchPara"
@@ -182,7 +181,7 @@ _PROTECTED_QUERY_PARAM_HANDLERS = (
     + b"),marimoStudioRetainedQueryKeys=new Set("
     + _RETAINED_QUERY_KEYS_JSON
     + b'),marimoStudioPushQuery=t=>window.history.pushState({},"",'
-    b"`${t.pathname}${t.search}${t.hash}`),Yf={append:t=>{if("
+    b"`${t.pathname}${t.search}${t.hash}`),Tn={append:t=>{if("
     b"marimoStudioImmutableQueryKeys.has(t.key))return;let A=new URL("
     b"window.location.href);"
     b"A.searchParams.append(t.key,t.value),marimoStudioPushQuery(A)},set:t=>{if("

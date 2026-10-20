@@ -71,7 +71,7 @@ import {
   useRequestClient,
   userConfigAtom,
   viewStateAtom,
-  WebSocketState,
+  ConnectionState,
 } from "./upstream/runtime.ts";
 import { terminatePresentationWasmWorker } from "./wasm-worker-owner.ts";
 import "./upstream/style.ts";
@@ -309,7 +309,7 @@ const transportHost: EmbeddedTransportHost = {
     const network = createNetworkRequests();
     const modelValues = bindModelValueSenderToPage<Parameters<typeof network.sendModelValue>[0]>(
       async (request) =>
-        store.get(connectionAtom).state === WebSocketState.OPEN
+        store.get(connectionAtom).state === ConnectionState.OPEN
           ? network.sendModelValue(request)
           : null,
     );
@@ -432,7 +432,7 @@ const embeddedRuntimeHost: EmbeddedRuntimeHost = {
   initialize: initializeEmbeddedRuntime,
   initializeTransport,
   setConnecting() {
-    store.set(connectionAtom, { state: WebSocketState.CONNECTING });
+    store.set(connectionAtom, { state: ConnectionState.CONNECTING });
   },
 };
 

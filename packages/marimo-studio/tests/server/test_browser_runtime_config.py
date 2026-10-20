@@ -22,7 +22,9 @@ def test_live_runtime_config_does_not_expose_marimo_credentials(
     mounted: Any = next(
         route.app for route in cast(Any, app).routes if isinstance(route, Mount)
     )
-    user_config = deepcopy(mounted.state.config_manager.user_config_mgr.get_config())
+    user_config = deepcopy(
+        mounted.state.config_manager.get_user_config(hide_secrets=False)
+    )
     user_config["display"]["theme"] = "dark"
     user_config["server"]["disable_file_downloads"] = True
     user_config["completion"]["codeium_api_key"] = "leak-live-completion"
@@ -42,8 +44,8 @@ def test_live_runtime_config_does_not_expose_marimo_credentials(
     }
     monkeypatch.setattr(
         mounted.state.config_manager.user_config_mgr,
-        "get_config",
-        lambda *, hide_secrets=True: user_config,
+        "read",
+        lambda: user_config,
     )
 
     with TestClient(app) as client:

@@ -86,7 +86,7 @@ and access to the npm registry. **Typst report** needs `marimo-studio[typst]`.
 **LaTeX article** needs Tectonic 0.15 or newer on `PATH`, and its first compile
 downloads TeX packages over the network.
 
-The sandbox image must provide marimo 0.25.1, the version Studio 0.4 runs on.
+The sandbox image must provide marimo 0.25.2, the version Studio 0.4 runs on.
 See [Supported environment](../reference/compatibility.md#supported-environment).
 
 ## Create the first view
