@@ -198,16 +198,10 @@ it, as [Select results with Lens](guide/lens.md) shows.
 ## Where the session runs
 
 The [runtime](reference/glossary.md#runtime) decides where the notebook's
-Python runs. The view project stays the same for each:
-
-| Runtime      | The session runs                                        |
-| ------------ | ------------------------------------------------------- |
-| **Python**   | On a server, through `marimo edit` or `marimo run`      |
-| **Browser**  | In each visitor's browser, through Pyodide              |
-| **Prepared** | On your machine, during export, once per prepared state |
-
-A prepared export runs no Python while visitors read it. Studio saved each
-prepared state's results during export, and the page moves between them.
+Python runs: on a server through `marimo edit` or `marimo run`, in each
+visitor's browser through Pyodide, or on your machine during export. A
+prepared export runs no Python while visitors read it. The view project stays
+the same for each.
 [Run or export a view](guide/run-and-share.md) compares the runtimes.
 
 ## Next steps
