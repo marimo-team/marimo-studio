@@ -117,12 +117,19 @@ connected through hidden hosts. List them on the element that shows the
 drawing:
 
 ```html
-<span id="rows-data" hidden mo-value="rows"></span>
-<span id="summary-data" hidden mo-value="summary.total"></span>
+<div hidden>
+  <span id="rows-data" hidden mo-value="rows"></span>
+  <span id="summary-data" hidden mo-value="summary.total"></span>
+</div>
 <section data-marimo-lens-inputs="rows-data summary-data">
   <!-- JavaScript renders the chart here. -->
 </section>
 ```
+
+Lens selects the parent of a hidden host as that host's target, as in
+[Select one metric](#select-one-metric). Group hosts that only feed page code
+in a hidden container. A hidden host placed directly in `#app-shell` makes the
+whole page one target.
 
 `data-marimo-lens-inputs` lists host IDs in the same document, separated by
 spaces, and declares the region's complete set of notebook inputs. Lens reads

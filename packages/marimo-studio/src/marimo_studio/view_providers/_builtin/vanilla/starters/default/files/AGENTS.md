@@ -22,10 +22,14 @@ The starter defines `observeMarimoValue` inside the `index.html` module script.
 Keep it inline or move it to a JavaScript file referenced directly from the
 entry document. Use it when page JavaScript consumes a notebook value or eager
 dataframe. Keep the corresponding `mo-value` host in authored HTML so Studio
-can inspect and authorize its selector.
+can inspect and authorize its selector. Group hosts that only feed page code in
+a hidden container. Lens selects the parent of a hidden host, so a host placed
+directly in `#app-shell` makes the whole page one selection target.
 
 ```html
-<span id="rows-data" hidden mo-value="rows"></span>
+<div hidden>
+  <span id="rows-data" hidden mo-value="rows"></span>
+</div>
 ```
 
 ```js
