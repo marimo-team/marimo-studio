@@ -57,7 +57,7 @@ click **Save**:
 
 ```python
 # /// script
-# dependencies = ["marimo-studio>=0.4.0"]
+# dependencies = ["marimo-studio>=0.4.1"]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
@@ -83,7 +83,7 @@ header in a local `notebook.py` and choose it under **Start from a file** in
 the **New Notebook** dialog.
 
 The **HTML document** starter needs nothing more. React, Svelte, Reveal.js
-slides, and Notebook Kit need `marimo-studio[deno]>=0.4.0` in `dependencies`
+slides, and Notebook Kit need `marimo-studio[deno]>=0.4.1` in `dependencies`
 and access to the npm registry. **Typst report** needs `marimo-studio[typst]`.
 **Quarto document** needs Quarto 1.9.38 or newer on the image's `PATH`.
 **LaTeX article** needs Tectonic 0.15 or newer on `PATH`, and its first compile
@@ -107,9 +107,9 @@ Notebook and Preview open side by side on the same kernel, so moving a slider
 in the view reruns dependent cells and updates both panes.
 
 View creation also pins Studio in the header to the installed version, such as
-`marimo-studio==0.4.0`, and records aliases for the cells the starter placed.
+`marimo-studio==0.4.1`, and records aliases for the cells the starter placed.
 A direct reference such as
-`marimo-studio @ https://example.com/marimo_studio-0.4.0-py3-none-any.whl` stays
+`marimo-studio @ https://example.com/marimo_studio-0.4.1-py3-none-any.whl` stays
 as written.
 
 Continue with [Edit and preview in Studio](work-in-studio.md) and
@@ -252,4 +252,4 @@ to the view.
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
 | The notebook page shows the marimo editor with no Studio toolbar   | Check that `dependencies` lists `marimo-studio`, then restart the session                       |
 | **Run as app** shows the notebook instead of the view              | The view root holds no view. See [Persist view projects](#persist-view-projects)                |
-| A starter asks for `marimo-studio[deno]` or `marimo-studio[typst]` | Add that extra to the dependency, such as `marimo-studio[deno]>=0.4.0`, and restart the session |
+| A starter asks for `marimo-studio[deno]` or `marimo-studio[typst]` | Add that extra to the dependency, such as `marimo-studio[deno]>=0.4.1`, and restart the session |
