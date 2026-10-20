@@ -111,6 +111,24 @@ def test_root_help_launches_marimo_with_the_exact_studio_distribution() -> None:
     ) in unstyle(result.output)
 
 
+def test_root_help_fits_an_80_column_terminal() -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["--help"],
+        prog_name="marimo-studio",
+        terminal_width=80,
+    )
+
+    output = unstyle(result.output)
+    assert result.exit_code == 0, result.output
+    assert all(len(line) <= 80 for line in output.splitlines()), output
+    assert "doctor    Check frontend integrations and starting points.\n" in output
+    assert (
+        f"    uvx --with marimo-studio=={version('marimo-studio')} "
+        "marimo edit analysis.py --sandbox --watch\n"
+    ) in output
+
+
 @pytest.mark.parametrize(
     "arguments",
     (

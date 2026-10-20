@@ -82,11 +82,18 @@ class ColoredGroup(click.Group):
         ctx: click.Context,
         formatter: click.HelpFormatter,
     ) -> None:
-        rows = []
+        commands = []
         for name in self.list_commands(ctx):
             command = self.get_command(ctx, name)
             if command is not None and not command.hidden:
-                rows.append((option(name), command.get_short_help_str()))
+                commands.append((name, command))
+        # Match Click's own limit, which counts the uncolored command name.
+        width = max((len(name) for name, _ in commands), default=0)
+        limit = formatter.width - 6 - width
+        rows = [
+            (option(name), command.get_short_help_str(limit))
+            for name, command in commands
+        ]
         if rows:
             with formatter.section(section("Commands")):
                 formatter.write_dl(rows)

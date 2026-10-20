@@ -51,7 +51,7 @@ def inspect(
     target: Path | None,
     json_output: bool,
 ) -> None:
-    """Inspect source documents, diagnostics, and development build state.
+    """Inspect source documents, diagnostics, and build state.
 
     When needed, Studio reruns the command through uv with requirements derived
     from the target's saved views and Python metadata. uv may resolve and install
