@@ -122,7 +122,7 @@ view_providers/
   _records.py      provider records and protocols
   _toolkit.py      project_files, copy_inputs, project_path, probe_tool
   _starters.py     PackagedStarter, create_starter, script_json
-  _sites.py        html_sites
+  _sites.py        host_site, html_sites
   testing.py       check_provider, the public conformance kit
   _host/           discovery, conformance, starters, and isolated operations
   _builtin/

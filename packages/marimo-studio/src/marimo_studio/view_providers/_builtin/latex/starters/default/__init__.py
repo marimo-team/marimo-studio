@@ -22,9 +22,9 @@ _GEOMETRY_PAPER = {"a4": "a4paper", "us-letter": "letterpaper"}
 def _markers(context: StarterContext) -> StarterMarkers:
     return StarterMarkers(
         values={
-            "__NOTEBOOK_LABEL_TEX__": latex_text(context.notebook_label),
-            "__VIEW_TITLE_TEX__": latex_text(context.title),
-            "__PAPER_TEX__": _GEOMETRY_PAPER[str(context.settings["paper"])],
+            "STARTER_NOTEBOOK_LABEL_TEX": latex_text(context.notebook_label),
+            "STARTER_VIEW_TITLE_TEX": latex_text(context.title),
+            "STARTER_PAPER_TEX": _GEOMETRY_PAPER[str(context.settings["paper"])],
         },
         cell_targets=(),
     )

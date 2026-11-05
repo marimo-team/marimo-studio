@@ -18,8 +18,8 @@ def _markers(context: StarterContext) -> StarterMarkers:
     targets = context.output_cells
     return StarterMarkers(
         values={
-            "__TOC_QMD__": "true" if context.settings["toc"] else "false",
-            "__NOTEBOOK_CELLS_QMD__": "\n\n".join(
+            "STARTER_TOC_QMD": "true" if context.settings["toc"] else "false",
+            "STARTER_NOTEBOOK_CELLS_QMD": "\n\n".join(
                 f'{{{{< marimo cell="{target.target}" >}}}}' for target in targets
             ),
         },

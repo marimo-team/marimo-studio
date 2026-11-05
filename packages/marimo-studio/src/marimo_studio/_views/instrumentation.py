@@ -30,6 +30,7 @@ from marimo_studio.view_providers._records import (
     ProjectionSite,
     SourceLocation,
 )
+from marimo_studio.view_providers._sites import built_host_site
 
 _SITE_ID = re.compile(rb"site-[0-9a-f]{64}")
 _TAG_CONTINUATIONS = frozenset((b" ", b"\t", b"\n", b"\r", b"\f", b"/", b">"))
@@ -216,15 +217,33 @@ def unknown_render_diagnostics(
     except (UnicodeDecodeError, OSError, MarimoStudioError):
         # Publication validates the page and reports these problems itself.
         return ()
-    declared = ", ".join(sorted(source.as_posix() for source in renders)) or "none"
-    return tuple(
-        ProjectDiagnostic(
-            "render-unknown",
-            "error",
-            f"{document}:{host.position[0]}:{host.position[1]}: the page shows "
-            f"the render of {host.source}, which the view does not render.",
-            f"Show a file the view renders: {declared}.",
-        )
-        for host in parser.render_hosts
-        if host.source not in renders
-    )
+    declared = {source.as_posix() for source in renders}
+    hint = f"Show a file the view renders: {', '.join(sorted(declared)) or 'none'}."
+    diagnostics: list[ProjectDiagnostic] = []
+    for host in parser.hosts:
+        line, column = host.position
+        if (
+            host.tag != "marimo-output"
+            or "render" not in host.attributes
+            or built_host_site(
+                host.tag,
+                host.attributes,
+                SourceLocation(document, line, column),
+                host.insertion_offset,
+                nested=host.nested,
+            )
+            is not None
+        ):
+            continue
+        shown = (host.attributes["render"] or "").strip()
+        if shown not in declared:
+            diagnostics.append(
+                ProjectDiagnostic(
+                    "render-unknown",
+                    "error",
+                    f"{document}:{line}:{column}: the page shows the render of "
+                    f"{shown}, which the view does not render.",
+                    hint,
+                )
+            )
+    return tuple(diagnostics)

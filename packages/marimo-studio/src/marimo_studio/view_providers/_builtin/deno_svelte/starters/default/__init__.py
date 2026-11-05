@@ -13,7 +13,7 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers._builtin._deno.starters import typescript_string_array
 
-_HOSTS_MARKER = "__NOTEBOOK_CELL_HOSTS_SVELTE__"
+_HOSTS_MARKER = "STARTER_NOTEBOOK_CELL_HOSTS_SVELTE"
 _DOCUMENTS = (
     PurePosixPath("AGENTS.md"),
     PurePosixPath("src/App.svelte"),

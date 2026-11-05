@@ -34,6 +34,8 @@ from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
 from typing import TypeVar, cast
 
+from packaging.utils import canonicalize_name
+
 import marimo_studio.view_providers._host as host
 from marimo_studio._artifacts.retention import ArtifactLease, lease_published_artifact
 from marimo_studio._authoring.view_api import View
@@ -65,6 +67,9 @@ from marimo_studio.view_providers import (
 )
 from marimo_studio.view_providers import __all__ as sdk
 from marimo_studio.view_providers._artifact_sites import read_sites
+from marimo_studio.view_providers._host.package_policy import (
+    BUILTIN_PROVIDER_DISTRIBUTION,
+)
 from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
     ProviderRegistry,
@@ -409,6 +414,15 @@ def check_provider(
     view declares, and ``CheckedView.renders`` holds the files each produced.
     Raises ``ProviderCheckError`` for the first problem found.
     """
+    if (
+        not isinstance(provider, str)
+        and canonicalize_name(key.partition("/")[0]) == BUILTIN_PROVIDER_DISTRIBUTION
+    ):
+        raise ProviderCheckError(
+            f"Provider key {key!r} belongs to Studio's built-in providers. Pass "
+            "key= with the distribution that ships the provider, such as "
+            "key='acme-views/report'."
+        )
     private = _private_imports(_provider_module(provider))
     if private:
         raise ProviderCheckError(

@@ -157,7 +157,7 @@ def test_builtin_starter_matches_replacement_line_endings_to_its_resource(
         monkeypatch,
         {
             "default/__init__.py": "",
-            "default/files/index.html": b"<main>\r\n__BODY__\r\n</main>\r\n",
+            "default/files/index.html": b"<main>\r\nSTARTER_BODY\r\n</main>\r\n",
         },
     )
     info = _starter()
@@ -165,7 +165,7 @@ def test_builtin_starter_matches_replacement_line_endings_to_its_resource(
         info=info,
         package=package,
         markers=lambda _context: StarterMarkers(
-            {"__BODY__": "first\nsecond"},
+            {"STARTER_BODY": "first\nsecond"},
             (),
         ),
     )
@@ -179,6 +179,63 @@ def test_builtin_starter_matches_replacement_line_endings_to_its_resource(
     assert plan.files[PurePosixPath("index.html")] == (
         b"<main>\r\nfirst\r\nsecond\r\n</main>\r\n"
     )
+
+
+def test_starter_markers_replace_whole_words(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = _fixture_package(
+        tmp_path,
+        monkeypatch,
+        {
+            "default/__init__.py": "",
+            "default/files/index.html": (
+                "STARTER_PAPER STARTER_PAPER_TEX {STARTER_PAPER} "
+                "STARTER_PAPER_TEXT xSTARTER_PAPER caféSTARTER_PAPER STARTER_PAPER$x\n"
+            ).encode(),
+        },
+    )
+    info = _starter()
+    starter = PackagedStarter(
+        info=info,
+        package=package,
+        markers=lambda _context: StarterMarkers(
+            {"STARTER_PAPER": "a4", "STARTER_PAPER_TEX": "a4paper"}, ()
+        ),
+    )
+
+    plan = create_starter((starter,), info, provider_starter_context(tmp_path))
+
+    assert (
+        plan.files[PurePosixPath("index.html")]
+        == (
+            "a4 a4paper {a4} STARTER_PAPER_TEXT xSTARTER_PAPER caféSTARTER_PAPER "
+            "STARTER_PAPER$x\n"
+        ).encode()
+    )
+
+
+@pytest.mark.parametrize("marker", ("__CELLS__", "STARTER_", "STARTER_cells"))
+def test_starter_markers_outside_the_marker_form_raise(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    marker: str,
+) -> None:
+    package = _fixture_package(
+        tmp_path,
+        monkeypatch,
+        {"default/__init__.py": "", "default/files/index.html": b"<main></main>"},
+    )
+    info = _starter()
+    starter = PackagedStarter(
+        info=info,
+        package=package,
+        markers=lambda _context: StarterMarkers({marker: "value"}, ()),
+    )
+
+    with pytest.raises(ValueError, match="Name markers like STARTER_CELLS"):
+        create_starter((starter,), info, provider_starter_context(tmp_path))
 
 
 def test_reveal_starter_uses_markdown_title_and_notebook_cells(

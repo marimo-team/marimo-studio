@@ -2,25 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from pathlib import Path, PurePosixPath
-from typing import Literal
+from pathlib import Path
 from urllib.parse import urlsplit
 
-from marimo_export.values import ValueSelector
-
-from marimo_studio._filesystem.paths import validate_relative_path
 from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers._artifact_sites import SITE_ATTRIBUTE
 from marimo_studio.view_providers._css_resources import css_resource_urls
-
-PROJECTION_USAGE_HINT = (
-    'Use <marimo-cell name="..."> for a complete cell display, '
-    '<marimo-output value="..."> for one Python object, '
-    '<marimo-output render="..."> for a file the view provider renders, '
-    'or mo-value="..." when browser code needs JSON-compatible data.'
-)
 
 _VOID_ELEMENTS = {
     "area",
@@ -42,22 +32,17 @@ _VOID_ELEMENTS = {
 
 @dataclass(frozen=True)
 class HTMLHost:
-    """One projection host and its UTF-8 insertion offset."""
+    """One start tag that declares a host or carries the site attribute.
 
-    kind: Literal["cell", "output", "value"]
-    target: str
+    ``insertion_offset`` is the UTF-8 byte offset before the tag closes, and
+    ``nested`` marks a tag inside another host element.
+    """
+
+    tag: str
+    attributes: Mapping[str, str | None]
     position: tuple[int, int]
     insertion_offset: int
-    allow: str | None = None
-    accept: str | None = None
-
-
-@dataclass(frozen=True)
-class HTMLRenderHost:
-    """One ``<marimo-output render="...">`` host and the source it shows."""
-
-    source: PurePosixPath
-    position: tuple[int, int]
+    nested: bool
 
 
 @dataclass(frozen=True)
@@ -227,7 +212,6 @@ class HTMLDocumentParser(HTMLParser):
         super().__init__()
         self._resources = resources
         self.hosts: list[HTMLHost] = []
-        self.render_hosts: list[HTMLRenderHost] = []
         self.resources: list[HTMLResource] = []
         self.local_resources: list[HTMLResource] = []
         self.inline_scripts: list[HTMLInlineScript] = []
@@ -240,7 +224,6 @@ class HTMLDocumentParser(HTMLParser):
         self.has_reserved_runtime_markup = False
         self.canonical_head_order = True
         self._document_phase = "before-html"
-        self.authored_site_attribute_position: tuple[int, int] | None = None
         self.authored_source_revision_position: tuple[int, int] | None = None
         self.import_map_position: tuple[int, int] | None = None
         self.base_href_position: tuple[int, int] | None = None
@@ -427,11 +410,6 @@ class HTMLDocumentParser(HTMLParser):
             if _resource_is_local(value, position):
                 self.local_resources.append(resource)
         if (
-            SITE_ATTRIBUTE in attributes
-            and self.authored_site_attribute_position is None
-        ):
-            self.authored_site_attribute_position = position
-        if (
             "data-marimo-studio-source-revision" in attributes
             and self.authored_source_revision_position is None
         ):
@@ -451,90 +429,17 @@ class HTMLDocumentParser(HTMLParser):
         if is_shell:
             self.app_shells += 1
             self._shell_depth += 1
-        if (tag in ("marimo-cell", "marimo-output") or "mo-value" in attributes) and (
-            self._shell_depth == 0
-        ):
+        is_host = tag in ("marimo-cell", "marimo-output") or "mo-value" in attributes
+        if is_host and self._shell_depth == 0:
             self.projection_outside_shell = True
-        declarations: list[tuple[Literal["cell", "output", "value"], str]] = []
-        if tag == "marimo-cell":
-            alias = attributes.get("name")
-            if alias is None or not alias.strip():
-                raise ViewProjectError(
-                    "<marimo-cell> requires a non-empty name.",
-                    line=line,
-                    column=column + 1,
-                    hint=PROJECTION_USAGE_HINT,
-                )
-            declarations.append(("cell", alias.strip()))
-        if "mo-value" in attributes:
-            source = attributes["mo-value"]
-            if source is None:
-                raise ViewProjectError(
-                    "mo-value requires a non-empty selector.",
-                    line=line,
-                    column=column + 1,
-                    hint=PROJECTION_USAGE_HINT,
-                )
-            try:
-                selector = ValueSelector(source.strip())
-            except ValueError as error:
-                raise ViewProjectError(
-                    f"Invalid mo-value reference {source!r} at line {line}: {error}",
-                    line=line,
-                    column=column + 1,
-                ) from error
-            declarations.append(("value", selector.source))
-        render_host = tag == "marimo-output" and "render" in attributes
-        if render_host:
-            self._render_host(attributes, line, column)
-        elif tag == "marimo-output":
-            source = attributes.get("value")
-            if source is None:
-                raise ViewProjectError(
-                    "<marimo-output> requires a non-empty value.",
-                    line=line,
-                    column=column + 1,
-                    hint=PROJECTION_USAGE_HINT,
-                )
-            try:
-                selector = ValueSelector(source.strip())
-            except ValueError as error:
-                raise ViewProjectError(
-                    f"Invalid marimo-output value {source!r} at line {line}: {error}",
-                    line=line,
-                    column=column + 1,
-                ) from error
-            declarations.append(("output", selector.source))
-        if len(declarations) > 1:
-            raise ViewProjectError(
-                "One element cannot declare more than one projection kind.",
-                line=line,
-                column=column + 1,
-                hint=PROJECTION_USAGE_HINT,
-            )
-        if (declarations or render_host) and any(
-            is_projection for _, _, is_projection in self._open_tags
-        ):
-            raise ViewProjectError(
-                "Projection hosts cannot contain other projection hosts. "
-                "Place them beside each other.",
-                line=line,
-                column=column + 1,
-            )
-        if declarations:
-            kind, target = declarations[0]
+        if is_host or SITE_ATTRIBUTE in attributes:
             self.hosts.append(
                 HTMLHost(
-                    kind,
-                    target,
+                    tag,
+                    attributes,
                     position,
                     self._start_tag_insertion_offset(line, column),
-                    (
-                        attributes["data-marimo-allow"] or ""
-                        if "data-marimo-allow" in attributes
-                        else None
-                    ),
-                    (attributes["accept"] or "") if "accept" in attributes else None,
+                    any(is_projection for _, _, is_projection in self._open_tags),
                 )
             )
         if self_closing:
@@ -543,36 +448,7 @@ class HTMLDocumentParser(HTMLParser):
             if is_shell:
                 self._shell_depth -= 1
         else:
-            self._open_tags.append((tag, is_shell, bool(declarations) or render_host))
-
-    def _render_host(
-        self,
-        attributes: dict[str, str | None],
-        line: int,
-        column: int,
-    ) -> None:
-        """Record a render host, which shows the render of a project file."""
-        for attribute in ("value", "mo-value", "accept", "data-marimo-allow"):
-            if attribute in attributes:
-                raise ViewProjectError(
-                    f"<marimo-output render> cannot also set {attribute}.",
-                    line=line,
-                    column=column + 1,
-                    hint='Show a render with <marimo-output render="main.typ">, '
-                    'or a notebook value with <marimo-output value="chart">.',
-                )
-        try:
-            source = validate_relative_path(
-                (attributes["render"] or "").strip(), field="<marimo-output> render"
-            )
-        except ValueError as error:
-            raise ViewProjectError(
-                str(error),
-                line=line,
-                column=column + 1,
-                hint="Name the project file the render starts from, such as main.typ.",
-            ) from error
-        self.render_hosts.append(HTMLRenderHost(source, (line, column + 1)))
+            self._open_tags.append((tag, is_shell, is_host))
 
     def _start_tag_insertion_offset(self, line: int, column: int) -> int:
         raw = self.get_starttag_text()

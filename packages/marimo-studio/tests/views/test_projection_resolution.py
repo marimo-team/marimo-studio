@@ -113,7 +113,7 @@ def test_symbolic_resolution_ignores_an_invalid_unselected_view(
         ),
         (
             '<main id="app-shell"><span mo-value="doubled + 1"></span></main>',
-            "Invalid mo-value reference",
+            "Invalid mo-value selector",
         ),
         (
             '<main id="app-shell"><marimo-output></marimo-output></main>',
@@ -122,7 +122,7 @@ def test_symbolic_resolution_ignores_an_invalid_unselected_view(
         (
             '<main id="app-shell">'
             '<marimo-output value="doubled + 1"></marimo-output></main>',
-            "Invalid marimo-output value",
+            "Invalid <marimo-output> value",
         ),
         (
             "<main id='app-shell' data-marimo-studio-runtime></main>",

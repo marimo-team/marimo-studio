@@ -19,8 +19,9 @@ the parts of the rendered files that notebook results produced. Raise
 
 The helpers cover work that every provider repeats: ``project_files`` and
 ``copy_inputs`` list and copy build inputs, ``find_tool`` locates an external
-tool and ``probe_tool`` checks its version, ``html_sites`` finds projection
-sites in HTML, ``parse_accept`` reads an output host's ``accept`` attribute,
+tool and ``probe_tool`` checks its version, ``host_site`` turns one host start
+tag into a projection site, ``html_sites`` finds projection sites in HTML,
+``parse_accept`` reads an output host's ``accept`` attribute,
 ``render_page`` writes a page that shows one render, and ``PackagedStarter``
 with ``create_starter`` ships starter files as package data.
 ``marimo_studio.view_providers.testing.check_provider`` runs a provider
@@ -81,7 +82,7 @@ from marimo_studio.view_providers._records import (
     ViewProject,
     ViewProvider,
 )
-from marimo_studio.view_providers._sites import html_sites
+from marimo_studio.view_providers._sites import host_site, html_sites
 from marimo_studio.view_providers._starters import (
     PackagedStarter,
     StarterMarkers,
@@ -152,6 +153,7 @@ __all__ = [
     "copy_inputs",
     "create_starter",
     "find_tool",
+    "host_site",
     "html_sites",
     "parse_accept",
     "probe_tool",

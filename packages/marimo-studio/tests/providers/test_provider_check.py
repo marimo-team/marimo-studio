@@ -165,6 +165,14 @@ def test_undeclared_options_fail_the_check(
         check_provider(install(""), options={"port": 8080})
 
 
+@pytest.mark.parametrize("key", ("marimo-studio/vanilla", "Marimo_Studio/report"))
+def test_built_in_provider_keys_fail_the_check_with_their_owner(
+    install: Callable[[str], ViewProvider], key: str
+) -> None:
+    with pytest.raises(ProviderCheckError, match="belongs to Studio's built-in"):
+        check_provider(install(""), key=key)
+
+
 def test_inspection_errors_point_at_the_file_that_caused_them(
     install: Callable[[str], ViewProvider],
 ) -> None:

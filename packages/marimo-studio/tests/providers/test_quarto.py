@@ -477,16 +477,16 @@ def test_quarto_from_a_conda_environment_requires_activation(
 
 
 @pytest.mark.parametrize(
-    "shortcode",
+    ("shortcode", "code"),
     [
-        '{{< marimo cell="" >}}',
-        '{{< marimo cell="1st plot" >}}',
-        '{{< marimo value="a..b" >}}',
+        ('{{< marimo cell="" >}}', "projection-target-missing"),
+        ('{{< marimo cell="1st plot" >}}', "projection-target-invalid"),
+        ('{{< marimo value="a..b" >}}', "projection-target-invalid"),
     ],
     ids=("empty-cell", "spaced-cell", "dotted-value"),
 )
 def test_inspection_locates_invalid_shortcode_targets(
-    tmp_path: Path, shortcode: str
+    tmp_path: Path, shortcode: str, code: str
 ) -> None:
     inspection = inspect_view_project_sync(
         _project(tmp_path, f"# Report\n\n{shortcode}\n")
@@ -495,7 +495,8 @@ def test_inspection_locates_invalid_shortcode_targets(
     assert INDEX in {doc.path for doc in inspection.documents}
     assert inspection.sites == ()
     (diagnostic,) = inspection.diagnostics
-    assert diagnostic.code == "projection-target-invalid"
+    assert diagnostic.code == code
+    assert diagnostic.message.startswith("The marimo shortcode ")
     assert diagnostic.source == SourceLocation(INDEX, 3, 1)
 
 

@@ -132,21 +132,23 @@ def test_vanilla_projection_diagnostics_locate_authored_sources(
 
         diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
 
-        assert diagnostic.code == "source-document-invalid"
+        assert diagnostic.code == "projection-target-missing"
         assert diagnostic.source is not None
         assert diagnostic.source.line == 5
 
 
 @pytest.mark.parametrize(
-    ("host", "message"),
+    ("host", "code", "message"),
     (
         (
             '<marimo-output render="main.typ" value="chart"></marimo-output>',
+            "projection-render-invalid",
             "<marimo-output render> cannot also set value.",
         ),
         *(
             (
                 f'<marimo-output render="{source}"></marimo-output>',
+                "projection-render-invalid",
                 "<marimo-output> render must be a normalized project-relative "
                 "POSIX path",
             )
@@ -155,13 +157,14 @@ def test_vanilla_projection_diagnostics_locate_authored_sources(
         (
             '<marimo-cell name="summary"><marimo-output render="main.typ">'
             "</marimo-output></marimo-cell>",
+            "projection-host-nested",
             "Projection hosts cannot contain other projection hosts",
         ),
     ),
     ids=("with-value", "parent", "absolute", "empty", "backslash", "nested"),
 )
 def test_vanilla_render_hosts_show_one_project_file(
-    tmp_path: Path, host: str, message: str
+    tmp_path: Path, host: str, code: str, message: str
 ) -> None:
     project = _project(tmp_path)
     (project.root / "index.html").write_text(
@@ -172,7 +175,7 @@ def test_vanilla_render_hosts_show_one_project_file(
 
     diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
 
-    assert diagnostic.code == "source-document-invalid"
+    assert diagnostic.code == code
     assert message in diagnostic.message
     assert diagnostic.source is not None
     assert diagnostic.source.line == 2
@@ -280,10 +283,7 @@ def test_vanilla_rejects_nested_projection_hosts(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
-    assert diagnostic.code == "source-document-invalid"
-    assert (
-        "Projection hosts cannot contain other projection hosts" in diagnostic.message
-    )
+    assert diagnostic.code == "projection-host-nested"
 
 
 def test_vanilla_build_preserves_crlf_line_endings(tmp_path: Path) -> None:

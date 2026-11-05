@@ -27,10 +27,10 @@ def _markers(context: StarterContext) -> StarterMarkers:
     )
     return StarterMarkers(
         values={
-            "__NOTEBOOK_LABEL_TYP__": _typst_string(context.notebook_label),
-            "__VIEW_TITLE_TYP__": _typst_string(context.title),
-            "__PAPER_TYP__": _typst_string(str(context.settings["paper"])),
-            "__REPORT_BINDING_TYP__": (
+            "STARTER_NOTEBOOK_LABEL_TYP": _typst_string(context.notebook_label),
+            "STARTER_VIEW_TITLE_TYP": _typst_string(context.title),
+            "STARTER_PAPER_TYP": _typst_string(str(context.settings["paper"])),
+            "STARTER_REPORT_BINDING_TYP": (
                 reads
                 if defines_report
                 else "// Define `report` in the notebook, then replace the next "

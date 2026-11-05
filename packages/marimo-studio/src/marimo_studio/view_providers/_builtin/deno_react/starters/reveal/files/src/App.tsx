@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 import type { RevealApi } from "reveal.js";
 import "reveal.js/reveal.css";
 
-const VIEW_TITLE = __VIEW_TITLE_JSON__;
-const NOTEBOOK_TITLE = __NOTEBOOK_TITLE_JSON__;
+const VIEW_TITLE = STARTER_VIEW_TITLE_JSON;
+const NOTEBOOK_TITLE = STARTER_NOTEBOOK_TITLE_JSON;
 
 const keyboardCondition = (event: KeyboardEvent) =>
   !event.composedPath().some(
@@ -43,7 +43,7 @@ export const App = () => {
         <p className="deck-kicker">{VIEW_TITLE}</p>
         <h1>{NOTEBOOK_TITLE}</h1>
       </Slide>
-      __NOTEBOOK_SLIDE_HOSTS_TSX__
+      STARTER_NOTEBOOK_SLIDE_HOSTS_TSX
     </Deck>
   );
 };

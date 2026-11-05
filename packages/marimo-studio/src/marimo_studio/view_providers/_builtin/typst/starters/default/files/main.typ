@@ -1,12 +1,12 @@
 #import "marimo.typ": marimo_region, marimo_value
 
-#let notebook = __NOTEBOOK_LABEL_TYP__
-#let title = __VIEW_TITLE_TYP__
+#let notebook = STARTER_NOTEBOOK_LABEL_TYP
+#let title = STARTER_VIEW_TITLE_TYP
 #let muted = luma(105)
 
 #set document(title: title)
 #set page(
-  paper: __PAPER_TYP__,
+  paper: STARTER_PAPER_TYP,
   margin: (x: 2.2cm, y: 2.4cm),
   numbering: "1 / 1",
   header: context if counter(page).get().first() > 1 {
@@ -24,7 +24,7 @@
 
 // `report` is a notebook variable that holds JSON values. Its scalar fields
 // become key figures, and each list of dictionaries becomes a table.
-__REPORT_BINDING_TYP__
+STARTER_REPORT_BINDING_TYP
 
 #let field-name(key) = upper(key.replace("_", " "))
 

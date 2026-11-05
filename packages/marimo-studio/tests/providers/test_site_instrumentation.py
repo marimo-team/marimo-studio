@@ -60,6 +60,7 @@ class CopyProvider(ProviderStub):
         self.documents: tuple[SourceDocument, ...] = ()
         self.build_diagnostic: str | None = None
         self.drop_hosts = False
+        self.built_page: bytes | None = None
 
     def availability(self) -> ProviderAvailability:
         return ProviderAvailability(True)
@@ -85,6 +86,9 @@ class CopyProvider(ProviderStub):
                 "</main></body></html>",
                 encoding="utf-8",
             )
+            return BuildResult(ENTRY, ())
+        if self.built_page is not None:
+            request.staging_root.joinpath(ENTRY).write_bytes(self.built_page)
             return BuildResult(ENTRY, ())
         shutil.copy2(built, request.staging_root.joinpath(ENTRY))
         if self.build_diagnostic is None:
@@ -209,6 +213,34 @@ def test_invalid_site_offsets_fail_the_build_at_the_host(
     (diagnostic,) = state.build.diagnostics
     assert diagnostic.code == "projection-site-invalid"
     assert diagnostic.source == site.source
+
+
+@pytest.mark.parametrize(
+    ("host", "message"),
+    (
+        ("<marimo-cell></marimo-cell>", "requires a non-empty name"),
+        (
+            '<marimo-cell name="a"><span mo-value="b"></span></marimo-cell>',
+            "cannot contain other projection hosts",
+        ),
+        (
+            '<marimo-output render="../main.typ"></marimo-output>',
+            "normalized project-relative POSIX path",
+        ),
+    ),
+    ids=("missing-name", "nested", "render-path"),
+)
+def test_publication_rejects_invalid_hosts_in_the_built_page(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    host: str,
+    message: str,
+) -> None:
+    project, provider = _project(tmp_path, monkeypatch, _page("<p>Report</p>"))
+    provider.built_page = _page(host)
+
+    with pytest.raises(ViewProjectError, match=message):
+        build_view_project_sync(project)
 
 
 def test_sites_accept_columns_counted_in_utf16(
