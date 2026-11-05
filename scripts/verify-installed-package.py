@@ -173,7 +173,8 @@ assert set(marimo_studio.view_providers.__all__) == {
     "SourceDocument",
     "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
     "StarterMarkers", "StarterPlan", "StarterSetting", "ViewProject", "ViewProvider", "copy_inputs",
-    "create_starter", "find_tool", "html_sites", "parse_accept", "probe_tool",
+    "create_starter", "find_tool", "host_site", "html_sites", "parse_accept",
+    "probe_tool",
     "project_files",
     "project_path", "render_page", "script_json",
 }
@@ -201,6 +202,9 @@ assert tuple(signature(providers.RenderProvider.render).parameters) == (
     "self", "request",
 )
 assert tuple(signature(providers.html_sites).parameters) == ("path", "source")
+assert tuple(signature(providers.host_site).parameters) == (
+    "tag", "attributes", "source", "offset", "nested",
+)
 assert tuple(field.name for field in fields(providers.ProjectionSite)) == (
     "kind", "targets", "source", "offset", "accept",
 )
