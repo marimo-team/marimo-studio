@@ -1,6 +1,6 @@
 <script lang="ts">
-  const notebookLabel = __NOTEBOOK_LABEL_JSON__;
-  const viewHeading = __VIEW_TITLE_JSON__;
+  const notebookLabel = STARTER_NOTEBOOK_LABEL_JSON;
+  const viewHeading = STARTER_VIEW_TITLE_JSON;
   let resultsVisible = $state(true);
 </script>
 
@@ -17,7 +17,7 @@
 
   {#if resultsVisible}
     <section class="results" aria-label="Notebook results">
-      __NOTEBOOK_CELL_HOSTS_SVELTE__
+      STARTER_NOTEBOOK_CELL_HOSTS_SVELTE
     </section>
   {/if}
 </div>

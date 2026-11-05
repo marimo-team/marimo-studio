@@ -13,7 +13,7 @@ from marimo_studio.view_providers import (
     StarterMarkers,
 )
 
-_CELL_MARKER = "__NOTEBOOK_CELLS_HTML__"
+_CELL_MARKER = "STARTER_NOTEBOOK_CELLS_HTML"
 
 
 def _markers(context: StarterContext) -> StarterMarkers:

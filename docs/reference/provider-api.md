@@ -273,7 +273,7 @@ becomes `Quarterly Report`.
 ### Ship starter files as package data
 
 `PackagedStarter` keeps a starter's files in a package directory and fills
-their `__MARKER__` markers when a view is created. Put the files in
+their `STARTER_*` markers when a view is created. Put the files in
 `acme_views/starters/default/files/`, then return them from `create()`:
 
 ```python
@@ -295,7 +295,7 @@ def markers(context: StarterContext) -> StarterMarkers:
         for item in context.output_cells
     )
     return StarterMarkers(
-        values={"__CELLS__": hosts},
+        values={"STARTER_CELLS": hosts},
         cell_targets=context.output_cells,
     )
 
@@ -324,8 +324,8 @@ class ReportProvider:
 
 `create_starter()` reads the files beneath `files/`, which needs no
 `__init__.py`, and replaces each marker with its value. Every starter can also
-use `__NOTEBOOK_LABEL_HTML__`, `__VIEW_TITLE_HTML__`,
-`__NOTEBOOK_LABEL_JSON__`, and `__VIEW_TITLE_JSON__`, where the title is
+use `STARTER_NOTEBOOK_LABEL_HTML`, `STARTER_VIEW_TITLE_HTML`,
+`STARTER_NOTEBOOK_LABEL_JSON`, and `STARTER_VIEW_TITLE_JSON`, where the title is
 `StarterContext.title`. The `_JSON` markers
 produce a JSON string literal that is safe inside a `<script>` element, and
 `script_json()` produces the same form for your own markers. Include the
@@ -912,8 +912,12 @@ notebook filename. [Create starting files](#create-starting-files) describes
 
 `create_starter()` reads the files in `<package>/files`, replaces each marker
 with its value from `StarterMarkers.values`, and returns the plan with
-`StarterMarkers.cell_targets`. Marker names match `__[A-Z0-9_]+__`. It raises
-`ValueError` for an unknown starter or for a `ProviderStarter.documents` path
+`StarterMarkers.cell_targets`. Marker names match `STARTER(_[A-Z0-9]+)+`, such
+as `STARTER_CELLS`, and a marker is replaced only where it stands as a whole
+word. A marker parses as an identifier in JavaScript, TypeScript, Svelte, and
+Typst source, and Markdown formatters keep it as written. It raises
+`ValueError` for an unknown starter, a marker name outside that form, a
+marker that repeats a shared marker, or a `ProviderStarter.documents` path
 missing from the files. `script_json()` returns a JSON string literal that
 cannot close a `<script>` element.
 

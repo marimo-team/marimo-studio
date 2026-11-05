@@ -18,7 +18,7 @@ def _markers(context: StarterContext) -> StarterMarkers:
     targets = context.output_cells
     return StarterMarkers(
         values={
-            "__NOTEBOOK_CELL_HOSTS_HTML__": "\n".join(
+            "STARTER_NOTEBOOK_CELL_HOSTS_HTML": "\n".join(
                 f'    <marimo-cell name="{html.escape(target.target, quote=True)}"'
                 "></marimo-cell>"
                 for target in targets

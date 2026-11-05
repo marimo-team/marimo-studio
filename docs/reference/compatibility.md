@@ -158,6 +158,11 @@ has tested, such as `marimo-studio>=0.4,<0.5`.
 
 A provider written for Studio 0.4 needs these changes for the current release:
 
+- Rename each packaged starter marker from `__NAME__` to `STARTER_NAME`, such
+  as `__VIEW_TITLE_HTML__` to `STARTER_VIEW_TITLE_HTML` and `__CELLS__` to
+  `STARTER_CELLS`, in starter files and in `StarterMarkers.values`. An
+  unrenamed marker stays in the created file as literal text, and an old
+  marker name in `StarterMarkers.values` raises `ValueError`.
 - Update tests that assert `html_sites()` diagnostics. Host problems that
   reported `source-document-invalid` report the codes in the
   [`host_site()` table](provider-api.md#helpers), and `source-document-invalid`
@@ -169,8 +174,8 @@ A provider written for Studio 0.4 needs these changes for the current release:
 A provider written for Studio 0.3 also needs two changes:
 
 - Rename the `__VIEW_HEADING_HTML__` and `__VIEW_HEADING_JSON__` markers in
-  packaged starter files to `__VIEW_TITLE_HTML__` and `__VIEW_TITLE_JSON__`.
-  An unrenamed marker stays in the created file as literal text.
+  packaged starter files to `STARTER_VIEW_TITLE_HTML` and
+  `STARTER_VIEW_TITLE_JSON`.
 - Pass `title=` when a test builds a `StarterContext` directly, and read
   `context.title` instead of deriving a heading from `context.view_name`.
 

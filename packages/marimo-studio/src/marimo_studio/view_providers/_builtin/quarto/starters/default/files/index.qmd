@@ -1,9 +1,9 @@
 ---
-title: __VIEW_TITLE_JSON__
-subtitle: __NOTEBOOK_LABEL_JSON__
+title: STARTER_VIEW_TITLE_JSON
+subtitle: STARTER_NOTEBOOK_LABEL_JSON
 format:
   html:
-    toc: __TOC_QMD__
+    toc: STARTER_TOC_QMD
 ---
 
-__NOTEBOOK_CELLS_QMD__
+STARTER_NOTEBOOK_CELLS_QMD

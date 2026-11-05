@@ -1,7 +1,7 @@
 /// <reference path="./marimo-studio.d.ts" />
 
-const NOTEBOOK_LABEL = __NOTEBOOK_LABEL_JSON__;
-const VIEW_TITLE = __VIEW_TITLE_JSON__;
+const NOTEBOOK_LABEL = STARTER_NOTEBOOK_LABEL_JSON;
+const VIEW_TITLE = STARTER_VIEW_TITLE_JSON;
 
 export const App = () => (
   <div className="page">
@@ -10,7 +10,7 @@ export const App = () => (
       <h1>{VIEW_TITLE}</h1>
     </header>
     <section className="results" aria-label="Notebook results">
-      __NOTEBOOK_CELL_HOSTS_TSX__
+      STARTER_NOTEBOOK_CELL_HOSTS_TSX
     </section>
   </div>
 );

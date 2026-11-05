@@ -22,13 +22,15 @@ from marimo_studio.view_providers._records import (
 if TYPE_CHECKING:
     from importlib.resources.abc import Traversable
 
-_MARKER_NAME = re.compile(r"__[A-Z0-9_]+__")
+# A marker parses as an identifier in JavaScript, TypeScript, Svelte, and Typst
+# source, and Markdown formatters read its inner underscores as text.
+_MARKER_NAME = re.compile(r"STARTER(?:_[A-Z0-9]+)+")
 _LINE_SEPARATOR = re.compile(r"\r\n|\r|\n")
 
 
 @dataclass(frozen=True)
 class StarterMarkers:
-    """Values for one starter's ``__MARKER__`` placeholders and the cells it names."""
+    """Values for one starter's ``STARTER_*`` markers and the cells it names."""
 
     values: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
     cell_targets: tuple[StarterCellTarget, ...] = ()
@@ -43,10 +45,10 @@ def _no_markers(context: StarterContext) -> StarterMarkers:
 class PackagedStarter:
     """A starter whose files live in ``<package>/files``.
 
-    ``markers`` returns the values for the starter's own ``__MARKER__``
-    placeholders. Every starter can also use ``__NOTEBOOK_LABEL_HTML__``,
-    ``__VIEW_TITLE_HTML__``, ``__NOTEBOOK_LABEL_JSON__``, and
-    ``__VIEW_TITLE_JSON__``.
+    ``markers`` returns the values for the starter's own ``STARTER_*``
+    markers, such as ``STARTER_CELLS``. Every starter can also use
+    ``STARTER_NOTEBOOK_LABEL_HTML``, ``STARTER_VIEW_TITLE_HTML``,
+    ``STARTER_NOTEBOOK_LABEL_JSON``, and ``STARTER_VIEW_TITLE_JSON``.
     """
 
     info: ProviderStarter
@@ -72,14 +74,16 @@ def _replacements(
 ) -> dict[str, str]:
     label = context.notebook_label
     replacements = {
-        "__NOTEBOOK_LABEL_HTML__": html.escape(label),
-        "__VIEW_TITLE_HTML__": html.escape(context.title),
-        "__NOTEBOOK_LABEL_JSON__": script_json(label),
-        "__VIEW_TITLE_JSON__": script_json(context.title),
+        "STARTER_NOTEBOOK_LABEL_HTML": html.escape(label),
+        "STARTER_VIEW_TITLE_HTML": html.escape(context.title),
+        "STARTER_NOTEBOOK_LABEL_JSON": script_json(label),
+        "STARTER_VIEW_TITLE_JSON": script_json(context.title),
     }
     for marker, value in additions.items():
         if _MARKER_NAME.fullmatch(marker) is None:
-            raise ValueError(f"Invalid starter marker {marker!r}")
+            raise ValueError(
+                f"Invalid starter marker {marker!r}. Name markers like STARTER_CELLS."
+            )
         if marker in replacements:
             raise ValueError(f"Duplicate starter marker {marker!r}")
         replacements[marker] = value
@@ -148,7 +152,9 @@ def create_starter(
     markers = starter.markers(context)
     values = _replacements(context, markers.values)
     marker_pattern = re.compile(
-        "|".join(re.escape(marker) for marker in sorted(values, key=len, reverse=True))
+        r"(?<![A-Za-z0-9_])(?:"
+        + "|".join(re.escape(marker) for marker in values)
+        + r")(?![A-Za-z0-9_])"
     )
     files = _tree_files(selected, values, marker_pattern)
     missing = sorted(set(requested.documents) - files.keys())

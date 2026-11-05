@@ -17,8 +17,8 @@ from marimo_studio.view_providers import (
     script_json,
 )
 
-_SLIDE_HOSTS_MARKER = "__NOTEBOOK_SLIDE_HOSTS_TSX__"
-_TITLE_MARKER = "__NOTEBOOK_TITLE_JSON__"
+_SLIDE_HOSTS_MARKER = "STARTER_NOTEBOOK_SLIDE_HOSTS_TSX"
+_TITLE_MARKER = "STARTER_NOTEBOOK_TITLE_JSON"
 _ATX_HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*$")
 _SETEXT_HEADING = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
