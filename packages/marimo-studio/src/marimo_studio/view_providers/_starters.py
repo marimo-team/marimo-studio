@@ -152,7 +152,9 @@ def create_starter(
     markers = starter.markers(context)
     values = _replacements(context, markers.values)
     marker_pattern = re.compile(
-        r"(?<!\w)(?:" + "|".join(re.escape(marker) for marker in values) + r")(?!\w)"
+        r"(?<![\w$])(?:"
+        + "|".join(re.escape(marker) for marker in values)
+        + r")(?![\w$])"
     )
     files = _tree_files(selected, values, marker_pattern)
     missing = sorted(set(requested.documents) - files.keys())

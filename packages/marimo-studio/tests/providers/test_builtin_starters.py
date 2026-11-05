@@ -192,7 +192,7 @@ def test_starter_markers_replace_whole_words(
             "default/__init__.py": "",
             "default/files/index.html": (
                 "STARTER_PAPER STARTER_PAPER_TEX {STARTER_PAPER} "
-                "STARTER_PAPER_TEXT xSTARTER_PAPER caféSTARTER_PAPER\n"
+                "STARTER_PAPER_TEXT xSTARTER_PAPER caféSTARTER_PAPER STARTER_PAPER$x\n"
             ).encode(),
         },
     )
@@ -210,7 +210,8 @@ def test_starter_markers_replace_whole_words(
     assert (
         plan.files[PurePosixPath("index.html")]
         == (
-            "a4 a4paper {a4} STARTER_PAPER_TEXT xSTARTER_PAPER caféSTARTER_PAPER\n"
+            "a4 a4paper {a4} STARTER_PAPER_TEXT xSTARTER_PAPER caféSTARTER_PAPER "
+            "STARTER_PAPER$x\n"
         ).encode()
     )
 
