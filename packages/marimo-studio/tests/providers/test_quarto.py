@@ -496,6 +496,7 @@ def test_inspection_locates_invalid_shortcode_targets(
     assert inspection.sites == ()
     (diagnostic,) = inspection.diagnostics
     assert diagnostic.code == code
+    assert diagnostic.message.startswith("The marimo shortcode ")
     assert diagnostic.source == SourceLocation(INDEX, 3, 1)
 
 

@@ -40,14 +40,6 @@ _USAGE_HINT = (
     'Write {{< marimo cell="summary" >}}, {{< marimo output="chart" >}}, or '
     '{{< marimo value="metrics.total" >}}.'
 )
-# Hints that show shortcode syntax in place of the host markup it becomes.
-_SHORTCODE_HINTS = {
-    "projection-target-missing": _USAGE_HINT,
-    "projection-target-invalid": _USAGE_HINT,
-    "projection-accept-invalid": (
-        'Write {{< marimo output="chart" accept="image/svg+xml" >}}.'
-    ),
-}
 # The host each shortcode kind becomes, with the attribute that holds its target.
 _HOSTS: dict[ProjectionKind, tuple[str, str]] = {
     "cell": ("marimo-cell", "name"),
@@ -348,10 +340,29 @@ def _shortcode_sites(
         if isinstance(result, ProjectionSite):
             sites.append(result)
         elif result is not None:
-            diagnostics.append(
-                replace(result, hint=_SHORTCODE_HINTS.get(result.code, result.hint))
-            )
+            diagnostics.append(_shortcode_diagnostic(result, kind))
     return sites, diagnostics
+
+
+def _shortcode_diagnostic(
+    diagnostic: ProjectDiagnostic, kind: ProjectionKind
+) -> ProjectDiagnostic:
+    """Describe a host problem in the shortcode syntax the author wrote."""
+    # host_site() messages end with the parser's reason after the first ": ".
+    reason = diagnostic.message.partition(": ")[2]
+    if diagnostic.code == "projection-target-missing":
+        message = f"The marimo shortcode needs a non-empty {kind}."
+    elif diagnostic.code == "projection-target-invalid":
+        message = f"The marimo shortcode {kind} is invalid: {reason}"
+    elif diagnostic.code == "projection-accept-invalid":
+        return replace(
+            diagnostic,
+            message=f"The marimo shortcode accept is invalid: {reason}",
+            hint='Write {{< marimo output="chart" accept="image/svg+xml" >}}.',
+        )
+    else:
+        return diagnostic
+    return replace(diagnostic, message=message, hint=_USAGE_HINT)
 
 
 def quarto_sites(
