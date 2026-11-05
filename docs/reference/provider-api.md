@@ -1368,7 +1368,11 @@ a notebook cell, it runs the check on a worker thread. The check also fails
 when `inspect()` changes the project, when two inspections differ, when
 inspection reports an error, and when the package that defines the provider
 imports Studio modules outside `marimo_studio.view_providers` and
-`marimo_studio.view_providers.testing`.
+`marimo_studio.view_providers.testing`. A provider object checked under a
+`key` in the `marimo-studio` distribution, such as `marimo-studio/report`,
+fails before the check starts, because those keys belong to the built-in
+providers. Pass the distribution that ships the provider, such as
+`key="acme-views/report"`.
 
 ### Notebook records
 

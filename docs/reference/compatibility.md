@@ -156,13 +156,15 @@ Browser and Prepared runtimes keep opaque-origin isolation.
 Declare `marimo-studio` as a dependency bounded to the minor line the provider
 has tested, such as `marimo-studio>=0.4,<0.5`.
 
-A provider written for Studio 0.4 needs this change for the current release:
+A provider written for Studio 0.4 needs these changes for the current release:
 
 - Update tests that assert `html_sites()` diagnostics. Host problems that
   reported `source-document-invalid` report the codes in the
   [`host_site()` table](provider-api.md#helpers), and `source-document-invalid`
   covers markup that HTML rejects. `html_sites()` reports every invalid host in
   source order and checks cell names.
+- Check a provider object with `check_provider(provider, key=...)` under its
+  own distribution. A key in the `marimo-studio` distribution fails the check.
 
 A provider written for Studio 0.3 also needs two changes:
 
