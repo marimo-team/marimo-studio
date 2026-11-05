@@ -49,11 +49,13 @@ from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildProfile,
     ProjectDiagnostic,
+    SourceLocation,
 )
 from marimo_studio.view_providers._document import (
     HTMLDocumentParser,
     validate_html_document,
 )
+from marimo_studio.view_providers._sites import built_host_site
 
 _LOGGER = logging.getLogger("marimo.studio")
 
@@ -85,6 +87,22 @@ def validate_document(root: Path, document: PurePosixPath) -> None:
     parser = HTMLDocumentParser()
     parser.feed(source)
     validate_html_document(parser, relative.as_posix())
+    for host in parser.hosts:
+        line, column = host.position
+        problem = built_host_site(
+            host.tag,
+            host.attributes,
+            SourceLocation(relative, line, column),
+            host.insertion_offset,
+            nested=host.nested,
+        )
+        if isinstance(problem, ProjectDiagnostic):
+            raise ViewProjectError(
+                f"{relative}: {problem.message}",
+                line=line,
+                column=column,
+                hint=problem.hint,
+            )
     if parser.has_reserved_runtime_markup:
         raise ViewProjectError(
             f"{relative}: artifact document contains reserved runtime markup"

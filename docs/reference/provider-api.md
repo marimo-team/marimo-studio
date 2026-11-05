@@ -470,8 +470,31 @@ and that host shows no notebook result. Studio reserves
 `data-marimo-studio-site`, and `html_sites()` reports `projection-site-reserved`
 when authored source contains it.
 
-A provider for another source format reports the same records from its own
-parser:
+A provider for another source format finds each host start tag with its own
+parser and passes it to `host_site()`, which applies the same host rules as
+`html_sites()`. A template language whose parser accepts markup that HTML
+rejects, such as a self-closing `<marimo-cell name="summary" />`, reports
+sites this way:
+
+```python
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import SourceLocation, host_site
+
+result = host_site(
+    "marimo-cell",
+    {"name": "summary"},
+    SourceLocation(PurePosixPath("report.tmpl"), 4, 5),
+    offset=118,
+)
+```
+
+`result` is `ProjectionSite(kind="cell", targets=("summary",), ...)`. A host
+Studio cannot project returns a `ProjectDiagnostic` at the same location, and
+an ordinary element returns `None`.
+
+A provider whose analyzer resolves targets itself, such as a conditional
+expression with two literal targets, builds the records directly:
 
 | Field     | Contract                                                                                                          |
 | --------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -1167,6 +1190,15 @@ html_sites(
     source: bytes,
 ) -> tuple[tuple[ProjectionSite, ...], tuple[ProjectDiagnostic, ...]]
 
+host_site(
+    tag: str,
+    attributes: Mapping[str, str | None],
+    source: SourceLocation,
+    offset: int,
+    *,
+    nested: bool = False,
+) -> ProjectionSite | ProjectDiagnostic | None
+
 parse_accept(kind: ProjectionKind, text: str | None) -> tuple[str, ...]
 
 find_tool(command: str) -> str | None
@@ -1219,12 +1251,36 @@ def build(self, request):
 `ValueError` for absolute paths, `..` segments, backslashes, and names that are
 not portable across operating systems.
 
-`html_sites()` parses `source` as HTML and returns its projection sites with
-diagnostics for invalid hosts. A render host is part of the page and has no
-projection site, and an invalid render host, such as one that also sets
-`value`, reports a diagnostic. `source` holds the file bytes as stored, so each
-`offset` points into the same bytes Studio marks. When the markup cannot be
-parsed, the result keeps the sites found before the parse error.
+`html_sites()` parses `source` as HTML, passes each host start tag to
+`host_site()`, and returns the sites and diagnostics in source order. `source`
+holds the file bytes as stored, so each `offset` points into the same bytes
+Studio marks. HTML rules come first: a duplicate attribute or a self-closing
+custom element such as `<marimo-cell name="summary" />` reports
+`source-document-invalid`, and the result keeps the sites found before it.
+
+`host_site()` turns one host start tag into the projection site it declares.
+It compares tag and attribute names exactly as lowercase names, which HTML
+parsers produce, so a parser for a case-insensitive language lowercases them
+first. `attributes` maps each attribute to its value, or to
+`None` for an attribute written without one, such as `data-marimo-allow`.
+`source` locates the start tag, and `offset` is the UTF-8 byte offset inside
+the start tag where Studio inserts the site attribute. Pass `nested=True` when
+the tag opens inside a `marimo-cell`, `marimo-output`, or `mo-value` element.
+
+It returns `None` for an element that declares no site, which includes a
+valid `<marimo-output render="...">` host. A host that breaks a rule returns a
+`ProjectDiagnostic` located at `source`:
+
+| Code                          | Host                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `projection-site-reserved`    | Any element that sets `data-marimo-studio-site`                                                             |
+| `projection-kind-conflict`    | One element that declares two kinds, such as `<marimo-cell mo-value="...">`                                 |
+| `projection-host-nested`      | A host inside another host                                                                                  |
+| `projection-render-invalid`   | A render host that also sets `value`, `accept`, or `data-marimo-allow`, or names a path outside the project |
+| `projection-target-missing`   | A host whose `name`, `value`, or `mo-value` is absent or blank                                              |
+| `projection-target-invalid`   | A cell name or value selector that does not parse                                                           |
+| `projection-wildcard-invalid` | A `data-marimo-allow` other than `"*"`                                                                      |
+| `projection-accept-invalid`   | An `accept` that `parse_accept()` rejects                                                                   |
 
 `parse_accept()` reads a host's `accept` attribute text, such as
 `"image/svg+xml, image/png"`, into lowercase media types in preference order.

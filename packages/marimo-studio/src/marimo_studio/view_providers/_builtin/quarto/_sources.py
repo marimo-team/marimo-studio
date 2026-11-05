@@ -12,6 +12,7 @@ scanner's lines, columns, and byte offsets stay exact for the authored file.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
@@ -19,8 +20,8 @@ from marimo_studio.view_providers import (
     ProjectionKind,
     ProjectionSite,
     SourceLocation,
+    host_site,
     html_sites,
-    parse_accept,
 )
 
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
@@ -34,8 +35,25 @@ _SHORTCODE_CALL = re.compile(
 _SHORTCODE_PARAM = re.compile(
     r"""(?P<key>[A-Za-z0-9_-]+)=(?P<value>"[^"]*"|'[^']*'|[^"'\s]+)|(?P<bare>"[^"]*"|'[^']*'|[^"'\s]+)"""
 )
-_HOST_KINDS: tuple[ProjectionKind, ...] = ("cell", "output", "value")
 _SITE_ATTRIBUTE = "data-marimo-studio-site"
+_USAGE_HINT = (
+    'Write {{< marimo cell="summary" >}}, {{< marimo output="chart" >}}, or '
+    '{{< marimo value="metrics.total" >}}.'
+)
+# Hints that show shortcode syntax in place of the host markup it becomes.
+_SHORTCODE_HINTS = {
+    "projection-target-missing": _USAGE_HINT,
+    "projection-target-invalid": _USAGE_HINT,
+    "projection-accept-invalid": (
+        'Write {{< marimo output="chart" accept="image/svg+xml" >}}.'
+    ),
+}
+# The host each shortcode kind becomes, with the attribute that holds its target.
+_HOSTS: dict[ProjectionKind, tuple[str, str]] = {
+    "cell": ("marimo-cell", "name"),
+    "output": ("marimo-output", "value"),
+    "value": ("span", "mo-value"),
+}
 _DISPLAY_MATH = re.compile(r"(?<!\\)\$\$.*?(?<!\\)\$\$", re.DOTALL)
 _INLINE_MATH = re.compile(r"(?<![\\$])\$(?=[^\s$])(?:\\.|[^$\\\n])*?(?<=\S)\$(?!\d)")
 _FRONT_MATTER_END = re.compile(r"^(?:---|\.\.\.)\s*$")
@@ -283,18 +301,7 @@ def _shortcode_sites(
             continue
         line, column = _position(text, match.start())
         source = SourceLocation(path, line, column)
-        kinds: list[ProjectionKind] = [kind for kind in _HOST_KINDS if kind in named]
-        if _SITE_ATTRIBUTE in named:
-            diagnostics.append(
-                ProjectDiagnostic(
-                    "projection-site-reserved",
-                    "error",
-                    f"{_SITE_ATTRIBUTE} is reserved for Studio.",
-                    f"Remove {_SITE_ATTRIBUTE}. Studio adds it to built hosts.",
-                    source,
-                )
-            )
-            continue
+        kinds: list[ProjectionKind] = [kind for kind in _HOSTS if kind in named]
         if len(kinds) != 1:
             diagnostics.append(
                 ProjectDiagnostic(
@@ -303,43 +310,47 @@ def _shortcode_sites(
                     else "projection-kind-conflict",
                     "error",
                     "The marimo shortcode needs exactly one of cell, output, or value.",
-                    'Write {{< marimo cell="summary" >}}, '
-                    '{{< marimo output="chart" >}}, or '
-                    '{{< marimo value="metrics.total" >}}.',
+                    _USAGE_HINT,
                     source,
                 )
             )
             continue
         kind = kinds[0]
-        if kind != "value" and not _standalone(text, match):
-            diagnostics.append(
-                ProjectDiagnostic(
-                    "projection-host-inline",
-                    "error",
-                    f"A marimo {kind} shortcode must be a paragraph of its own.",
-                    "Put the shortcode on its own line with a blank line before and "
-                    "after it.",
-                    source,
-                )
-            )
-            continue
-        try:
-            accept = parse_accept(kind, named.get("accept"))
-        except ValueError as error:
-            diagnostics.append(
-                ProjectDiagnostic(
-                    "projection-accept-invalid",
-                    "error",
-                    f"The marimo shortcode accept is invalid: {error}.",
-                    'Write {{< marimo output="chart" accept="image/svg+xml" >}}.',
-                    source,
-                )
-            )
-            continue
+        tag, attribute = _HOSTS[kind]
         # Studio inserts the site attribute as one more shortcode parameter, at
         # the whitespace before the closing ``>}}``.
-        offset = len(text[: match.start("space")].encode("utf-8"))
-        sites.append(ProjectionSite(kind, (named[kind],), source, offset, accept))
+        result = host_site(
+            tag,
+            {
+                attribute: named[kind],
+                **{
+                    key: named[key]
+                    for key in ("accept", _SITE_ATTRIBUTE)
+                    if key in named
+                },
+            },
+            source,
+            len(text[: match.start("space")].encode("utf-8")),
+        )
+        if (
+            isinstance(result, ProjectionSite)
+            and kind != "value"
+            and not _standalone(text, match)
+        ):
+            result = ProjectDiagnostic(
+                "projection-host-inline",
+                "error",
+                f"A marimo {kind} shortcode must be a paragraph of its own.",
+                "Put the shortcode on its own line with a blank line before and "
+                "after it.",
+                source,
+            )
+        if isinstance(result, ProjectionSite):
+            sites.append(result)
+        elif result is not None:
+            diagnostics.append(
+                replace(result, hint=_SHORTCODE_HINTS.get(result.code, result.hint))
+            )
     return sites, diagnostics
 
 

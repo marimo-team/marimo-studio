@@ -798,7 +798,8 @@ Studio checks each result against these rules and reports the one it breaks.
   those files from the view project.
 - Keep `inspect()` read-only. Put reusable data in `request.cache_root`.
 - Report each host as a `ProjectionSite` whose `offset` points inside its start
-  tag in the stored file. `html_sites()` does this for HTML. Match `kind` to the
+  tag in the stored file. `html_sites()` does this for HTML, and `host_site()`
+  does it for one start tag that your own parser finds. Match `kind` to the
   host: `cell` for `marimo-cell`, `output` for `marimo-output`, `value` for an
   element with `mo-value`.
 - Build from the snapshot in `request.project.root` and keep the

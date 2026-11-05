@@ -136,7 +136,10 @@ class VanillaProvider:
                 sites=sites,
                 # Malformed HTML fails both scans, so report it once.
                 diagnostics=site_diagnostics
-                or (_source_diagnostic(entry_path, error.cause),),
+                if any(
+                    item.code == "source-document-invalid" for item in site_diagnostics
+                )
+                else (*site_diagnostics, _source_diagnostic(entry_path, error.cause)),
             )
         return ProjectInspection(
             documents=graph.documents,
