@@ -355,7 +355,8 @@ def test_an_abandoned_render_leaves_nothing_in_the_asyncio_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     renderer = GatedRenderer()
-    store, presentation, snapshot = _store(monkeypatch, renderer)
+    # Only closing the store may end the render, so the grace outlasts the test.
+    store, presentation, snapshot = _store(monkeypatch, renderer, abandoned_grace=60)
     loop = asyncio.new_event_loop()
     try:
         leaving = loop.create_task(_render(store, presentation, snapshot, {"total": 1}))
