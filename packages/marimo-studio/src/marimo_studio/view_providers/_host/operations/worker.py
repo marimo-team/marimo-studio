@@ -80,7 +80,7 @@ def _number(value: object, label: str) -> float:
 class _SourceLoader(SourceFileLoader):
     def get_code(self, fullname: str) -> CodeType:
         path = self.get_filename(fullname)
-        return cast(CodeType, self.source_to_code(self.get_data(path), path))
+        return self.source_to_code(self.get_data(path), path)
 
 
 class _WorkingTreeFinder:
