@@ -30,6 +30,7 @@ import {
   documentLifecycleEnvelope,
   setActiveDocumentLifecycleId,
 } from "./document-lifecycle-id.ts";
+import { navigateToFragment } from "./fragment.ts";
 import { isStudioParentMessage, postToStudioParent } from "./parent-bridge.ts";
 import { RefreshRetrySchedule } from "./presentation-refresh.ts";
 import { studioOwned } from "./studio-ownership.ts";
@@ -39,29 +40,6 @@ export interface DirectViewNavigation {
   documentUrl: string;
   view: string;
 }
-
-const scrollToFragment = (hash: string): void => {
-  let identifier = hash.startsWith("#") ? hash.slice(1) : hash;
-  try {
-    identifier = decodeURIComponent(identifier);
-  } catch {
-    return;
-  }
-  try {
-    (
-      document.getElementById(identifier) ?? document.getElementsByName(identifier)[0]
-    )?.scrollIntoView();
-  } catch {
-    return;
-  }
-};
-
-const replaceFragment = (hash: string): void => {
-  const target = new URL(globalThis.location.href);
-  target.hash = hash;
-  globalThis.history.replaceState(globalThis.history.state, "", target);
-  scrollToFragment(hash);
-};
 
 export const bindFragmentRestores = (): (() => void) => {
   const listener = (event: MessageEvent<unknown>) => {
@@ -77,7 +55,7 @@ export const bindFragmentRestores = (): (() => void) => {
     ) {
       return;
     }
-    replaceFragment(request.hash);
+    navigateToFragment(request.hash);
   };
   globalThis.addEventListener("message", listener);
   return () => globalThis.removeEventListener("message", listener);
@@ -356,21 +334,22 @@ export const bindViewNavigation = (
     }
     if (navigation.current && !queryChanged) {
       if (globalThis.parent === globalThis.window) {
-        globalThis.history.pushState(globalThis.history.state, "", target);
-        scrollToFragment(target.hash);
-      } else {
-        replaceFragment(target.hash);
-        const message: NavigateViewMessage = {
-          type: "marimo-studio:navigate-view",
-          runtime: getRuntimeConfig().runtime.id,
-          ...documentLifecycleEnvelope(),
-          view: navigation.view,
-          query: target.search,
-          hash: target.hash,
-          history: "push",
-        };
-        postToStudioParent(message);
+        navigateToFragment(target.hash, "push");
+        return;
       }
+      // A wrapper parent pushes its entry before the fragment navigation
+      // reports the new location, so the location replaces the new entry.
+      const message: NavigateViewMessage = {
+        type: "marimo-studio:navigate-view",
+        runtime: getRuntimeConfig().runtime.id,
+        ...documentLifecycleEnvelope(),
+        view: navigation.view,
+        query: target.search,
+        hash: target.hash,
+        history: "push",
+      };
+      postToStudioParent(message);
+      navigateToFragment(target.hash);
       return;
     }
     if (queryChanged) {

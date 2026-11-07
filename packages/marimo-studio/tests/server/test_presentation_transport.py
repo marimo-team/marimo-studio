@@ -189,8 +189,7 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
     }
     frame = _PresentationFrameParser()
     frame.feed(document)
-    assert frame.src == "../_marimo-studio/presentation/token/dashboard/"
-    assert 'allow="clipboard-write; fullscreen *"' in document
+    assert frame.allow == {"clipboard-write", "fullscreen *", "screen-wake-lock *"}
 
 
 def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() -> None:
@@ -216,7 +215,9 @@ def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() ->
     sandbox = _presentation_frame_sandbox(document)
     assert "allow-scripts" in sandbox
     assert "allow-same-origin" not in sandbox
-    assert 'data-frame-allow="clipboard-write; fullscreen *"' in document
+    frame = _PresentationFrameParser()
+    frame.feed(document)
+    assert frame.allow == {"clipboard-write", "fullscreen *", "screen-wake-lock *"}
 
     config = _presentation_wrapper_config(document)
     assert config["runtime"] == "server"

@@ -161,6 +161,7 @@ export const previewDeck = (options: Partial<PreviewDeckOptions> = {}): PreviewD
     viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
     supportUrl: (view) => `/support/${view}`,
     syncQuery: vi.fn(),
+    syncFragment: vi.fn(),
     syncEditorQuery: vi.fn(async () => "accepted" as const),
     navigate: vi.fn(),
     ...options,
@@ -175,13 +176,17 @@ type ServerPreviewWindow = {
   ) => void;
 };
 
-export const attachedServerDeck = (previewWindow: ServerPreviewWindow, ready = false) => {
+export const attachedServerDeck = (
+  previewWindow: ServerPreviewWindow,
+  ready = false,
+  options: Partial<PreviewDeckOptions> = {},
+) => {
   const preview = frame("complete");
   Object.defineProperty(preview, "contentWindow", {
     configurable: true,
     value: previewWindow,
   });
-  const deck = previewDeck();
+  const deck = previewDeck(options);
   deck.attach(frame("complete"), new Map([["server", preview]]));
   const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
   if (ready) {

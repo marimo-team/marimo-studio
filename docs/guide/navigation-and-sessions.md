@@ -43,9 +43,13 @@ notebook makes through `mo.query_params()` update the browser URL and history.
 Repeated keys and blank values stay distinct, as in `?tag=a&tag=b&empty=`.
 
 An anchor such as `<a href="#errors">` stays inside the current view. Studio
-applies the fragment once the view is ready, and back and forward restore the
-query, the fragment, and the selected view. Switching views in Studio carries
-the current query and fragment along.
+passes the fragment to the page as a fragment navigation, so the browser
+scrolls to the anchor and the page receives `hashchange`. A page that routes by
+fragment opens at `/report/#/3`, and the routes it writes appear in the address
+bar. Back and forward restore the query, the fragment, and the selected view.
+Switching views in Studio carries the current query and fragment along.
+[Page environment](../reference/provider-api.md#page-environment) shows a
+fragment router.
 
 Studio keeps its own parameters, such as `runtime`, `session_id`, and access
 tokens, out of `mo.query_params()`. When a notebook allows both runtimes,

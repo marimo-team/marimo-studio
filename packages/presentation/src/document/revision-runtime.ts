@@ -6,6 +6,7 @@ import { errorMessage } from "../errors.ts";
 import { renderedViewIdentity } from "../rendered-view-state.ts";
 import { getRuntimeConfig, RuntimeConfigRequestError } from "../runtime-config/index.ts";
 import { updateConfiguredRuntime } from "../runtime/coordinator.ts";
+import { isCurrentDocument } from "./fragment.ts";
 import {
   PresentationRevisionController,
   type RevisionOperation,
@@ -59,7 +60,16 @@ export const createPresentationRevisions = (
     {
       addressFollowsDocument: globalThis.parent !== globalThis.window,
       applyRuntime: () => updateConfiguredRuntime(getRuntimeConfig()),
-      reloadDocument: (url) => globalThis.location.assign(url),
+      reloadDocument: (url) => {
+        // Assigning the current URL with a fragment only navigates to the
+        // fragment, so the current document reloads in place.
+        if (isCurrentDocument(url)) {
+          globalThis.history.replaceState(globalThis.history.state, "", url);
+          globalThis.location.reload();
+        } else {
+          globalThis.location.assign(url);
+        }
+      },
       reloadRuntime: () => globalThis.location.reload(),
       classifyFailure,
     },

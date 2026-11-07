@@ -87,7 +87,7 @@ test("user navigation pushes history while presentation refresh replaces it", as
 
   assert.deepEqual(histories, [
     ["push", "/report/"],
-    ["replace", "/report/"],
+    ["refresh", "/report/"],
   ]);
 });
 
@@ -107,8 +107,8 @@ test("a top-level page keeps its public address through refreshes and reloads", 
   await controller.transition("/signed/report/", "/support/report");
 
   assert.deepEqual(histories, [
-    ["replace", null],
-    ["replace", null],
+    ["refresh", null],
+    ["refresh", null],
   ]);
   assert.deepEqual(settings.reloadDocument.mock.calls, [[globalThis.location.href]]);
 });
@@ -507,7 +507,9 @@ test("a document reload bypasses the mounted runtime handoff", async () => {
 
   await controller.transition(target.documentUrl, target.supportUrl);
 
-  assert.deepEqual(hooks.reloadDocument.mock.calls, [["/report/"]]);
+  assert.deepEqual(hooks.reloadDocument.mock.calls, [
+    [new URL("/report/", globalThis.location.href).href],
+  ]);
   assert.equal(hooks.applyRuntime.mock.calls.length, 0);
   assert.equal(hooks.onReady.mock.calls.length, 0);
   assert.equal(hooks.onSupportChanged.mock.calls.length, 0);

@@ -16,7 +16,7 @@ import {
   viewList,
   viewOwner,
 } from "./fixtures.ts";
-import { deferred } from "./studio-test-support.ts";
+import { deferred, studioBootstrap } from "./studio-test-support.ts";
 
 // Parsed Studio records hold absolute URLs.
 const studioUrl = (path: string): string => new URL(path, globalThis.location.origin).href;
@@ -48,6 +48,7 @@ const ready: StudioBootstrap = {
   runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
   trustedServerRuntime: false,
+  presentationFrame: studioBootstrap.presentationFrame,
   clientId: host.clientId,
   serverInstance: host.serverInstance,
   serverToken: host.serverToken,

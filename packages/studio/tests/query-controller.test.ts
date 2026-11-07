@@ -53,6 +53,39 @@ it("applies an editor query through the rendered preview bridge", async () => {
   preview.remove();
 });
 
+it("sends a Studio fragment once and drops it when the page reports its own", async () => {
+  const preview = frame();
+  const source = createFrameBridgeSource();
+  installFrameBridge(preview, source, {
+    lifecycleId: 1,
+    revision: "revision-1",
+    runtime: "wasm",
+    sessionId: null,
+    view: "dashboard",
+  });
+  const controller = new PreviewQueryController("wasm", preview, vi.fn(), vi.fn(), vi.fn());
+  const applied = () =>
+    source.postMessage.mock.calls
+      .map(([message]) => parseFrameBridgeMessage(message))
+      .filter((message) => message?.type === "marimo-studio:frame-query-apply")
+      .map((message) => ({ query: message?.query, hash: message?.hash }));
+
+  await controller.applyToPreview(true, "#/3");
+  controller.editorChanged("region=emea", true);
+  await vi.waitFor(() => expect(applied()).toHaveLength(2));
+  await controller.applyToPreview(false, "#/5");
+  controller.previewHashChanged("#/6");
+  await controller.applyToPreview(true);
+
+  expect(applied()).toEqual([
+    { query: "", hash: "#/3" },
+    { query: "?region=emea", hash: undefined },
+    { query: "?region=emea", hash: undefined },
+  ]);
+  controller.cancel();
+  preview.remove();
+});
+
 it.each(["preview-first", "editor-first"] as const)(
   "keeps an authored navigation alive with %s completion",
   async (order) => {

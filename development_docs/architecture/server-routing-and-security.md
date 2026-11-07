@@ -211,12 +211,21 @@ The trusted wrapper loads provider-authored content in an iframe whose sandbox
 permits scripts, forms, downloads, modals, pointer lock, and popups. The iframe
 has an opaque origin because `allow-same-origin` is absent.
 
-The host delegates the [Fullscreen API](https://fullscreen.spec.whatwg.org/)
-for presentation controls. The browser requires a user gesture to enter fullscreen.
+`PRESENTATION_SANDBOX` and `PRESENTATION_FRAME_ALLOW` in
+`_server/presentation/isolation.py` define the presentation frame policy. The
+wrapper creates its frame with both, presentation responses repeat the sandbox
+as a `Content-Security-Policy` sandbox, and the Studio bootstrap carries both
+as `presentationFrame` for the workspace preview. The policy delegates
+clipboard writes, the [Fullscreen API](https://fullscreen.spec.whatwg.org/),
+and the [Screen Wake Lock API](https://w3c.github.io/screen-wake-lock/), so a
+deck can keep the display on while it presents. The opaque origin matches no
+named origin, so fullscreen and screen wake lock list `*`. The browser requires a user
+gesture to enter fullscreen. The page environment section of
+`docs/reference/provider-api.md` documents the contract for view authors.
 
 The child receives no Studio credential or same-origin authority. A validated
-message bridge carries navigation, public query, fragment, readiness, replay,
-and diagnostic messages. The wrapper accepts child messages from
+message bridge carries navigation, public location, fragment, readiness,
+replay, and diagnostic messages. The wrapper accepts child messages from
 the iframe window with origin `null` and parent messages from the same-origin
 Studio window.
 

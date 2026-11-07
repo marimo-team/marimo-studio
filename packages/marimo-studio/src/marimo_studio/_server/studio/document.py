@@ -38,6 +38,10 @@ from marimo_studio._delivery.urls import (
     with_notebook_query,
     with_query,
 )
+from marimo_studio._server.presentation.isolation import (
+    PRESENTATION_FRAME_ALLOW,
+    PRESENTATION_SANDBOX,
+)
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.editor_capability import (
@@ -99,6 +103,10 @@ def studio_bootstrap_payload(
             else runtimes[0][0]
         ),
         "trustedServerRuntime": trusted_server_runtime,
+        "presentationFrame": {
+            "sandbox": PRESENTATION_SANDBOX,
+            "allow": PRESENTATION_FRAME_ALLOW,
+        },
         "urls": {
             "editor": relative_url(
                 request_path,

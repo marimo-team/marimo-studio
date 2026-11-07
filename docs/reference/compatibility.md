@@ -141,8 +141,11 @@ Provider-authored pages run inside a sandboxed
 [iframe](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe),
 an embedded browser document, with an opaque origin. The sandbox permits
 scripts, forms, downloads, modals, pointer lock, and popups. It withholds
-same-origin access and top-level navigation. Studio validates navigation,
-query, replay, and readiness messages at the parent boundary.
+same-origin access and top-level navigation. The frame delegates clipboard
+writes, fullscreen, and screen wake lock. Studio validates navigation,
+location, replay, and readiness messages at the parent boundary.
+[Page environment](provider-api.md#page-environment) lists what this means for
+view code.
 
 Set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1` for a trusted single-tenant
 deployment that needs Server runtime documents to share the authenticated host

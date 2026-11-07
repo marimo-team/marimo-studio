@@ -579,6 +579,16 @@ For a named view link, Studio flushes current edits and synchronizes the target
 query before committing the view, query, and hash to browser history. Preview
 selects the verified publication while Source hydrates the target catalog.
 
+The page owns its fragment. Studio applies a fragment with a same-document
+fragment navigation through `navigateToFragment()`, so the page observes
+`popstate` and `hashchange` as it would outside a frame. The page reports each
+history write, `popstate`, and `hashchange` as `marimo-studio:location-change`
+with its view, query, and fragment. The parent replaces its own entry with that
+location. The query is notebook state and always applies. The fragment applies
+when the reported view is the parent's current view or when the page has not
+named a view yet, because a view switch pushes its own entry after the new
+document commits.
+
 Browser history stores canonical public view URLs. `BrowserSessionReplay`
 indexes a native Server session by file key, page path, and the canonical public
 query recorded when the session is first remembered. Canonicalization sorts

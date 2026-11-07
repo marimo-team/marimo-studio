@@ -559,6 +559,44 @@ An HTML entry document needs one `head`, one `body`, and one `#app-shell`.
 Studio validates paths, symlinks, file limits, reserved routes, projection
 sites, render hosts, and the complete output before publication.
 
+### Page environment
+
+Studio loads the built page in a sandboxed
+[iframe](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe),
+the presentation frame. Studio Preview, a view URL served by `marimo run`, and
+**Open preview in new tab** apply the same frame policy, so a page that works in
+one host works in the others.
+
+| Property    | Behavior                                                                                               | Consequence for the page                                                                                                                                                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sandbox     | `allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-scripts`               | The page runs with an opaque origin, so `window.origin` is `"null"`. It cannot read the host's cookies, storage, or parent document, or navigate the top-level window.                                                                                                                        |
+| Permissions | `clipboard-write; fullscreen *; screen-wake-lock *`                                                    | The frame permits `navigator.clipboard.writeText()` and `requestFullscreen()` after a user gesture, and `navigator.wakeLock.request("screen")` while the page is visible, in browsers that implement them. Check for the API and handle a rejected request. Other permission-gated APIs fail. |
+| Storage     | `localStorage` is an in-memory store for the current document. `sessionStorage` throws `SecurityError` | Stored values last until the page reloads. Wrap `sessionStorage` reads in `try`, or turn off library features that read it.                                                                                                                                                                   |
+| Base path   | Studio serves the page from a path it mints for each request, and an export can live in any folder     | Reference assets with relative URLs, for example with Vite's `--base ./`. A root path such as `/assets/app.js` resolves outside the view.                                                                                                                                                     |
+| Errors      | An uncaught error or unhandled rejection from the page's own scripts fails the view                    | Studio replaces the preview with the error and its file, line, and column. Catch the errors the page recovers from.                                                                                                                                                                           |
+
+Studio passes the URL fragment to the page as a fragment navigation, so the
+browser scrolls to the named element and fires `popstate` and `hashchange`. A
+page that routes by fragment reads its route the same way it would outside
+Studio:
+
+```js
+const showRoute = () => render(location.hash.slice(1) || "/");
+addEventListener("hashchange", showRoute);
+showRoute();
+```
+
+A link to `/deck/#/3` opens that route, and routes the page writes with
+`location.hash`, `history.pushState()`, or `history.replaceState()` appear in
+the address bar. [Link views and keep state](../guide/navigation-and-sessions.md)
+describes how back and forward restore them.
+
+A static export opens the page as the top-level document of the site that
+hosts it, so its origin, storage, and permissions follow that site. With
+`MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1`, a Server runtime page runs on the
+host origin without the sandbox and uses the browser's own storage. See
+[Deploy](../guide/deploy.md).
+
 ## Render files from notebook results
 
 A render turns notebook results into files with the provider's tools: a PDF

@@ -260,6 +260,54 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
   }
 });
 
+test("the Studio preview and its popout give the page the same environment", async ({ page }) => {
+  const environment = (frame: ReturnType<typeof previewFrame>) =>
+    frame.locator("html").evaluate(() => {
+      // SAFETY: The suite runs in Chromium, which exposes the frame's
+      // permissions policy as `document.featurePolicy`.
+      const policy = (
+        document as Document & { featurePolicy?: { allowsFeature(feature: string): boolean } }
+      ).featurePolicy;
+      let sessionStorageError = "";
+      try {
+        void sessionStorage.length;
+      } catch (error) {
+        sessionStorageError = error instanceof DOMException ? error.name : String(error);
+      }
+      localStorage.setItem("marimo-studio-probe", "kept");
+      return {
+        origin: globalThis.origin,
+        fullscreen: policy?.allowsFeature("fullscreen"),
+        screenWakeLock: policy?.allowsFeature("screen-wake-lock"),
+        clipboardWrite: policy?.allowsFeature("clipboard-write"),
+        sessionStorage: sessionStorageError,
+        localStorage: localStorage.getItem("marimo-studio-probe"),
+      };
+    });
+  const expected = {
+    origin: "null",
+    fullscreen: true,
+    screenWakeLock: true,
+    clipboardWrite: true,
+    sessionStorage: "SecurityError",
+    localStorage: "kept",
+  };
+
+  await page.goto(studioEntryUrl);
+  expect(await environment(await waitForPreview(page))).toEqual(expected);
+
+  const opened = page.context().waitForEvent("page");
+  await page.getByLabel("Workspace options").click();
+  await page.getByRole("link", { name: "Open preview in new tab", exact: true }).click();
+  const popout = await opened;
+  const presentation = presentationFrame(popout);
+  await expect(presentation.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready", {
+    timeout: PREVIEW_TIMEOUT,
+  });
+  expect(await environment(presentation)).toEqual(expected);
+  await popout.close();
+});
+
 test("keeps standalone navigation inside server-authored route authority", async ({
   browserDiagnostics,
   page,

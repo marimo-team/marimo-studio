@@ -11,6 +11,7 @@ const payload = {
   runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
   trustedServerRuntime: false,
+  presentationFrame: { sandbox: "allow-scripts", allow: "fullscreen *" },
   clientId: "browser-client-1234",
   serverInstance: "server-instance",
   urls: {

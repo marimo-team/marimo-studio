@@ -36,10 +36,11 @@ test("pre-config query messages use the server-minted mount runtime", () => {
 
   expect(postMessage).toHaveBeenCalledWith(
     {
-      type: "marimo-studio:query-change",
+      type: "marimo-studio:location-change",
       runtime: "wasm",
       lifecycleId: 7,
       query: "",
+      hash: "",
     },
     globalThis.location.origin,
   );
@@ -61,10 +62,12 @@ test("query changes carry the current document switch", () => {
 
   expect(postMessage).toHaveBeenCalledWith(
     {
-      type: "marimo-studio:query-change",
+      type: "marimo-studio:location-change",
       runtime: "server",
       lifecycleId: 7,
+      view: "dashboard",
       query: "?region=emea",
+      hash: "",
     },
     globalThis.location.origin,
   );
@@ -82,14 +85,54 @@ test("an isolated direct view reports public query changes to its wrapper", () =
 
   expect(parent.postMessage).toHaveBeenCalledWith(
     {
-      type: "marimo-studio:query-change",
+      type: "marimo-studio:location-change",
       runtime: "server",
       lifecycleId: 9,
+      view: "dashboard",
       query: "?region=emea",
+      hash: "",
     },
     globalThis.location.origin,
   );
   dispose();
+});
+
+test("a page's own fragment changes report the view location to its parent", async () => {
+  commitRuntimeConfig(runtimeConfig());
+  globalThis.history.replaceState({}, "", "/dashboard/?region=emea");
+  const parent = { postMessage: vi.fn() };
+  vi.stubGlobal("parent", parent);
+  setActiveDocumentLifecycleId(9);
+  const dispose = startQuerySync();
+  const reported = (hash: string) => ({
+    type: "marimo-studio:location-change",
+    runtime: "server",
+    lifecycleId: 9,
+    view: "dashboard",
+    query: "?region=emea",
+    hash,
+  });
+  try {
+    globalThis.history.replaceState(null, "", "#/2");
+    expect(parent.postMessage).toHaveBeenLastCalledWith(
+      reported("#/2"),
+      globalThis.location.origin,
+    );
+
+    globalThis.location.hash = "#/3";
+    await vi.waitFor(() =>
+      expect(parent.postMessage).toHaveBeenLastCalledWith(
+        reported("#/3"),
+        globalThis.location.origin,
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      parent.postMessage.mock.calls.filter(([message]) => message.hash === "#/3"),
+    ).toHaveLength(1);
+  } finally {
+    dispose();
+  }
 });
 
 test("static browser history restores the public WebAssembly query", async () => {
@@ -110,6 +153,25 @@ test("static browser history restores the public WebAssembly query", async () =>
   expect(updateQuery).toHaveBeenCalledOnce();
 });
 
+test("static browser history leaves the runtime query alone on fragment navigations", async () => {
+  globalThis.history.replaceState({}, "", "/report/?region=apac");
+  const stopSync = startQuerySync();
+  const updateQuery = vi.fn(async () => {});
+  const dispose = bindRuntimeQueryHistory(updateQuery, vi.fn());
+  try {
+    globalThis.history.pushState({}, "", "?region=emea");
+    globalThis.location.hash = "#details";
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(updateQuery).not.toHaveBeenCalled();
+
+    globalThis.history.go(-2);
+    await vi.waitFor(() => expect(updateQuery).toHaveBeenCalledExactlyOnceWith("?region=apac"));
+  } finally {
+    dispose();
+    stopSync();
+  }
+});
+
 test("static browser history reloads when query synchronization fails", async () => {
   const updateQuery = vi.fn(async () => {
     throw new Error("query bridge unavailable");
@@ -117,6 +179,7 @@ test("static browser history reloads when query synchronization fails", async ()
   const reload = vi.fn();
   const dispose = bindRuntimeQueryHistory(updateQuery, reload);
 
+  globalThis.history.replaceState({}, "", "/?region=emea");
   globalThis.dispatchEvent(new PopStateEvent("popstate"));
 
   await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());

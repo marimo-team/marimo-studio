@@ -64,7 +64,9 @@ export class PreviewQueryController {
   private committedEditorQuery: string;
   private editorError: Error | undefined;
   private previewError: Error | undefined;
-  private previewHash = "";
+  // A fragment Studio navigates the page to. Query-only writes leave the
+  // page's own fragment alone, so a hash router keeps the route it wrote.
+  private pendingHash: string | undefined;
   private previewGeneration = 0;
   private previewWriting = false;
   private previewRetryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -231,9 +233,16 @@ export class PreviewQueryController {
     });
   }
 
+  /** Drop a pending fragment once the page reports one of its own. */
+  previewHashChanged(hash: string): void {
+    if (this.pendingHash !== hash) {
+      this.pendingHash = undefined;
+    }
+  }
+
   async applyToPreview(viewReady: boolean, hash?: string): Promise<void> {
     if (hash !== undefined) {
-      this.previewHash = hash;
+      this.pendingHash = hash;
     }
     if (!viewReady) {
       return;
@@ -244,9 +253,13 @@ export class PreviewQueryController {
     this.previewWriting = true;
     this.emitStatus();
     try {
-      await applyFrameQuery(this.preview, query, this.previewHash);
+      const hash = this.pendingHash;
+      await applyFrameQuery(this.preview, query, hash);
       if (generation !== this.previewGeneration) {
         return;
+      }
+      if (this.pendingHash === hash) {
+        this.pendingHash = undefined;
       }
       this.previewError = undefined;
       this.previewRetrySchedule.reset();

@@ -26,6 +26,29 @@ const deferred = <T>() => {
   return { promise, resolve };
 };
 
+it("mirrors the fragment the current view navigates to into the Studio URL", () => {
+  const syncFragment = vi.fn();
+  const { deck, lifecycleId, previewWindow } = attachedServerDeck({ postMessage: vi.fn() }, true, {
+    syncFragment,
+  });
+  const location = (view: string, hash: string) =>
+    dispatchPreviewMessage(previewWindow, {
+      type: "marimo-studio:location-change",
+      runtime: "server",
+      lifecycleId,
+      view,
+      query: "",
+      hash,
+    });
+
+  location("dashboard", "#/3");
+  location("report", "#/9");
+  location("dashboard", "#/3");
+
+  expect(syncFragment).toHaveBeenCalledExactlyOnceWith("#/3");
+  expect(deck.fragment).toBe("#/3");
+});
+
 it("restores the prior controller and editor query after a target view fails", async () => {
   let editorQuery = "?region=emea";
   let queryOwner: WeakRef<PreviewController> | undefined;

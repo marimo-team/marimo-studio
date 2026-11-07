@@ -155,6 +155,8 @@ describe("Studio shell", () => {
       rollback: vi.fn(async () => {}),
     });
     const navigation = { query: "?region=apac", hash: "#app-shell" };
+    // The stub replaces the staged view, which would show the authored fragment.
+    vi.spyOn(services.preview, "fragment", "get").mockReturnValue(navigation.hash);
 
     expect(await services.views.choose("report", "preserve", navigation)).toBe(true);
     expect(synchronize).toHaveBeenCalledOnce();

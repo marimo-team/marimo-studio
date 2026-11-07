@@ -39,6 +39,7 @@ interface PreviewDeckOptions {
   viewUrl: (view: string, runtime: string, navigation?: ViewNavigationIntent) => string;
   supportUrl: (view: string) => string;
   syncQuery: (query: string) => void;
+  syncFragment: (hash: string) => void;
   syncEditorQuery: (
     query: string,
     operationId: string,
@@ -361,6 +362,11 @@ export class PreviewDeck {
     );
   }
 
+  /** The fragment the active view shows, including routes its page wrote. */
+  get fragment(): string {
+    return this.navigation.hash;
+  }
+
   cancelNavigation(): void {
     this.frames.find(this.runtime, this.view)?.controller?.cancelNavigation();
   }
@@ -540,7 +546,7 @@ export class PreviewDeck {
     }
     this.stopEditorQuerySync = observeFrameQuery(editor, (query, operationId, completed) => {
       if (operationId === undefined) {
-        this.receiveNavigationQuery(query);
+        this.receiveNavigation({ query, hash: this.navigation.hash });
       }
       this.frames
         .find(this.runtime, this.view)
@@ -570,9 +576,9 @@ export class PreviewDeck {
       (state) => this.receive(slot, state),
       this.options.connectControlFrame,
       slot.navigation!,
-      (query) => {
+      (navigation) => {
         if (this.isActive(slot)) {
-          this.receiveNavigationQuery(query);
+          this.receiveNavigation(navigation);
         }
       },
       slot.state!.lifecycleId,
@@ -782,15 +788,19 @@ export class PreviewDeck {
     this.publish();
   }
 
-  private receiveNavigationQuery(query: string): void {
-    const next = publicNotebookQuery(query);
-    if (next === this.navigation.query) {
+  private receiveNavigation(navigation: ViewNavigationIntent): void {
+    const next = { query: publicNotebookQuery(navigation.query), hash: navigation.hash };
+    if (next.query === this.navigation.query && next.hash === this.navigation.hash) {
       return;
     }
-    this.navigation = { ...this.navigation, query: next };
+    const hashChanged = next.hash !== this.navigation.hash;
+    this.navigation = next;
     for (const runtime of this.options.runtimes) {
       const slot = this.frames.select(runtime, this.view, this.navigation);
       this.states.set(runtime, slot.state!);
+    }
+    if (hashChanged) {
+      this.options.syncFragment(next.hash);
     }
   }
 

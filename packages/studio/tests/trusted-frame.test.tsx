@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vite-plus/test";
 
 import { PreviewFrame, TrustedFrame } from "../src/features/workspace/TrustedFrame.tsx";
+import { studioBootstrap } from "./studio-test-support.ts";
 
 it("forwards the host's browser permissions", () => {
   render(
@@ -17,21 +18,29 @@ it("forwards the host's browser permissions", () => {
   );
 });
 
-it("delegates fullscreen to an opaque preview document", () => {
+const policy = studioBootstrap.presentationFrame;
+
+it("gives an opaque preview the bootstrap's frame policy", () => {
   render(
-    <PreviewFrame frameRef={vi.fn()} runtime="server" title="Presentation" view="dashboard" />,
+    <PreviewFrame
+      frameRef={vi.fn()}
+      policy={policy}
+      runtime="server"
+      title="Presentation"
+      view="dashboard"
+    />,
   );
   const frame = screen.getByTitle("Presentation");
-  expect(frame.getAttribute("allow")?.split(/;\s*/u)).toContain("fullscreen *");
-  const sandbox = frame.getAttribute("sandbox")?.split(/\s+/u);
-  expect(sandbox).toContain("allow-scripts");
-  expect(sandbox).not.toContain("allow-same-origin");
+  expect(frame).toHaveAttribute("sandbox", policy.sandbox);
+  expect(frame).toHaveAttribute("allow", policy.allow);
+  expect(frame.getAttribute("sandbox")?.split(/\s+/u)).not.toContain("allow-same-origin");
 });
 
 it("leaves a trusted server preview on the host origin", () => {
   render(
     <PreviewFrame
       frameRef={vi.fn()}
+      policy={policy}
       runtime="server"
       sameOrigin
       title="Trusted presentation"
@@ -48,6 +57,7 @@ it("keeps a visible preview inert until its runtime is ready", () => {
     <PreviewFrame
       active
       frameRef={frameRef}
+      policy={policy}
       interactive={false}
       runtime="server"
       title="dashboard custom view using server"
@@ -62,6 +72,7 @@ it("keeps a visible preview inert until its runtime is ready", () => {
     <PreviewFrame
       active
       frameRef={frameRef}
+      policy={policy}
       interactive
       runtime="server"
       title="dashboard custom view using server"

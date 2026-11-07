@@ -21,6 +21,10 @@ export const studioBootstrapSchema = z
     runtimes: z.array(studioRuntimeSchema).min(1),
     defaultRuntime: z.string().trim().min(1),
     trustedServerRuntime: z.boolean().optional().default(false),
+    presentationFrame: z.object({
+      sandbox: z.string().min(1),
+      allow: z.string().min(1),
+    }),
     urls: z.object({
       editor: z.string().min(1),
       agent: z.string().min(1),

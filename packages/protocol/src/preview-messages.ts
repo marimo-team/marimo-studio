@@ -69,10 +69,15 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     url: documentUrlSchema,
   }),
   z.strictObject({
-    type: z.literal("marimo-studio:query-change"),
+    type: z.literal("marimo-studio:location-change"),
     ...runtimeField,
     ...documentLifecycleField,
+    // The page names its view once its runtime config loads. The parent always
+    // applies the query, which belongs to the notebook, and applies the
+    // fragment only for its current view or a page that names none yet.
+    view: viewNameSchema.optional(),
     query: querySchema,
+    hash: hashSchema,
   }),
   z.strictObject({
     type: z.literal("marimo-studio:restore-fragment"),
@@ -198,7 +203,10 @@ export type ReplayDocumentMessage = Extract<
   { type: "marimo-studio:replay-document" }
 >;
 export type ViewNavigationIntent = Pick<NavigateViewMessage, "query" | "hash">;
-export type QueryChangeMessage = Extract<PreviewMessage, { type: "marimo-studio:query-change" }>;
+export type LocationChangeMessage = Extract<
+  PreviewMessage,
+  { type: "marimo-studio:location-change" }
+>;
 export type RestoreFragmentMessage = Extract<
   PreviewMessage,
   { type: "marimo-studio:restore-fragment" }
@@ -250,7 +258,7 @@ export type ViewPreviewMessage =
 export type PresentationToStudioMessage =
   | ViewProgressMessage
   | NavigateViewMessage
-  | QueryChangeMessage
+  | LocationChangeMessage
   | ReceiverReadyMessage
   | ReceiverUnreadyMessage
   | ReceiverWaitingMessage

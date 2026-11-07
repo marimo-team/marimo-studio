@@ -11,6 +11,7 @@ import {
   recoverRequestAbort,
   restoreWorkspace,
   test,
+  waitForPreview,
   WASM_PREVIEW_TIMEOUT,
   workspaceCreatedViewHtmlPath,
   workspaceNotebookPath,
@@ -415,4 +416,110 @@ test("keeps direct view history hot and starts a fresh session for a new public 
       await server.close();
     }
   }
+});
+
+// A minimal hash router: it reads the fragment when it starts and on
+// `hashchange`, and writes routes both by assignment and through history.
+const hashRoutedDashboard = (source: string): string =>
+  source
+    .replace(
+      "</main>",
+      `<p>Route: <output id="route"></output></p>
+      <button type="button" id="replace-route">Replace route</button>
+      <button type="button" id="assign-route">Assign route</button>
+      <a href="#/7">Seventh route</a>
+      </main>`,
+    )
+    .replace(
+      "</body>",
+      `<script type="module">
+        const route = document.querySelector("#route");
+        const render = () => {
+          route.textContent = location.hash.slice(1) || "/";
+        };
+        addEventListener("hashchange", render);
+        render();
+        document.querySelector("#replace-route").addEventListener("click", () => {
+          history.replaceState(null, "", "#/4");
+          render();
+        });
+        document.querySelector("#assign-route").addEventListener("click", () => {
+          location.hash = "#/5";
+        });
+      </script>
+  </body>`,
+    );
+
+test("a hash-routed view follows deep links and history, and publishes its own routes", async ({
+  page,
+}) => {
+  await writeWorkspaceFile(
+    dashboardHtmlPath,
+    hashRoutedDashboard(await readWorkspaceFile(dashboardHtmlPath)),
+  );
+  const server = startRunServer();
+  const rendered = presentationFrame(page);
+  const route = rendered.locator("#route");
+
+  try {
+    const entry = `${runServerUrl()}/dashboard/?access_token=${runServerToken}&runtime=server`;
+    await server.waitUntilReady(entry);
+    await page.goto(`${entry}#/3`);
+    await expect(rendered.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready", {
+      timeout: 65_000,
+    });
+    await expect(page).toHaveURL(/\/dashboard\/\?runtime=server#\/3$/);
+    await expect(route).toHaveText("/3");
+
+    await rendered.getByRole("button", { name: "Replace route" }).click();
+    await expect(route).toHaveText("/4");
+    await expect(page).toHaveURL(/#\/4$/);
+
+    await rendered.getByRole("button", { name: "Assign route" }).click();
+    await expect(route).toHaveText("/5");
+    await expect(page).toHaveURL(/#\/5$/);
+
+    await page.goBack();
+    await expect(route).toHaveText("/4");
+    await expect(page).toHaveURL(/#\/4$/);
+
+    await rendered.getByRole("link", { name: "Seventh route" }).click();
+    await expect(route).toHaveText("/7");
+    await expect(page).toHaveURL(/#\/7$/);
+
+    await page.goBack();
+    await expect(route).toHaveText("/4");
+    await expect(page).toHaveURL(/\/dashboard\/\?runtime=server#\/4$/);
+  } finally {
+    try {
+      await page.close();
+    } finally {
+      await server.close();
+    }
+  }
+});
+
+test("Studio opens a preview at its fragment and mirrors the routes the page writes", async ({
+  page,
+}) => {
+  await writeWorkspaceFile(
+    dashboardHtmlPath,
+    hashRoutedDashboard(await readWorkspaceFile(dashboardHtmlPath)),
+  );
+  await page.goto("/studio/dashboard/?file=notebook.py#/3");
+  const preview = await waitForPreview(page);
+  const route = preview.locator("#route");
+  await expect(route).toHaveText("/3");
+
+  await preview.getByRole("button", { name: "Replace route" }).click();
+  await expect(route).toHaveText("/4");
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=notebook\.py#\/4$/);
+
+  await preview.getByRole("button", { name: "Assign route" }).click();
+  await expect(route).toHaveText("/5");
+  await expect(page).toHaveURL(/#\/5$/);
+
+  await preview.getByRole("link", { name: "Seventh route" }).click();
+  await expect(route).toHaveText("/7");
+  await expect(page).toHaveURL(/#\/7$/);
 });

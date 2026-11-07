@@ -116,7 +116,15 @@ def test_trusted_server_runtime_marks_the_workspace_preview(
         workspace = client.get("/studio/dashboard/?session_id=s_ready1")
 
     assert workspace.status_code == 200
-    assert _studio_bootstrap(workspace)["trustedServerRuntime"] is trusted
+    bootstrap = _studio_bootstrap(workspace)
+    assert bootstrap["trustedServerRuntime"] is trusted
+    assert bootstrap["presentationFrame"] == {
+        "sandbox": (
+            "allow-downloads allow-forms allow-modals allow-pointer-lock "
+            "allow-popups allow-scripts"
+        ),
+        "allow": "clipboard-write; fullscreen *; screen-wake-lock *",
+    }
 
 
 def test_explicit_host_handoff_uses_the_embedding_security_policy(

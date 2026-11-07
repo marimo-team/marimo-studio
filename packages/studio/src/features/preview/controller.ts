@@ -120,7 +120,7 @@ export class PreviewController {
       query: globalThis.location.search,
       hash: globalThis.location.hash,
     },
-    private readonly navigationQueryChanged?: (query: string) => void,
+    private readonly navigationChanged?: (navigation: ViewNavigationIntent) => void,
     initialLifecycleId = 1,
     private readonly nextLifecycleId: () => number = nextPreviewDocumentLifecycleId,
     initialEditorSessionId?: string,
@@ -163,7 +163,7 @@ export class PreviewController {
       () => {
         const query = this.queries.currentQuery;
         this.navigation = { ...this.navigation, query };
-        this.navigationQueryChanged?.(query);
+        this.navigationChanged?.(this.navigation);
         this.setPopoutUrl(this.viewUrl(this.view, this.runtime, this.navigation));
       },
       this.navigation.query,
@@ -293,7 +293,8 @@ export class PreviewController {
       }
       const identity = this.admission.identity;
       if (this.admission.isInteractive && identity !== null) {
-        await this.queries.applyToPreview(true, navigation.hash);
+        // The page may have written its own fragment while it started.
+        await this.queries.applyToPreview(true, this.navigation.hash);
         if (!this.activeOwner || this.activeLifecycleId !== lifecycleId) {
           return false;
         }
@@ -570,7 +571,7 @@ export class PreviewController {
     if (
       !this.activeOwner &&
       (message.type === "marimo-studio:navigate-view" ||
-        message.type === "marimo-studio:query-change")
+        message.type === "marimo-studio:location-change")
     ) {
       return;
     }
@@ -597,8 +598,11 @@ export class PreviewController {
       case "marimo-studio:navigate-view":
         void this.navigate(message.view, { query: message.query, hash: message.hash });
         return;
-      case "marimo-studio:query-change":
+      case "marimo-studio:location-change":
         this.previewQueryChanged(message.query);
+        if (message.view === undefined || message.view === this.view) {
+          this.previewHashChanged(message.hash);
+        }
         return;
       case "marimo-studio:receiver-unready":
         this.waitingLifecycleId = undefined;
@@ -680,6 +684,16 @@ export class PreviewController {
     if (this.activeOwner) {
       this.queries.previewChanged(query);
     }
+  }
+
+  private previewHashChanged(hash: string): void {
+    if (!this.activeOwner || hash === this.navigation.hash) {
+      return;
+    }
+    this.navigation = { ...this.navigation, hash };
+    this.queries.previewHashChanged(hash);
+    this.navigationChanged?.(this.navigation);
+    this.setPopoutUrl(this.viewUrl(this.view, this.runtime, this.navigation));
   }
 
   private postSwitch(): void {
