@@ -75,7 +75,7 @@ class RenderUnavailable(Exception):
 
 @dataclass(frozen=True)
 class _Failed:
-    error: Exception
+    error: BaseException
     traceback: TracebackType | None
 
 
@@ -492,7 +492,7 @@ class RenderStore:
 def _outcome(render: Callable[[], RenderBundle]) -> RenderBundle | _Failed:
     try:
         return render()
-    except Exception as error:
+    except BaseException as error:
         return _Failed(error, error.__traceback__)
 
 

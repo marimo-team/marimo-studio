@@ -359,7 +359,8 @@ beneath `request.cache_root`.
 ### Provider caches
 
 `request.cache_root` is the provider's cache, and inspections and builds of
-every view in every process receive the same one. Each provider has its own.
+every view receive the same one. Each provider has its own, and it persists
+across processes.
 The caches live in `providers/` beneath the absolute path in
 `MARIMO_STUDIO_CACHE_DIR` when it is set, and otherwise in:
 
@@ -368,7 +369,7 @@ The caches live in `providers/` beneath the absolute path in
   `~/.cache/marimo-studio/providers`
 - Windows: `%LOCALAPPDATA%\marimo-studio\Cache\providers`
 
-Studio creates private cache directories with mode `0700` on POSIX systems,
+On POSIX systems, Studio creates private cache directories with mode `0700`
 and rejects an existing `MARIMO_STUDIO_CACHE_DIR` that other users can open,
 so create it with `mkdir -m 700` or `mktemp -d`. When the user cache directory is unusable, Studio logs a warning and keeps a
 temporary provider cache for the current process.
@@ -383,8 +384,9 @@ dependencies across views by runtime version. Deno verifies downloaded npm
 packages against the project's frozen lockfile. To reclaim space, delete the
 `providers` directory while Studio commands and servers are stopped. The next
 inspection or build downloads the dependencies it needs. Studio 0.4.1 and
-earlier kept build caches in each view's `.artifacts/.cache/` directory.
-Delete those directories to reclaim their space.
+earlier kept inspection caches in `inspection/` beside `providers/`, and build
+caches in each view's `.artifacts/.cache/` directory. Delete those directories
+to reclaim their space.
 
 ### Read provider options
 

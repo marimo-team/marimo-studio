@@ -112,7 +112,7 @@ def test_provider_build_reads_one_immutable_input_snapshot(
     def build_from_snapshot(request: BuildRequest) -> BuildResult:
         assert request.project.root != project.root
         assert request.cache_root == inspection_request(project).cache_root
-        assert artifact_root(project) not in request.cache_root.parents
+        assert not request.cache_root.is_relative_to(artifact_root(project))
         assert request.cache_root.is_dir()
         live_document.write_text(source_b, encoding="utf-8")
         snapshot_document = request.project.root / "index.html"
