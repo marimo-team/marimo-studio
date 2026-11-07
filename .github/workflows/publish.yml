@@ -134,7 +134,7 @@ jobs:
     name: Build provenance
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 55
     permissions:
       actions: read
       artifact-metadata: write
@@ -148,12 +148,40 @@ jobs:
           name: dist
           path: dist
 
+      # Every attestation is recorded in the public Sigstore transparency log,
+      # whose outages last from seconds to half an hour. The action has no
+      # retry input, so the job repeats it after 2 and 30 more minutes.
       - name: Attest package provenance
+        id: attest
+        continue-on-error: true
+        timeout-minutes: 5
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
+        with: &subjects
           subject-path: |
             dist/marimo_studio-*.whl
             dist/marimo_studio-*.tar.gz
+
+      - name: Wait for the transparency log
+        if: steps.attest.outcome == 'failure'
+        run: sleep 120
+
+      - name: Retry package provenance
+        id: retry
+        if: steps.attest.outcome == 'failure'
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with: *subjects
+
+      - name: Wait for the transparency log to recover
+        if: steps.retry.outcome == 'failure'
+        run: sleep 1800
+
+      - name: Retry package provenance after the outage
+        if: steps.retry.outcome == 'failure'
+        timeout-minutes: 5
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with: *subjects
 
   pypi:
     name: Publish to PyPI

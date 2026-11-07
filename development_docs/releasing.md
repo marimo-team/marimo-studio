@@ -302,6 +302,7 @@ Inspect the first failed job and preserve evidence from that boundary.
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `resolve`                               | Wait for the required workflow results, then rerun the workflow. Fix a tag, version, or notes mismatch with a new release version  |
 | `build`                                 | Correct source or packaging inputs, bump the version when needed, and publish from a new validated commit                          |
+| `attest`                                | Rerun failed jobs once [Sigstore](https://status.sigstore.dev/) is healthy. Rerun all jobs after `dist` expires in a day           |
 | `pypi` before PyPI accepted the version | Resolve the trusted-publishing or service problem, then rerun the workflow                                                         |
 | `verify-pypi`                           | Inspect the installed provider, starter, extra, or asset failure and prepare a patch release when the public artifact is defective |
 | `release-notes`                         | Rerun after public package verification succeeds                                                                                   |
