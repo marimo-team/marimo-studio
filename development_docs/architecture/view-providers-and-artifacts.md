@@ -124,7 +124,11 @@ files, so the digest is computed for each call. The source monitor watches the
 same locations and reinspects the view when they change, so a provider edit
 rebuilds the view while `marimo edit` runs. An editable install resolves to
 the working tree. A non-editable directory install resolves to its installed
-copy, so reinstalling it rebuilds the view. Built-in providers run in the
+copy, so reinstalling it rebuilds the view. The worker compiles modules beneath
+those locations from source, because cached bytecode records only the source's
+size and whole-second modification time. Discovery describes each provider
+once per process, so an edit to its `info`, starters, or `render()` applies
+after a restart. Built-in providers run in the
 server process and keep the identity of the installed Studio version.
 
 ## Provider layout

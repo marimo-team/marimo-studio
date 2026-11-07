@@ -518,6 +518,7 @@ class ProviderRegistry:
                                 candidate.distribution,
                                 candidate.version,
                                 candidate.entry_point.value,
+                                tuple(str(path) for path in candidate.source),
                             ),
                         )
                     )

@@ -826,8 +826,10 @@ Studio rebuilds a view when its inputs, the provider package version, or the
 tool version from `availability()` change. While the package is installed with
 `uv add --editable`, an edit to its files also rebuilds the view, and
 `marimo edit` rebuilds an open view as soon as the file is saved. Reinstalling
-a non-editable install from a local directory rebuilds it the same way. Release
-a new version when the build output changes for the same inputs.
+a non-editable install from a local directory rebuilds it the same way. Restart
+marimo after changing the provider's `info`, its starters, or whether it
+defines `render()`. Release a new version when the build output changes for the
+same inputs.
 
 ## Verify the provider
 

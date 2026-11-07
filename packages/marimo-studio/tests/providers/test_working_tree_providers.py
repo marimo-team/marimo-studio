@@ -209,3 +209,25 @@ def test_editing_a_module_beside_a_namespace_provider_rebuilds_its_view(
     headings.write_text('HEADING = "Second"\n', encoding="utf-8")
 
     assert "<h1>Second</h1>" in _page(notebook_path)
+
+
+def test_a_same_size_edit_with_an_unchanged_mtime_runs_the_edited_provider(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headings = _dashboard_with_provider(
+        notebook_path,
+        tmp_path,
+        monkeypatch,
+        {"url": "file:///work/tree-views", "dir_info": {"editable": True}},
+    )
+    assert "<h1>First</h1>" in _page(notebook_path)
+    written = headings.stat()
+
+    # Cached bytecode records the source's size and whole-second mtime, which
+    # an edit within the same second can leave unchanged.
+    headings.write_text('HEADING = "Fifth"\n', encoding="utf-8")
+    os.utime(headings, ns=(written.st_atime_ns, written.st_mtime_ns))
+
+    assert "<h1>Fifth</h1>" in _page(notebook_path)

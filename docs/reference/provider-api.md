@@ -1045,7 +1045,8 @@ with `uv add --editable ./acme-views`, the revision also covers the metadata
 of each file in the installed provider package. An editable install rebuilds
 its views after each edit, and `marimo edit` rebuilds an open view as soon as
 the file is saved. A non-editable directory install rebuilds them when it is
-reinstalled.
+reinstalled. Studio reads `info`, the starters, and whether the provider
+defines `render()` once per process, so restart marimo after changing them.
 
 ### Diagnostics
 
