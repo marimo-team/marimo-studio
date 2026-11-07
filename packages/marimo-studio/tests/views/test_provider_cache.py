@@ -149,6 +149,7 @@ def test_providers_use_a_process_cache_when_the_user_cache_is_unusable(
         second = inspection_request(project).cache_root
 
     assert first == second
+    assert first.is_dir()
     assert occupied not in first.parents
     assert "MARIMO_STUDIO_CACHE_DIR" in caplog.text
 

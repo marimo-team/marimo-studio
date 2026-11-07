@@ -70,7 +70,9 @@ class _ProcessCache:
                     CACHE_DIR_ENV,
                 )
                 self._directory = TemporaryDirectory(prefix="marimo-studio-providers-")
-            return Path(self._directory.name).resolve() / namespace
+            root = Path(self._directory.name).resolve() / namespace
+            root.mkdir(mode=0o700, exist_ok=True)
+            return root
 
 
 _PROCESS_CACHE = _ProcessCache()
