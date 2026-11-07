@@ -358,8 +358,9 @@ conda-forge Quarto pins its own Deno. In a workspace that also adds
 `marimo-studio[deno]` for React, Svelte, or Notebook Kit views, Studio's Deno
 replaces it, so install Quarto there with `pixi global install quarto`.
 
-Builds keep Quarto's caches in the `.cache/` directory of the view's build
-state, apart from the user cache other Quarto installations share.
+Builds give each Quarto installation its own cache inside the
+[provider cache](provider-api.md#provider-caches), separate from the user cache
+other Quarto installations share.
 
 On Windows, Quarto keeps a render cache in a SQLite file inside the build
 directory, and SQLite opens it only when its path stays under 260 characters.

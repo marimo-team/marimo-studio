@@ -355,25 +355,32 @@ def test_an_abandoned_render_leaves_nothing_in_the_asyncio_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     renderer = GatedRenderer()
-    store, presentation, snapshot = _store(monkeypatch, renderer)
-
-    async def exercise() -> None:
-        leaving = asyncio.create_task(
-            _render(store, presentation, snapshot, {"total": 1})
-        )
-        await asyncio.to_thread(renderer.started.wait, 15)
+    # Only closing the store may end the render, so the grace outlasts the test.
+    store, presentation, snapshot = _store(monkeypatch, renderer, abandoned_grace=60)
+    loop = asyncio.new_event_loop()
+    try:
+        leaving = loop.create_task(_render(store, presentation, snapshot, {"total": 1}))
+        loop.run_until_complete(asyncio.to_thread(renderer.started.wait, 15))
         leaving.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await leaving
-        assert await asyncio.to_thread(renderer.cancelled.wait, 15)
-
-    try:
-        asyncio.run(exercise())
-        # asyncio reports an unretrieved exception when its future is collected.
-        gc.collect()
-        assert [r.getMessage() for r in caplog.records if r.name == "asyncio"] == []
-    finally:
+            loop.run_until_complete(leaving)
+        loop.run_until_complete(loop.shutdown_default_executor())
+        # Closing the store fails the abandoned render and joins its worker.
+        # One more loop iteration then delivers the result to the job's future,
+        # and the loop closes before the callbacks that iteration schedules run.
         store.close()
+        loop.call_soon(loop.stop)
+        loop.run_forever()
+    finally:
+        loop.close()
+        store.close()
+    # asyncio reports an unretrieved exception when its future is collected,
+    # and the store and the request task hold the job's future until then.
+    del store, leaving
+    gc.collect()
+
+    assert renderer.cancelled.is_set()
+    assert [r.getMessage() for r in caplog.records if r.name == "asyncio"] == []
 
 
 def test_a_request_within_the_grace_continues_the_abandoned_render(

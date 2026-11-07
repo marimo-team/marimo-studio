@@ -73,7 +73,7 @@ print(json.dumps({"root": str(cache), "previous": previous}))
 
 @pytest.mark.supported_python
 @pytest.mark.skipif(os.name != "posix", reason="POSIX directory permissions")
-def test_inspection_cache_is_private_to_the_user(
+def test_provider_cache_is_private_to_the_user(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -85,14 +85,14 @@ def test_inspection_cache_is_private_to_the_user(
 
     root = inspection_request(project).cache_root
 
-    for directory in (cache, cache / "inspection", root):
+    for directory in (cache, cache / "providers", root):
         assert directory.stat().st_mode & 0o777 == 0o700
 
 
 @pytest.mark.supported_python
 @pytest.mark.skipif(os.name != "posix", reason="POSIX directory permissions")
 @pytest.mark.parametrize("kind", ["public", "file"])
-def test_inspection_rejects_unsafe_cache_directories(
+def test_provider_cache_rejects_unsafe_directories(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     kind: str,
@@ -113,7 +113,7 @@ def test_inspection_rejects_unsafe_cache_directories(
 
 
 @pytest.mark.supported_python
-def test_inspection_rejects_linked_cache_directories(
+def test_provider_cache_rejects_linked_directories(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -128,7 +128,7 @@ def test_inspection_rejects_linked_cache_directories(
         inspection_request(project)
 
 
-def test_inspection_uses_a_process_cache_when_the_user_cache_is_unusable(
+def test_providers_use_a_process_cache_when_the_user_cache_is_unusable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
@@ -137,7 +137,7 @@ def test_inspection_uses_a_process_cache_when_the_user_cache_is_unusable(
     occupied.write_text("not a directory", encoding="utf-8")
     monkeypatch.delenv("MARIMO_STUDIO_CACHE_DIR")
     monkeypatch.setattr(
-        "marimo_studio._views.inspection_cache.user_cache_path",
+        "marimo_studio._views.provider_cache.user_cache_path",
         lambda *_args, **_kwargs: occupied / "marimo-studio",
     )
     project = ViewProject(
@@ -149,11 +149,12 @@ def test_inspection_uses_a_process_cache_when_the_user_cache_is_unusable(
         second = inspection_request(project).cache_root
 
     assert first == second
+    assert first.is_dir()
     assert occupied not in first.parents
     assert "MARIMO_STUDIO_CACHE_DIR" in caplog.text
 
 
-def test_inspection_cache_location_must_be_absolute(
+def test_provider_cache_location_must_be_absolute(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -173,7 +174,7 @@ def test_inspection_cache_location_must_be_absolute(
     reason="marimo-studio[deno] is unavailable",
 )
 @pytest.mark.parametrize("provider", ["svelte", "react", "notebook-kit"])
-def test_unchanged_deno_build_reuses_dependencies_with_registry_unavailable(
+def test_deno_views_reuse_downloaded_dependencies_with_registry_unavailable(
     tmp_path: Path,
     runtime_assets: Path,
     provider: str,
@@ -181,29 +182,39 @@ def test_unchanged_deno_build_reuses_dependencies_with_registry_unavailable(
     notebook = tmp_path / "analysis.py"
     notebook.write_text(empty_notebook_source(), encoding="utf-8")
     environment: dict[str, str] = {}
-    created = _run_cli(
-        runtime_assets,
-        "view",
-        "create",
-        "dashboard",
-        "--target",
-        str(notebook),
-        "--starter",
-        f"marimo-studio/{provider}:default",
-        "--json",
-        environment=environment,
-    )
-    assert created.returncode == 0, created.stderr
-    arguments = ("view", "build", "dashboard", "--target", str(notebook), "--json")
-    built = _run_cli(runtime_assets, *arguments, environment=environment)
+
+    def create(name: str) -> None:
+        created = _run_cli(
+            runtime_assets,
+            "view",
+            "create",
+            name,
+            "--target",
+            str(notebook),
+            "--starter",
+            f"marimo-studio/{provider}:default",
+            "--json",
+            environment=environment,
+        )
+        assert created.returncode == 0, created.stderr
+
+    def build(name: str) -> subprocess.CompletedProcess[str]:
+        arguments = ("view", "build", name, "--target", str(notebook), "--json")
+        return _run_cli(runtime_assets, *arguments, environment=environment)
+
+    create("dashboard")
+    built = build("dashboard")
     assert built.returncode == 0, built.stderr
 
     for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
         environment[name] = environment[name.lower()] = "http://127.0.0.1:9"
     environment["NO_PROXY"] = environment["no_proxy"] = ""
-    rebuilt = _run_cli(runtime_assets, *arguments, environment=environment)
+    rebuilt = build("dashboard")
+    create("executive")
+    second = build("executive")
 
     assert rebuilt.returncode == 0, rebuilt.stderr
     assert (
         json.loads(rebuilt.stdout)["revision"] == json.loads(built.stdout)["revision"]
     )
+    assert second.returncode == 0, second.stderr

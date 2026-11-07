@@ -451,7 +451,8 @@ def test_view_deletion_removes_generated_links_without_following_them(
     runtime = tmp_path / "deno-install"
     runtime.mkdir()
     (runtime / "node").write_bytes(b"runtime")
-    # Provider caches link to toolchains outside the view, as Deno does.
+    # Studio 0.4.1 kept provider caches here, which link to toolchains
+    # outside the view, as Deno does.
     cache = studio.view("dashboard").root / ".artifacts" / ".cache"
     cache.mkdir(parents=True)
     link_directory(runtime, cache / "node_compat_bin")

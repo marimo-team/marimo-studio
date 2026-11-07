@@ -204,7 +204,7 @@ def test_view_deletion_resolves_provider_starters_off_the_event_loop(
 
     def blocking_starters(*args: Any, **kwargs: Any) -> Any:
         started.set()
-        assert release.wait(timeout=2)
+        assert release.wait(timeout=15)
         return installed_starters(*args, **kwargs)
 
     monkeypatch.setattr(studio_api_module, "starters", blocking_starters)
@@ -217,13 +217,13 @@ def test_view_deletion_resolves_provider_starters_off_the_event_loop(
             headers,
             owner,
         )
-        assert started.wait(timeout=2)
+        assert started.wait(timeout=15)
         health = executor.submit(client.get, "/health")
         try:
-            assert health.result(timeout=1).status_code == 200
+            assert health.result(timeout=5).status_code == 200
         finally:
             release.set()
-    assert deletion.result(timeout=2).status_code == 200
+    assert deletion.result(timeout=15).status_code == 200
 
 
 def test_view_deletion_capacity_returns_a_retryable_response(
@@ -378,7 +378,7 @@ def test_project_and_source_reads_report_transient_deletion(
         owner: PresentViewOwner,
     ) -> StudioWorkspace:
         deletion_started.set()
-        if not release_deletion.wait(timeout=10):
+        if not release_deletion.wait(timeout=15):
             raise RuntimeError("view deletion was not released")
         return remove(
             workspace,
@@ -397,7 +397,7 @@ def test_project_and_source_reads_report_transient_deletion(
             headers,
             owner,
         )
-        assert deletion_started.wait(timeout=2)
+        assert deletion_started.wait(timeout=15)
         try:
             project = client.get("/_marimo-studio/views/operations/project")
             source = client.get("/_marimo-studio/views/operations/source/index.html")

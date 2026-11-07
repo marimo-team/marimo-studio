@@ -583,8 +583,8 @@ provider = ViteProvider()
   disagree. Vite then bundles `main.js` into `request.staging_root` and keeps
   the site attributes on the hosts in `index.html`.
 
-`DENO_DIR` keeps Deno's downloads in `request.cache_root`, which persists
-between builds, so only the first build downloads Vite and Lit.
+`DENO_DIR` keeps Deno's downloads in `request.cache_root`, which every view
+of the provider shares, so only the first build downloads Vite and Lit.
 `request.runner.run()` stops a command when Studio cancels the build, and all
 commands in one build share a 120-second budget. `check()` turns a nonzero exit
 into a `ProviderError` that `marimo-studio view build` prints with the end of

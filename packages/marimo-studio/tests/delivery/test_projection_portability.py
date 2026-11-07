@@ -16,7 +16,6 @@ _PREPARE_TIMEOUT = 120.0
 
 
 @pytest.mark.deno
-@pytest.mark.usefixtures("shared_deno_test_cache")
 @pytest.mark.skipif(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",

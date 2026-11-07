@@ -356,27 +356,37 @@ read.
 `inspect()` must leave the project unchanged. Keep downloaded or generated data
 beneath `request.cache_root`.
 
-### Inspection caches
+### Provider caches
 
-Studio reuses inspection caches across processes and projects, with a separate
-namespace for each provider. They live in `inspection/` beneath the absolute
-path in `MARIMO_STUDIO_CACHE_DIR` when it is set, and otherwise in:
+`request.cache_root` is the provider's cache, and inspections and builds of
+every view receive the same one. Each provider has its own, and it persists
+across processes.
+The caches live in `providers/` beneath the absolute path in
+`MARIMO_STUDIO_CACHE_DIR` when it is set, and otherwise in:
 
-- macOS: `~/Library/Caches/marimo-studio/inspection`
-- Linux: `$XDG_CACHE_HOME/marimo-studio/inspection`, defaulting to
-  `~/.cache/marimo-studio/inspection`
-- Windows: `%LOCALAPPDATA%\marimo-studio\Cache\inspection`
+- macOS: `~/Library/Caches/marimo-studio/providers`
+- Linux: `$XDG_CACHE_HOME/marimo-studio/providers`, defaulting to
+  `~/.cache/marimo-studio/providers`
+- Windows: `%LOCALAPPDATA%\marimo-studio\Cache\providers`
 
-Studio creates private cache directories with mode `0700` on POSIX systems.
-When the user cache directory is unusable, Studio logs a warning and keeps a
-temporary inspection cache for the current process.
-Providers must coordinate concurrent access and validate cached dependencies
-against their project inputs. The built-in providers for JavaScript views use
+On POSIX systems, Studio creates private cache directories with mode `0700`
+and rejects an existing `MARIMO_STUDIO_CACHE_DIR` that other users can open,
+so create it with `mkdir -m 700` or `mktemp -d`. When the user cache directory is unusable, Studio logs a warning and keeps a
+temporary provider cache for the current process.
+Concurrent inspections and builds of different views share the cache, and
+every version of the provider reads what earlier versions wrote. Providers must
+coordinate concurrent access, key cached data by what produced it, and validate cached dependencies against their project inputs. Keep
+`cache_root` out of the write grants of commands that run project code, so one
+project cannot change the dependencies that another project's build reads. The
+built-in providers for JavaScript views use
 [Deno](https://docs.deno.com/runtime/packages/), a JavaScript runtime, to share
 dependencies across views by runtime version. Deno verifies downloaded npm
 packages against the project's frozen lockfile. To reclaim space, delete the
-`inspection` directory while Studio commands and servers are stopped. The next
-inspection downloads the dependencies it needs.
+`providers` directory while Studio commands and servers are stopped. The next
+inspection or build downloads the dependencies it needs. Studio 0.4.1 and
+earlier kept inspection caches in `inspection/` beside `providers/`, and build
+caches in each view's `.artifacts/.cache/` directory. Delete those directories
+to reclaim their space.
 
 ### Read provider options
 
@@ -1093,7 +1103,8 @@ Rect(x: float, y: float, width: float, height: float)
 `BuildRequest.inputs` lists every build input file, with directories expanded.
 `staging_root` receives the page and its assets, `template_root` receives the
 private files renders start from, `work_root` is an empty directory for
-intermediate files, and `cache_root` persists between builds. Return
+intermediate files, and `cache_root` is the
+[provider cache](#provider-caches). Return
 `document=None` when diagnostics prevent publication.
 
 `BuildResult.output_sizes` maps a render's source, then an output target the
@@ -1377,6 +1388,15 @@ imports Studio modules outside `marimo_studio.view_providers` and
 fails before the check starts, because those keys belong to the built-in
 providers. Pass the distribution that ships the provider, such as
 `key="acme-views/report"`.
+
+The check's inspections and builds receive the
+[provider cache](#provider-caches) for the checked key, so later checks reuse
+the dependencies the first one downloads. Set `MARIMO_STUDIO_CACHE_DIR` to an
+absolute path to keep a test run's checks out of the user cache:
+
+```bash
+MARIMO_STUDIO_CACHE_DIR="$(mktemp -d)" pytest
+```
 
 ### Notebook records
 

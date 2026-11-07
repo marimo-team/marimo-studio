@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-import os
 import shutil
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
@@ -113,7 +111,8 @@ def test_provider_build_reads_one_immutable_input_snapshot(
 
     def build_from_snapshot(request: BuildRequest) -> BuildResult:
         assert request.project.root != project.root
-        assert request.cache_root == artifact_root(project) / ".cache"
+        assert request.cache_root == inspection_request(project).cache_root
+        assert not request.cache_root.is_relative_to(artifact_root(project))
         assert request.cache_root.is_dir()
         live_document.write_text(source_b, encoding="utf-8")
         snapshot_document = request.project.root / "index.html"
@@ -131,49 +130,14 @@ def test_provider_build_reads_one_immutable_input_snapshot(
     assert "<p>generation-a</p>" in document
 
 
-def test_build_tags_its_cache_and_staging_directories(tmp_path: Path) -> None:
+def test_build_tags_its_staging_directory(tmp_path: Path) -> None:
     project = make_project(tmp_path)
-    cache = artifact_root(project) / ".cache"
-    cache.mkdir(parents=True)
-    (cache / "CACHEDIR.TAG").write_bytes(b"written by a provider\n")
 
     with publish_artifact_lease(project, "development"):
         pass
 
-    for directory in (".cache", ".staging"):
-        tag = artifact_root(project) / directory / "CACHEDIR.TAG"
-        assert tag.read_bytes().startswith(
-            b"Signature: 8a477f597d28d172789f06886806bc55"
-        )
-
-
-@pytest.mark.skipif(
-    os.name == "nt" or os.geteuid() == 0,
-    reason="directory modes do not restrict writes on Windows or for root",
-)
-def test_build_publishes_when_the_provider_cache_cannot_be_tagged(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    project = make_project(tmp_path)
-    cache = artifact_root(project) / ".cache"
-    cache.mkdir(parents=True)
-    cache.chmod(0o500)
-    try:
-        with (
-            caplog.at_level(logging.WARNING, logger="marimo.studio"),
-            publish_artifact_lease(project, "development") as lease,
-        ):
-            document = lease.read_text(lease.artifact.document)
-    finally:
-        cache.chmod(0o700)
-
-    assert "<main" in document
-    assert not (cache / "CACHEDIR.TAG").exists()
-    assert any(
-        record.levelno == logging.WARNING and str(cache) in record.getMessage()
-        for record in caplog.records
-    )
+    tag = artifact_root(project) / ".staging" / "CACHEDIR.TAG"
+    assert tag.read_bytes().startswith(b"Signature: 8a477f597d28d172789f06886806bc55")
 
 
 def test_build_request_receives_the_owner_cancellation(

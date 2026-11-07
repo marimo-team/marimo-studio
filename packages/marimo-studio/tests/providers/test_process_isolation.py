@@ -515,7 +515,7 @@ def test_isolated_provider_round_trips_renders_sizes_and_render_results(
         project,
         inspected,
         staging,
-        cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+        cache_root=tmp_path / "cache",
     )
     built = installed.build(request)
     rendered = installed.render(

@@ -147,7 +147,7 @@ def test_cancelled_provider_process_finishes_when_extension_ignores_cancellation
     else:
         staging = tmp_path / "staging"
         staging.mkdir()
-        cache = tmp_path / "live" / ".artifacts" / ".cache"
+        cache = tmp_path / "cache"
         selected_build = provider_build_request(
             project,
             inspection(),

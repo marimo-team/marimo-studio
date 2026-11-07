@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import partial
-from pathlib import Path
 
 from marimo_studio._artifacts.inputs import project_revision
 from marimo_studio._artifacts.records import ViewBuildState
@@ -16,7 +15,7 @@ from marimo_studio._processes.provider_operation import (
     run_provider_operation,
 )
 from marimo_studio._processes.provider_runner import create_provider_runner
-from marimo_studio._views.inspection_cache import inspection_cache_root
+from marimo_studio._views.provider_cache import provider_cache_root
 from marimo_studio._views.records import ViewProjectState
 from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio._workspace.tools import notebook_tools
@@ -39,14 +38,12 @@ DEFAULT_INSPECTION_COMMAND_TIMEOUT = 120.0
 def inspection_request(
     project: ViewProject,
     *,
-    cache_root: Path | None = None,
     cancellation: ProviderCancellation | None = None,
     runner: ProviderRunner | None = None,
     command_timeout: float = DEFAULT_INSPECTION_COMMAND_TIMEOUT,
 ) -> InspectionRequest:
     """Construct one supervised provider inspection request."""
     control = cancellation or current_provider_cancellation() or ProviderCancellation()
-    selected_cache = cache_root or inspection_cache_root(project.provider)
     return InspectionRequest(
         # Providers receive the provider-facing record, never Studio's state
         # location.
@@ -59,7 +56,7 @@ def inspection_request(
         ),
         runner=runner or create_provider_runner(project.root, control, command_timeout),
         cancellation=control,
-        cache_root=selected_cache,
+        cache_root=provider_cache_root(project.provider),
         command_timeout=command_timeout,
     )
 
@@ -82,7 +79,6 @@ async def inspect_view_project(project: ViewProject) -> ProjectInspection:
 def inspect_view_project_sync(
     project: ViewProject,
     *,
-    cache_root: Path | None = None,
     cancellation: ProviderCancellation | None = None,
     runner: ProviderRunner | None = None,
     command_timeout: float = DEFAULT_INSPECTION_COMMAND_TIMEOUT,
@@ -97,7 +93,6 @@ def inspect_view_project_sync(
     with notebook_tools(notebook):
         request = inspection_request(
             project,
-            cache_root=cache_root,
             cancellation=cancellation,
             runner=runner,
             command_timeout=command_timeout,

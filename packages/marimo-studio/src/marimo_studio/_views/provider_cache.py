@@ -1,4 +1,4 @@
-"""Own reusable provider inspection caches outside view projects."""
+"""Own the reusable provider caches outside view projects."""
 
 from __future__ import annotations
 
@@ -25,19 +25,15 @@ def _private_directory(path: Path) -> None:
         state = path.lstat()
     except OSError as error:
         raise ConfigurationError(
-            f"Could not create the provider inspection cache {path}: "
+            f"Could not create the provider cache {path}: "
             f"{error.strerror or type(error).__name__}"
         ) from error
     if is_link(state) or not stat.S_ISDIR(state.st_mode):
-        raise ConfigurationError(
-            f"Provider inspection cache must be a regular directory: {path}"
-        )
+        raise ConfigurationError(f"Provider cache must be a regular directory: {path}")
     if os.name == "posix" and (
         state.st_uid != os.getuid() or stat.S_IMODE(state.st_mode) & 0o077
     ):
-        raise ConfigurationError(
-            f"Provider inspection cache must be private to its owner: {path}"
-        )
+        raise ConfigurationError(f"Provider cache must be private to its owner: {path}")
 
 
 def _persistent_root(cache: Path, namespace: str) -> Path:
@@ -49,7 +45,7 @@ def _persistent_root(cache: Path, namespace: str) -> Path:
             f"{error.strerror or type(error).__name__}"
         ) from error
     root = cache
-    for part in ("inspection", namespace):
+    for part in ("providers", namespace):
         _private_directory(root)
         root /= part
     _private_directory(root)
@@ -57,7 +53,7 @@ def _persistent_root(cache: Path, namespace: str) -> Path:
 
 
 class _ProcessCache:
-    """Hold inspection caches for this process when no persistent one exists."""
+    """Hold provider caches for this process when no persistent one exists."""
 
     def __init__(self) -> None:
         self._lock = Lock()
@@ -67,25 +63,28 @@ class _ProcessCache:
         with self._lock:
             if self._directory is None:
                 _LOGGER.warning(
-                    "%s Provider inspection uses a temporary cache, so each "
-                    "process downloads its dependencies again. Set %s to a "
+                    "%s Providers use a temporary cache, so each process "
+                    "downloads their dependencies again. Set %s to a "
                     "writable directory to keep them.",
                     reason,
                     CACHE_DIR_ENV,
                 )
-                self._directory = TemporaryDirectory(prefix="marimo-studio-inspection-")
-            return Path(self._directory.name).resolve() / namespace
+                self._directory = TemporaryDirectory(prefix="marimo-studio-providers-")
+            root = Path(self._directory.name).resolve() / namespace
+            root.mkdir(mode=0o700, exist_ok=True)
+            return root
 
 
 _PROCESS_CACHE = _ProcessCache()
 
 
-def inspection_cache_root(provider: str) -> Path:
-    """Return a private cache namespace for a provider.
+def provider_cache_root(provider: str) -> Path:
+    """Return the private cache that a provider's inspections and builds share.
 
-    The namespace persists across processes in ``MARIMO_STUDIO_CACHE_DIR`` or
-    the user cache directory. When the user cache directory is unusable,
-    inspection keeps a temporary cache for the current process.
+    The namespace persists across processes and projects in
+    ``MARIMO_STUDIO_CACHE_DIR`` or the user cache directory. When the user cache
+    directory is unusable, providers keep a temporary cache for the current
+    process.
     """
     # Deno nests npm packages deeply beneath the cache, so a short namespace
     # keeps their paths under the 260-character Windows limit.

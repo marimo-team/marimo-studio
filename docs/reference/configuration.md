@@ -144,9 +144,9 @@ describes their defaults.
 `MARIMO_STUDIO_STATE_DIR` moves view build state for every notebook the process
 opens. See [Build state location](#build-state-location).
 
-`MARIMO_STUDIO_CACHE_DIR` moves the per-user cache that provider inspection
-reuses across processes. It takes an absolute path. See
-[Inspection caches](provider-api.md#inspection-caches).
+`MARIMO_STUDIO_CACHE_DIR` moves the per-user cache that provider inspections
+and builds share across views and processes. It takes an absolute path. See
+[Provider caches](provider-api.md#provider-caches).
 
 `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` controls which cross-origin parent
 documents may frame the Studio edit workspace. Pass a comma-separated list of
@@ -436,7 +436,9 @@ so Git skips them whatever the repository's own ignore rules say.
 
 Removing a view through Studio removes its build state, and renaming a view
 moves it. Delete one view's `.artifacts/` directory to force a clean rebuild.
-The next build recreates it from saved source.
+The next build recreates it from saved source. Delete the
+[provider cache](provider-api.md#provider-caches) to download provider
+dependencies again.
 
 ## Cell aliases
 

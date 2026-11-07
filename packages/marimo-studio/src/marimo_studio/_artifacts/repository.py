@@ -214,15 +214,6 @@ def prepare_control_directories(project: CatalogProject) -> None:
         control_root / "revisions",
         "Artifact revisions directory",
     )
-    cache = control_root / ".cache"
-    assert_secure_path(artifact_base(project), cache, "Artifact provider cache")
-    if cache.exists():
-        assert_secure_path(
-            artifact_base(project),
-            cache,
-            "Artifact provider cache",
-            final_kind="directory",
-        )
     recover_staging(project)
 
 

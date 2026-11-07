@@ -14,7 +14,7 @@ from marimo_studio.view_providers._builtin.deno_obsnotebook import provider
 
 from ..deno_provider_test_support import inspect_provider, project
 
-pytestmark = [pytest.mark.deno, pytest.mark.usefixtures("shared_deno_test_cache")]
+pytestmark = pytest.mark.deno
 
 
 def test_notebook_html_cells_and_template_declare_source_located_mounts(

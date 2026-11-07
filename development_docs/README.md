@@ -387,8 +387,8 @@ examples/studio/<notebook>/<view>/                    authored
 examples/__marimo__/studio/<notebook>/<view>/.artifacts/   generated
 ```
 
-Studio writes staging candidates, immutable revisions, provider caches, and
-profile receipts there, and each `.artifacts/` ignores itself in Git.
+Studio writes staging candidates, immutable revisions, and profile receipts
+there, and each `.artifacts/` ignores itself in Git.
 Source-controlled examples keep the manifest, authored files, provider
 configuration, and dependency locks. The E2E `lazy` fixture keeps the Studio 0.3.0
 layout under `__marimo__/studio/` so the browser suite also opens an existing

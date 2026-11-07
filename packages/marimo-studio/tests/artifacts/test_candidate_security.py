@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -142,7 +143,8 @@ def test_publication_detaches_provider_hardlinks_from_cache(
         nonlocal cache_file
         report = build(request)
         output = request.staging_root / "index.html"
-        cache_file = request.cache_root / "hardlink-source.html"
+        # Concurrent builds share the provider cache, so each keys its own entry.
+        cache_file = request.cache_root / f"hardlink-{secrets.token_hex(8)}.html"
         cache_file.write_bytes(output.read_bytes())
         output.unlink()
         os.link(cache_file, output)
@@ -222,7 +224,7 @@ def test_ingestion_copies_the_files_root_it_opened(
 )
 @pytest.mark.parametrize(
     "control",
-    (".artifacts", "revisions", ".staging", ".cache"),
+    (".artifacts", "revisions", ".staging"),
 )
 def test_artifact_publication_rejects_symlinked_control_directories(
     tmp_path: Path,
@@ -248,7 +250,7 @@ def test_artifact_publication_rejects_symlinked_control_directories(
 @pytest.mark.skipif(
     os.name == "nt", reason="symlink creation needs elevated Windows access"
 )
-def test_cache_creation_stays_in_the_control_root_it_opened(
+def test_control_directory_creation_stays_in_the_control_root_it_opened(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -260,11 +262,11 @@ def test_cache_creation_stays_in_the_control_root_it_opened(
     retired = _swap_after_open(monkeypatch, control, external)
 
     ensure_secure_directory(
-        artifact_base(project), control / ".cache", "Artifact provider cache"
+        artifact_base(project), control / "revisions", "Artifact revisions directory"
     )
 
     assert retired
-    assert (retired[0] / ".cache").is_dir()
+    assert (retired[0] / "revisions").is_dir()
     assert tuple(external.iterdir()) == ()
 
 

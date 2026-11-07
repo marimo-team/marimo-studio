@@ -20,7 +20,6 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from functools import partial
-from pathlib import Path
 from typing import Protocol
 
 from marimo_studio._artifacts.codec import receipt_diagnostics
@@ -66,6 +65,7 @@ from marimo_studio._views.instrumentation import (
     missing_site_diagnostics,
     unknown_render_diagnostics,
 )
+from marimo_studio._views.provider_cache import provider_cache_root
 from marimo_studio._views.publication_hold import read_publication_hold
 from marimo_studio._views.records import DiagnosticsError, ViewBuild
 from marimo_studio._views.renders import Renderer, renderer_missing
@@ -202,13 +202,10 @@ def _inspect_snapshot(
     profile: BuildProfile,
     provider: BuildProvider,
     started: float,
-    cache_root: Path,
     cancellation: ProviderCancellation,
 ) -> ProjectInspection:
     try:
-        inspection = provider.inspect(
-            inspection_request(snapshot, cache_root=cache_root)
-        )
+        inspection = provider.inspect(inspection_request(snapshot))
     except Exception as error:
         raise_process_cleanup(error)
         record_build_failure(
@@ -529,7 +526,6 @@ def _publish_locked(
                 profile,
                 provider,
                 started,
-                candidate.cache_root,
                 cancellation,
             )
             provenance = provider.provenance()
@@ -630,7 +626,7 @@ def _publish_locked(
                 staging_root=candidate.files_root,
                 template_root=candidate.template_root,
                 work_root=candidate.work_root,
-                cache_root=candidate.cache_root,
+                cache_root=provider_cache_root(snapshot.provider),
                 cancellation=cancellation,
                 runner=create_provider_runner(
                     snapshot.root,
