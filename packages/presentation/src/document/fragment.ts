@@ -6,7 +6,8 @@
  * the fragment names. Hash routers and plain anchors therefore observe Studio's
  * fragment changes the same way they observe their own. `replace` keeps the
  * session history length, and `push` adds one entry. As with any fragment
- * navigation, the new entry starts with `history.state` set to null.
+ * navigation, the new entry starts with `history.state` set to null. A call
+ * for the current location changes nothing.
  */
 export const navigateToFragment = (hash: string, history: "push" | "replace" = "replace"): void => {
   const target = new URL(globalThis.location.href);
@@ -14,11 +15,23 @@ export const navigateToFragment = (hash: string, history: "push" | "replace" = "
   // A URL without "#" names another document. An empty fragment keeps the
   // navigation inside this one.
   const href = target.hash ? target.href : `${target.href}#`;
+  if (href === globalThis.location.href) {
+    return;
+  }
   if (history === "push") {
     globalThis.location.assign(href);
   } else {
     globalThis.location.replace(href);
   }
+};
+
+/** Return whether `url` names the current document, ignoring fragments. */
+export const isCurrentDocument = (url: string): boolean => {
+  const target = new URL(url, globalThis.location.href);
+  const current = new URL(globalThis.location.href);
+  target.hash = "";
+  current.hash = "";
+  return target.href === current.href;
 };
 
 /** Return `url` with the fragment of the current document location. */

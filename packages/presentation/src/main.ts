@@ -14,10 +14,15 @@ import {
   documentLifecycleEnvelope,
 } from "./document/document-lifecycle-id.ts";
 import { bindFragmentRestores, bindViewNavigation } from "./document/events";
+import { isCurrentDocument } from "./document/fragment.ts";
 import { startFrameRuntimeBridge } from "./document/frame-runtime-bridge.ts";
 import { onFinalPageHide } from "./document/page-lifecycle";
 import { postToStudioParent } from "./document/parent-bridge.ts";
-import { bindRuntimeQueryHistory, startQuerySync } from "./document/query-sync";
+import {
+  bindRuntimeQueryHistory,
+  startQuerySync,
+  subscribeDocumentQuery,
+} from "./document/query-sync";
 import { waitForReceiverAdmission } from "./document/receiver-admission.ts";
 import { presentationRefreshUrl, presentationRenewalSupportUrl } from "./document/refresh-url.ts";
 import { createPresentationRevisions } from "./document/revision-runtime";
@@ -128,8 +133,17 @@ const bindRuntimeNavigation = (
   presentationRevisions: ReturnType<typeof createPresentationRevisions>,
 ): (() => void) => {
   const runtimeExplicit = getMountConfig().runtimeExplicit;
+  let documentLocation = globalThis.location.href;
+  const stopTracking = subscribeDocumentQuery(() => {
+    documentLocation = globalThis.location.href;
+  });
+  // The capture listener runs before query sync records the traversed
+  // location, so it compares against the last history write. A fragment
+  // navigation keeps the document, and the browser has already scrolled.
   const reloadWhenChanged = () => {
-    if (!hasRuntimeConfig()) {
+    const previous = documentLocation;
+    documentLocation = globalThis.location.href;
+    if (!hasRuntimeConfig() || isCurrentDocument(previous)) {
       return;
     }
     const config = getRuntimeConfig();
@@ -153,11 +167,6 @@ const bindRuntimeNavigation = (
       return;
     }
     const { navigation, publicQueryChanged } = historyNavigation;
-    // A fragment navigation keeps the mounted document, and the browser has
-    // already scrolled to its target.
-    if (navigation.current && !publicQueryChanged) {
-      return;
-    }
     const target = new URL(navigation.documentUrl);
     if (publicQueryChanged) {
       globalThis.location.assign(target.href);
@@ -171,9 +180,10 @@ const bindRuntimeNavigation = (
       .restore(documentUrl, getSupportUrl(), target.href)
       .catch((cause: unknown) => console.error("marimo-studio history navigation error", cause));
   };
-  globalThis.addEventListener("popstate", reloadWhenChanged);
+  globalThis.addEventListener("popstate", reloadWhenChanged, { capture: true });
   return () => {
-    globalThis.removeEventListener("popstate", reloadWhenChanged);
+    stopTracking();
+    globalThis.removeEventListener("popstate", reloadWhenChanged, { capture: true });
   };
 };
 

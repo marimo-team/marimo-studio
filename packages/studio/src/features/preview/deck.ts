@@ -362,6 +362,11 @@ export class PreviewDeck {
     );
   }
 
+  /** The fragment the active view shows, including routes its page wrote. */
+  get fragment(): string {
+    return this.navigation.hash;
+  }
+
   cancelNavigation(): void {
     this.frames.find(this.runtime, this.view)?.controller?.cancelNavigation();
   }

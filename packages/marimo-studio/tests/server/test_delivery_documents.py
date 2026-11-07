@@ -123,6 +123,7 @@ def test_run_wasm_uses_the_trusted_wrapper_without_session_preservation(
     assert wrapper_config["runtime"] == "wasm"
     assert wrapper_config["runtimeExplicit"] is True
     assert wrapper_config["replayEnabled"] is False
+    assert 'id="marimo-studio-presentation"' in wrapper.text
     assert "<iframe" not in wrapper.text
     assert "<marimo-cell" not in wrapper.text
     assert child.status_code == 200

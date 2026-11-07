@@ -475,6 +475,50 @@ test("a same-revision navigation reaches its fragment after the commit", async (
   }
 });
 
+test("a refresh keeps the fragment the page holds when the revision commits", async () => {
+  const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
+  document.body.innerHTML = '<main id="app-shell">Current shell</main>';
+  setSupportUrl("/support/old");
+  commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
+  const refreshed = runtimeConfig({ revision: "revision-old" });
+  globalThis.history.replaceState({}, "", "/next/#/1");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/config")) {
+        // The page routes on while the refresh is in flight.
+        globalThis.history.replaceState(null, "", "#/4");
+        return Response.json(refreshed);
+      }
+      return new Response('<html><body><main id="app-shell">Ignored</main></body></html>', {
+        headers: { "Marimo-Studio-Revision": "revision-old" },
+      });
+    }),
+  );
+  const hashchange = vi.fn();
+  globalThis.addEventListener("hashchange", hashchange);
+  const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
+
+  try {
+    await adapter.replace(
+      "/next/#/1",
+      "/support/old",
+      new AbortController().signal,
+      vi.fn(),
+      "refresh",
+      "/next/#/1",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(globalThis.location.hash).toBe("#/4");
+    expect(hashchange).not.toHaveBeenCalled();
+  } finally {
+    globalThis.removeEventListener("hashchange", hashchange);
+    globalThis.history.replaceState({}, "", "/");
+  }
+});
+
 test("same-revision bindings remain stale until projection identity advances", async () => {
   const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
   document.body.innerHTML = '<main id="app-shell">Current shell</main>';

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vite-plus/test";
 
 import { PreviewFrame, TrustedFrame } from "../src/features/workspace/TrustedFrame.tsx";
+import { studioBootstrap } from "./studio-test-support.ts";
 
 it("forwards the host's browser permissions", () => {
   render(
@@ -17,12 +18,9 @@ it("forwards the host's browser permissions", () => {
   );
 });
 
-const policy = {
-  sandbox: "allow-forms allow-scripts",
-  allow: "fullscreen *; screen-wake-lock *",
-};
+const policy = studioBootstrap.presentationFrame;
 
-it("applies the server's presentation frame policy", () => {
+it("gives an opaque preview the bootstrap's frame policy", () => {
   render(
     <PreviewFrame
       frameRef={vi.fn()}
@@ -33,8 +31,9 @@ it("applies the server's presentation frame policy", () => {
     />,
   );
   const frame = screen.getByTitle("Presentation");
-  expect(frame).toHaveAttribute("sandbox", "allow-forms allow-scripts");
-  expect(frame).toHaveAttribute("allow", "fullscreen *; screen-wake-lock *");
+  expect(frame).toHaveAttribute("sandbox", policy.sandbox);
+  expect(frame).toHaveAttribute("allow", policy.allow);
+  expect(frame.getAttribute("sandbox")?.split(/\s+/u)).not.toContain("allow-same-origin");
 });
 
 it("leaves a trusted server preview on the host origin", () => {

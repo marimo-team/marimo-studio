@@ -585,8 +585,9 @@ fragment navigation through `navigateToFragment()`, so the page observes
 history write, `popstate`, and `hashchange` as `marimo-studio:location-change`
 with its view, query, and fragment. The parent replaces its own entry with that
 location. The query is notebook state and always applies. The fragment applies
-only when the reported view is the parent's current view, because a view switch
-pushes its own entry after the new document commits.
+when the reported view is the parent's current view or when the page has not
+named a view yet, because a view switch pushes its own entry after the new
+document commits.
 
 Browser history stores canonical public view URLs. `BrowserSessionReplay`
 indexes a native Server session by file key, page path, and the canonical public

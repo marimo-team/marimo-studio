@@ -125,7 +125,8 @@ export const createStudioServices = (
         preview.navigateWithinView(navigation);
       }
       const studioUrl = new URL(routes.studio(view));
-      studioUrl.hash = navigation?.hash ?? "";
+      // The page may have routed on while the view staged.
+      studioUrl.hash = preview.fragment;
       globalThis.history.replaceState({}, "", studioUrl);
       if (landing === "authoring") {
         source.focusSource();

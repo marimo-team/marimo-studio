@@ -2,6 +2,8 @@ import { PRESENTATION_REVISION_QUERY_PARAM } from "@marimo-studio/protocol/query
 import { resolveUrl } from "@marimo-studio/protocol/url";
 import { flushSync } from "react-dom";
 
+import type { RevisionHistoryMode } from "./revision-controller.ts";
+
 import { projectionHosts } from "../projections/host-runtime.ts";
 import { clearProjectionBindingStale } from "../projections/staleness.ts";
 import {
@@ -23,8 +25,6 @@ import { morphAuthoredShell, sameProjectionHostTopology } from "./shell-morph.ts
 import { stageShellSwap } from "./shell-swap.ts";
 import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
-type RevisionHistoryMode = "push" | "replace";
-
 // The entry keeps the current fragment until the new shell is in place, then
 // `revealFragment` navigates to the target fragment so the page observes it.
 const commitHistory = (mode: RevisionHistoryMode, url: string | null): void => {
@@ -39,8 +39,8 @@ const commitHistory = (mode: RevisionHistoryMode, url: string | null): void => {
   }
 };
 
-const revealFragment = (url: string | null): void => {
-  if (url === null) {
+const revealFragment = (mode: RevisionHistoryMode, url: string | null): void => {
+  if (url === null || mode === "refresh") {
     return;
   }
   const hash = new URL(url, globalThis.location.href).hash;
@@ -205,7 +205,7 @@ export class DocumentRevisionAdapter {
         if (nextConfig.projectionRevision !== previousConfig.projectionRevision) {
           clearProjectionBindingStale(nextConfig.projectionRevision);
         }
-        revealFragment(historyUrl);
+        revealFragment(historyMode, historyUrl);
         this.documentUrl = nextDocumentUrl;
         return {
           target,
@@ -327,7 +327,7 @@ export class DocumentRevisionAdapter {
       this.authoredShell = nextAuthoredShell;
       stagedStyles = undefined;
       stagedShell = undefined;
-      revealFragment(historyUrl);
+      revealFragment(historyMode, historyUrl);
       return {
         target,
         supportChanged: previousSupportUrl !== target.supportUrl,

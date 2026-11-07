@@ -28,7 +28,7 @@ const deferred = <T>() => {
 
 it("mirrors the fragment the current view navigates to into the Studio URL", () => {
   const syncFragment = vi.fn();
-  const { lifecycleId, previewWindow } = attachedServerDeck({ postMessage: vi.fn() }, true, {
+  const { deck, lifecycleId, previewWindow } = attachedServerDeck({ postMessage: vi.fn() }, true, {
     syncFragment,
   });
   const location = (view: string, hash: string) =>
@@ -46,6 +46,7 @@ it("mirrors the fragment the current view navigates to into the Studio URL", () 
   location("dashboard", "#/3");
 
   expect(syncFragment).toHaveBeenCalledExactlyOnceWith("#/3");
+  expect(deck.fragment).toBe("#/3");
 });
 
 it("restores the prior controller and editor query after a target view fails", async () => {

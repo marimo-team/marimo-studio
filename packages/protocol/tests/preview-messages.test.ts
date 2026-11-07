@@ -79,6 +79,14 @@ test("preview messages decode every supported discriminant", () => {
       hash: "",
     },
     {
+      type: "marimo-studio:location-change",
+      runtime: "server",
+      lifecycleId: 7,
+      view: "report",
+      query: "?region=emea",
+      hash: "#/3",
+    },
+    {
       type: "marimo-studio:restore-fragment",
       runtime: "server",
       lifecycleId: 7,
@@ -202,6 +210,20 @@ test("preview messages reject malformed protocol classes", () => {
       runtime: "server",
       query: "?region=emea",
       hash: "",
+    },
+    {
+      type: "marimo-studio:location-change",
+      runtime: "server",
+      lifecycleId: 7,
+      query: "?region=emea",
+    },
+    {
+      type: "marimo-studio:location-change",
+      runtime: "server",
+      lifecycleId: 7,
+      view: "",
+      query: "?region=emea",
+      hash: "#/3",
     },
     {
       type: "marimo-studio:receiver-ready",

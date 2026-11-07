@@ -16,7 +16,12 @@ import { withCurrentFragment } from "./fragment.ts";
 import { isAbortError } from "./styles.ts";
 
 export type RevisionOperationKind = "presentation" | "view";
-export type RevisionHistoryMode = "push" | "replace";
+/**
+ * How a revision writes the document's history entry. A `refresh` keeps the
+ * view, so the entry keeps the fragment the page holds when the revision
+ * commits.
+ */
+export type RevisionHistoryMode = "push" | "replace" | "refresh";
 
 export interface RevisionOperation {
   readonly kind: RevisionOperationKind;
@@ -94,10 +99,8 @@ export class PresentationRevisionController {
       supportUrl,
       kind,
       policy,
-      "replace",
-      // A refresh keeps the view, so the entry keeps the fragment the page
-      // navigated to since it loaded.
-      this.options.addressFollowsDocument ? withCurrentFragment(documentUrl) : null,
+      "refresh",
+      this.options.addressFollowsDocument ? documentUrl : null,
     );
   }
 
@@ -164,9 +167,11 @@ export class PresentationRevisionController {
         );
         if (commit.reloadDocument) {
           reloadPending = true;
-          this.options.reloadDocument(
-            this.sessionReplay.preservedUrl(historyUrl ?? globalThis.location.href),
-          );
+          let reloadUrl = historyUrl ?? globalThis.location.href;
+          if (historyUrl !== null && historyMode === "refresh") {
+            reloadUrl = withCurrentFragment(historyUrl);
+          }
+          this.options.reloadDocument(this.sessionReplay.preservedUrl(reloadUrl));
           cancelFunctionTransition();
           return commit;
         }

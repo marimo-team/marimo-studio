@@ -71,7 +71,7 @@ const projectedCaller = () => {
   return { element, wrapper };
 };
 
-test("user navigation pushes history while a refresh replaces it with the live fragment", async () => {
+test("user navigation pushes history while presentation refresh replaces it", async () => {
   readiness.start();
   const histories: [string, string | null][] = [];
   const adapter = documentPort(
@@ -85,15 +85,10 @@ test("user navigation pushes history while a refresh replaces it with the live f
   await controller.navigate("/signed/report/", "/support/report", "/report/");
   await controller.transition("/report/", "/support/report");
 
-  globalThis.history.replaceState({}, "", "/report/#/4");
-  await controller.transition("/report/#/1", "/support/report");
-
   assert.deepEqual(histories, [
     ["push", "/report/"],
-    ["replace", new URL("/report/", globalThis.location.href).href],
-    ["replace", new URL("/report/#/4", globalThis.location.href).href],
+    ["refresh", "/report/"],
   ]);
-  globalThis.history.replaceState({}, "", "/");
 });
 
 test("a top-level page keeps its public address through refreshes and reloads", async () => {
@@ -112,8 +107,8 @@ test("a top-level page keeps its public address through refreshes and reloads", 
   await controller.transition("/signed/report/", "/support/report");
 
   assert.deepEqual(histories, [
-    ["replace", null],
-    ["replace", null],
+    ["refresh", null],
+    ["refresh", null],
   ]);
   assert.deepEqual(settings.reloadDocument.mock.calls, [[globalThis.location.href]]);
 });

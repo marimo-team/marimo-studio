@@ -53,7 +53,7 @@ it("applies an editor query through the rendered preview bridge", async () => {
   preview.remove();
 });
 
-it("sends a Studio fragment once and leaves the page's own fragment to later query writes", async () => {
+it("sends a Studio fragment once and drops it when the page reports its own", async () => {
   const preview = frame();
   const source = createFrameBridgeSource();
   installFrameBridge(preview, source, {
@@ -71,12 +71,15 @@ it("sends a Studio fragment once and leaves the page's own fragment to later que
       .map((message) => ({ query: message?.query, hash: message?.hash }));
 
   await controller.applyToPreview(true, "#/3");
-  controller.previewHashChanged("#/4");
   controller.editorChanged("region=emea", true);
   await vi.waitFor(() => expect(applied()).toHaveLength(2));
+  await controller.applyToPreview(false, "#/5");
+  controller.previewHashChanged("#/6");
+  await controller.applyToPreview(true);
 
   expect(applied()).toEqual([
     { query: "", hash: "#/3" },
+    { query: "?region=emea", hash: undefined },
     { query: "?region=emea", hash: undefined },
   ]);
   controller.cancel();

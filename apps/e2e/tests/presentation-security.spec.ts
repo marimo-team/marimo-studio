@@ -260,7 +260,7 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
   }
 });
 
-test("every frame that hosts a view gives the page the same environment", async ({ page }) => {
+test("the Studio preview and its popout give the page the same environment", async ({ page }) => {
   const environment = (frame: ReturnType<typeof previewFrame>) =>
     frame.locator("html").evaluate(() => {
       // SAFETY: The suite runs in Chromium, which exposes the frame's
