@@ -959,18 +959,26 @@ class ProviderConformance:
             )
         return cast(BuildProfile, value)
 
-    def provenance(self, tool_version: str | None) -> ProviderProvenance:
-        """Return compact provenance for builds with this provider and tool."""
-        payload = json.dumps(
-            [
-                self.distribution,
-                self.version,
-                self.key,
-                _BUILD_CONTRACT_VERSION,
-                tool_version,
-            ],
-            separators=(",", ":"),
-        ).encode()
+    def provenance(
+        self,
+        tool_version: str | None,
+        source_digest: str | None,
+    ) -> ProviderProvenance:
+        """Return compact provenance for builds with this provider and tool.
+
+        A released install has no source digest, so its fingerprint names its
+        version alone.
+        """
+        identity: list[object] = [
+            self.distribution,
+            self.version,
+            self.key,
+            _BUILD_CONTRACT_VERSION,
+            tool_version,
+        ]
+        if source_digest is not None:
+            identity.append(source_digest)
+        payload = json.dumps(identity, separators=(",", ":")).encode()
         return ProviderProvenance(
             key=self.key,
             distribution=self.distribution,

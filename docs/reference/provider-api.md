@@ -1040,7 +1040,11 @@ target in different forms.
 
 Each artifact revision records the provider distribution's version and the
 `availability()` version, so an upgrade never reuses output built by the
-earlier version.
+earlier version. For a provider installed from a local directory, such as
+with `uv add --editable ./acme-views`, the revision also covers the metadata
+of each file in the provider's package. Editing the provider rebuilds its views
+with the edited code, and `marimo edit` rebuilds an open view as soon as the
+file is saved.
 
 ### Diagnostics
 

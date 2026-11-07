@@ -58,6 +58,8 @@ def test_committed_retirement_evicts_monitor_before_provider_recreation(
                 )
             )
 
+        source: tuple[Path, ...] = ()
+
         def provenance(self) -> Any:
             return builtin.provenance()
 

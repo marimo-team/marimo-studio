@@ -825,6 +825,8 @@ def test_a_scan_cancelled_during_inspection_recovers_on_the_next_subscriber(
                 ),
             )
 
+        source: tuple[Path, ...] = ()
+
         def provenance(self) -> Any:
             return builtin.provenance()
 

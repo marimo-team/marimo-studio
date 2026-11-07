@@ -823,8 +823,9 @@ Studio checks each result against these rules and reports the one it breaks.
   or trailing whitespace.
 
 Studio rebuilds a view when its inputs, the provider package version, or the
-tool version from `availability()` change. Release a new version when the build
-output changes for the same inputs.
+tool version from `availability()` change. While the package is installed with
+`uv add --editable`, an edit to its files also rebuilds the view. Release a new
+version when the build output changes for the same inputs.
 
 ## Verify the provider
 

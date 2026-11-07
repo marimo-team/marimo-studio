@@ -51,6 +51,8 @@ def _watch_only_registry(
                 sites=(),
             )
 
+        source: tuple[Path, ...] = ()
+
         def provenance(self) -> Any:
             return registered.provenance()
 
@@ -214,6 +216,8 @@ def test_source_monitor_surfaces_provider_process_cleanup_failure(
     studio = created_one_view(notebook_path)
 
     class Provider:
+        source: tuple[Path, ...] = ()
+
         def inspect(self, _request: object) -> object:
             try:
                 raise ProcessCleanupError("source monitor process survived")
@@ -554,6 +558,8 @@ def test_inspection_failure_keeps_a_repair_watch(
                 raise ValueError("source is temporarily invalid")
             return registered.inspect(cast(Any, selected))
 
+        source: tuple[Path, ...] = ()
+
         def provenance(self) -> Any:
             return registered.provenance()
 
@@ -591,6 +597,8 @@ def test_failed_reinspection_invalidates_the_previous_catalog(
             if fail:
                 raise ValueError("source is temporarily invalid")
             return registered.inspect(cast(Any, selected))
+
+        source: tuple[Path, ...] = ()
 
         def provenance(self) -> Any:
             return registered.provenance()
