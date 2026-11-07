@@ -29,6 +29,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path, PurePosixPath
+from types import TracebackType
 
 from marimo_studio._processes.cancellation import provider_cancellation
 from marimo_studio._server.presentation.service import (
@@ -72,10 +73,19 @@ class RenderUnavailable(Exception):
     """The presentation revision or the render owner stopped before rendering."""
 
 
+@dataclass(frozen=True)
+class _Failed:
+    error: Exception
+    traceback: TracebackType | None
+
+
 @dataclass
 class _Job:
-    work: Future[RenderBundle]
-    task: asyncio.Future[RenderBundle]
+    # The worker returns a failure as its result. A job can fail after every
+    # request left and its event loop stopped running callbacks, and an
+    # exception on such a future would reach asyncio's log unread.
+    work: Future[RenderBundle | _Failed]
+    task: asyncio.Future[RenderBundle | _Failed]
     cancellation: ProviderCancellation
     waiters: int = 0
     # Stops the job once its grace period ends without a new request.
@@ -158,15 +168,18 @@ class RenderStore:
             job = self._jobs.get(key)
             if job is None:
                 work = self._executor.submit(
-                    self._render,
-                    key,
-                    presentation,
-                    snapshot,
-                    source,
-                    normalized,
-                    outputs,
-                    cells,
-                    cancellation := ProviderCancellation(),
+                    _outcome,
+                    partial(
+                        self._render,
+                        key,
+                        presentation,
+                        snapshot,
+                        source,
+                        normalized,
+                        outputs,
+                        cells,
+                        cancellation := ProviderCancellation(),
+                    ),
                 )
                 job = _Job(work, asyncio.wrap_future(work), cancellation)
                 job.task.add_done_callback(partial(self._settled, key, job))
@@ -177,6 +190,9 @@ class RenderStore:
                 job.abandoned = None
         try:
             bundle = await asyncio.shield(job.task)
+            if isinstance(bundle, _Failed):
+                # Each request raises the failure with the worker's traceback.
+                raise bundle.error.with_traceback(bundle.traceback)
         except asyncio.CancelledError:
             # Closing the store cancels queued work, which the reader sees as a
             # transient result. Otherwise this request was cancelled, and the
@@ -219,12 +235,9 @@ class RenderStore:
         job.cancellation.cancel()
 
     def _settled(
-        self, key: _JobKey, job: _Job, task: asyncio.Future[RenderBundle]
+        self, key: _JobKey, job: _Job, task: asyncio.Future[RenderBundle | _Failed]
     ) -> None:
         """Retire a finished job. Its bundle stays in the results."""
-        if not task.cancelled():
-            # A job that no request awaits ends without an unread error.
-            task.exception()
         with self._lock:
             if job.abandoned is not None:
                 job.abandoned.cancel()
@@ -474,6 +487,13 @@ class RenderStore:
         self._executor.shutdown(wait=True, cancel_futures=True)
         if directory is not None:
             shutil.rmtree(directory, ignore_errors=True)
+
+
+def _outcome(render: Callable[[], RenderBundle]) -> RenderBundle | _Failed:
+    try:
+        return render()
+    except Exception as error:
+        return _Failed(error, error.__traceback__)
 
 
 def _remove(roots: list[Path]) -> None:
