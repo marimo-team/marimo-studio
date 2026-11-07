@@ -23,8 +23,9 @@ def working_tree_source(point: EntryPoint) -> tuple[Path, ...]:
     are the import locations of the first regular package or module on the
     entry point's module path, which an editable install resolves to the
     working tree. Namespace packages above it are shared with other
-    distributions, so they are skipped. Finding the package runs import
-    finders and executes no provider code.
+    distributions, so they are skipped, except that a module directly inside
+    one covers its directory, which holds the modules it imports beside it.
+    Finding the package runs import finders and executes no provider code.
     """
     distribution = point.dist
     if distribution is None:
@@ -45,9 +46,10 @@ def working_tree_source(point: EntryPoint) -> tuple[Path, ...]:
             return ()
         if spec.origin is not None:
             locations = spec.submodule_search_locations
-            if locations is None:
-                return (Path(spec.origin),)
-            return tuple(Path(item) for item in locations)
+            if locations is not None:
+                return tuple(Path(item) for item in locations)
+            module = Path(spec.origin)
+            return (module.parent,) if depth > 1 else (module,)
     return ()
 
 

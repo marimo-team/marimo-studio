@@ -33,7 +33,6 @@ from marimo_studio._workspace.tools import notebook_tools
 from marimo_studio.errors import ConfigurationError, MarimoStudioError
 from marimo_studio.view_providers import ProjectInspection, ViewProject
 from marimo_studio.view_providers._host import provider_registry
-from marimo_studio.view_providers._host.working_tree import source_digest
 
 _WatchKey = tuple[Literal["root", "view"], Path]
 _FileStamp = str | tuple[int, int, int, int]
@@ -73,7 +72,7 @@ class SourceChangeProducer:
         # A provider installed from a directory changes its build identity
         # when its package files change.
         self._provider_source: tuple[Path, ...] = ()
-        self._provider_stamp: str | None = None
+        self._provider_tree: dict[_WatchKey, _TreeStamp] = {}
         self._pending: deque[SourceChange] = deque()
         self._workspace_invalid = False
         self._invalid_project_change = False
@@ -102,6 +101,10 @@ class SourceChangeProducer:
             *self._roots,
             *(path for path in self._provider_source if path.is_dir()),
         }
+        excluded = {
+            *self._excluded_roots,
+            *(path.parent / "__pycache__" for _kind, path in self._provider_tree),
+        }
         if self._project is not None:
             files.add(self._project.manifest)
             files.add(state_space_path(self._project.root))
@@ -111,7 +114,7 @@ class SourceChangeProducer:
             roots=tuple(sorted((path.absolute() for path in roots), key=str)),
             excluded=tuple(
                 sorted(
-                    (path.absolute() for path in self._excluded_roots),
+                    (path.absolute() for path in excluded),
                     key=str,
                 )
             ),
@@ -213,7 +216,7 @@ class SourceChangeProducer:
         publication_hold_change = publication_hold_stamp != self._publication_hold_stamp
         self._publication_hold_stamp = publication_hold_stamp
         provider_change = bool(self._provider_source) and (
-            source_digest(self._provider_source) != self._provider_stamp
+            _provider_stamps(self._provider_source) != self._provider_tree
         )
         if changed or provider_change:
             project = self._project
@@ -273,7 +276,7 @@ class SourceChangeProducer:
         self._tree = {}
         self._catalog_stamps = {}
         self._provider_source = ()
-        self._provider_stamp = None
+        self._provider_tree = {}
         if project is None:
             self._manifest_stamp = "missing"
             self._state_space_stamp = "missing"
@@ -316,7 +319,7 @@ class SourceChangeProducer:
             self._project = project
             provider = registry.get(project.provider)
             self._provider_source = provider.source
-            self._provider_stamp = source_digest(provider.source)
+            self._provider_tree = _provider_stamps(provider.source)
             before = (
                 observed_tree
                 if observed_tree is not None
@@ -640,6 +643,15 @@ def _scope_path(path: PurePosixPath, kind: str) -> PurePosixPath:
             f"Provider build inputs must use normalized project-relative paths: {raw}"
         )
     return path
+
+
+def _provider_stamps(source: tuple[Path, ...]) -> dict[_WatchKey, _TreeStamp]:
+    """Stamp a provider's package files apart from the bytecode its imports write."""
+    return {
+        key: stamp
+        for key, stamp in _tree_stamps(source).items()
+        if "__pycache__" not in key[1].parts
+    }
 
 
 def _tree_stamps(

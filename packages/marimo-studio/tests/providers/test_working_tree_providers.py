@@ -29,7 +29,7 @@ from marimo_studio.view_providers import (
     SourceDocument,
 )
 
-HEADING = "{heading}"
+from {package}.headings import HEADING
 
 
 class Provider:
@@ -64,27 +64,37 @@ provider = Provider()
 """
 
 
-def _install(root: Path, direct_url: dict[str, object] | None) -> Path:
-    """Install `tree-views` with its package in `root/src` and return the module."""
-    package = root / "src" / "tree_views"
-    package.mkdir(parents=True)
-    module = package / "__init__.py"
-    module.write_text(_PROVIDER.format(heading="First"), encoding="utf-8")
+def _install(
+    root: Path,
+    direct_url: dict[str, object] | None,
+    *,
+    package: str = "tree_views",
+    module: str = "__init__",
+) -> Path:
+    """Install `tree-views` from `root/src` and return the module its heading uses."""
+    directory = root / "src" / package
+    directory.mkdir(parents=True)
+    (directory / f"{module}.py").write_text(
+        _PROVIDER.format(package=package), encoding="utf-8"
+    )
+    headings = directory / "headings.py"
+    headings.write_text('HEADING = "First"\n', encoding="utf-8")
     metadata = root / "site" / "tree_views-1.0.0.dist-info"
     metadata.mkdir(parents=True)
     (metadata / "METADATA").write_text(
         "Metadata-Version: 2.1\nName: tree-views\nVersion: 1.0.0\n",
         encoding="utf-8",
     )
+    entry = package if module == "__init__" else f"{package}.{module}"
     (metadata / "entry_points.txt").write_text(
-        "[marimo_studio.view_provider]\npage = tree_views:provider\n",
+        f"[marimo_studio.view_provider]\npage = {entry}:provider\n",
         encoding="utf-8",
     )
     if direct_url is not None:
         (metadata / "direct_url.json").write_text(
             json.dumps(direct_url), encoding="utf-8"
         )
-    return module
+    return headings
 
 
 def _page(notebook_path: Path) -> str:
@@ -98,9 +108,10 @@ def _dashboard_with_provider(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     direct_url: dict[str, object] | None,
+    **layout: str,
 ) -> Path:
-    """Point the dashboard view at an installed `tree-views` and return its module."""
-    module = _install(tmp_path / "provider", direct_url)
+    """Point the dashboard view at an installed `tree-views` and return its headings."""
+    headings = _install(tmp_path / "provider", direct_url, **layout)
     roots = (tmp_path / "provider" / "src", tmp_path / "provider" / "site")
     for root in roots:
         monkeypatch.syspath_prepend(str(root))
@@ -111,7 +122,7 @@ def _dashboard_with_provider(
         encode_view_manifest("tree-views/page"), encoding="utf-8"
     )
     monkeypatch.setattr(providers_module, "_REGISTRY", ProviderRegistry.discover())
-    return module
+    return headings
 
 
 @pytest.mark.parametrize(
@@ -142,10 +153,12 @@ def test_editing_a_working_tree_provider_rebuilds_its_view(
     direct_url: dict[str, object] | None,
     rebuilt: str,
 ) -> None:
-    module = _dashboard_with_provider(notebook_path, tmp_path, monkeypatch, direct_url)
+    headings = _dashboard_with_provider(
+        notebook_path, tmp_path, monkeypatch, direct_url
+    )
 
     assert "<h1>First</h1>" in _page(notebook_path)
-    module.write_text(_PROVIDER.format(heading="Second"), encoding="utf-8")
+    headings.write_text('HEADING = "Second"\n', encoding="utf-8")
 
     assert rebuilt in _page(notebook_path)
 
@@ -155,17 +168,17 @@ def test_source_monitor_reports_an_edit_to_a_working_tree_provider(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _dashboard_with_provider(
+    headings = _dashboard_with_provider(
         notebook_path,
         tmp_path,
         monkeypatch,
         {"url": "file:///work/tree-views", "dir_info": {"editable": True}},
     )
     monitor = SourceChangeProducer(load_studio(notebook_path), "dashboard")
-    assert module.parent in monitor.watch_plan.roots
+    assert headings.parent in monitor.watch_plan.roots
     assert monitor.poll() is None
 
-    module.write_text(_PROVIDER.format(heading="Second"), encoding="utf-8")
+    headings.write_text('HEADING = "Second"\n', encoding="utf-8")
     change = monitor.poll()
     project, inspection, input_id = monitor.catalog()
 
@@ -176,3 +189,23 @@ def test_source_monitor_reports_an_edit_to_a_working_tree_provider(
         assert (
             "<h1>Second</h1>" in lease.read_bytes(PurePosixPath("index.html")).decode()
         )
+
+
+def test_editing_a_module_beside_a_namespace_provider_rebuilds_its_view(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headings = _dashboard_with_provider(
+        notebook_path,
+        tmp_path,
+        monkeypatch,
+        {"url": "file:///work/tree-views", "dir_info": {"editable": True}},
+        package="acme",
+        module="views",
+    )
+
+    assert "<h1>First</h1>" in _page(notebook_path)
+    headings.write_text('HEADING = "Second"\n', encoding="utf-8")
+
+    assert "<h1>Second</h1>" in _page(notebook_path)

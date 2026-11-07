@@ -36,7 +36,9 @@ class CountingProvider:
         self.inspections += 1
         return self._provider.inspect(request)
 
-    source: tuple[()] = ()
+    @property
+    def source(self) -> Any:
+        return self._provider.source
 
     def provenance(self) -> Any:
         return self._provider.provenance()

@@ -116,12 +116,15 @@ Installers record such an install with a `dir_info` key in the distribution's
 `direct_url.json`, defined by
 [PEP 610](https://peps.python.org/pep-0610/). For an isolated provider with
 `dir_info`, discovery records the import locations of the first regular
-package on the entry point's module path (`_host/working_tree.py`).
+package or module on the entry point's module path (`_host/working_tree.py`).
+A module directly inside a namespace package records its directory.
 Provenance adds a digest of the path, size, modification and change times, and
 inode of each file beneath them. Each isolated operation imports the current
 files, so the digest is computed for each call. The source monitor watches the
-same locations and reinspects the view when the digest changes, so a provider
-edit rebuilds the view while `marimo edit` runs. Built-in providers run in the
+same locations and reinspects the view when they change, so a provider edit
+rebuilds the view while `marimo edit` runs. An editable install resolves to
+the working tree. A non-editable directory install resolves to its installed
+copy, so reinstalling it rebuilds the view. Built-in providers run in the
 server process and keep the identity of the installed Studio version.
 
 ## Provider layout
