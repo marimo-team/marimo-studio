@@ -229,16 +229,18 @@ contains one editor and one horizontally scrollable tab strip.
 Provider order is the tab order. The controller retains dirty documents if a
 new inspection drops their path, which keeps unsaved work recoverable.
 
-The shipped editor loads syntax modes for HTML, CSS, SCSS, JavaScript, JSX,
-TypeScript, TSX, JSON, Markdown, Python, XML, YAML, LaTeX, Lua, and TOML.
-BibTeX, Svelte, Typst, text, and external language IDs use the plain-text
-mode.
+The shipped editor loads a syntax mode for every language ID that Studio and
+its built-in providers report, listed in
+`packages/protocol/fixtures/source-languages.json`. `plaintext` and language
+IDs from other providers use the plain-text mode.
 
-When adding a language:
+When a built-in provider reports a new language:
 
 1. Keep the provider language ID stable.
-2. Load the matching CodeMirror extension on demand.
-3. Preserve the plain-text fallback.
+2. Add the ID to `source-languages.json`. The provider test
+   `test_editor_languages.py` fails until the fixture matches the providers.
+3. Load the matching CodeMirror extension on demand in `languages.ts`. The
+   Source test `source-languages.test.ts` fails until every fixture ID loads.
 4. Test editable and read-only files.
 5. Inspect the tab and editor at desktop and narrow widths.
 

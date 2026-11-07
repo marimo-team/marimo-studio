@@ -194,7 +194,7 @@ def _failed_inspection(root: Path, diagnostic: ProjectDiagnostic) -> ProjectInsp
         return ProjectInspection((), (), diagnostics=(_located(diagnostic, ()),))
     document = SourceDocument(
         source.path,
-        _SOURCE_LANGUAGES.get(source.path.suffix.lower(), "text"),
+        _SOURCE_LANGUAGES.get(source.path.suffix.lower(), "plaintext"),
         "edit",
     )
     return ProjectInspection((document,), (), diagnostics=(diagnostic,))

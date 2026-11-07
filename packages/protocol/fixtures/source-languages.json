@@ -1,0 +1,23 @@
+{
+  "languages": [
+    "bibtex",
+    "css",
+    "html",
+    "javascript",
+    "javascriptreact",
+    "json",
+    "latex",
+    "lua",
+    "markdown",
+    "plaintext",
+    "python",
+    "scss",
+    "svelte",
+    "toml",
+    "typescript",
+    "typescriptreact",
+    "typst",
+    "xml",
+    "yaml"
+  ]
+}
