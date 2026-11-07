@@ -37,7 +37,6 @@ from marimo_studio._artifacts.paths import (
     artifact_base,
     artifact_root,
     assert_secure_path,
-    ensure_secure_directory,
     normalized_artifact_path,
     project_artifacts,
 )
@@ -105,7 +104,6 @@ class ArtifactCandidate:
     files_root: Path
     template_root: Path
     work_root: Path
-    cache_root: Path
 
 
 @dataclass(frozen=True)
@@ -258,31 +256,17 @@ def prepare_artifact_build(
 
 
 # https://bford.info/cachedir/ marks a directory that tools can rebuild.
-# Workspace hosts and backup tools skip it, which keeps a provider's dependency
-# cache and unfinished build candidates out of saved workspaces and backups.
-_CACHE_DIRECTORY_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
+# Workspace hosts and backup tools skip it, which keeps unfinished build
+# candidates out of saved workspaces and backups.
 _CACHE_DIRECTORY_TAG = (
-    _CACHE_DIRECTORY_SIGNATURE
-    + b"\n# marimo Studio recreates this directory on demand.\n"
+    b"Signature: 8a477f597d28d172789f06886806bc55\n"
+    b"# marimo Studio recreates this directory on demand.\n"
 )
 
 
-def _tag_cache_directory(tree: FileTree, directory: Path) -> None:
-    tag = directory / "CACHEDIR.TAG"
+def _tag_staging_directory(tree: FileTree, directory: Path) -> None:
     try:
-        try:
-            current = tree.read(tag)
-        except FileNotFoundError:
-            current = None
-        if current is not None and current.content.startswith(
-            _CACHE_DIRECTORY_SIGNATURE
-        ):
-            return
-        tree.write(
-            tag,
-            _CACHE_DIRECTORY_TAG,
-            expect=ABSENT if current is None else current.version,
-        )
+        tree.write(directory / "CACHEDIR.TAG", _CACHE_DIRECTORY_TAG, expect=ABSENT)
     except ConditionalWriteError:
         return
     except OSError as error:
@@ -305,7 +289,7 @@ def capture_artifact_candidate(
     )
     tree = FileTree(artifact_base(project))
     tree.create_directory(generation_root)
-    _tag_cache_directory(tree, generation_root.parent)
+    _tag_staging_directory(tree, generation_root.parent)
     try:
         captured = snapshot_project(project, inspection, generation_root / "project")
         files_root = project_artifacts(captured.project) / "build" / "files"
@@ -314,24 +298,12 @@ def capture_artifact_candidate(
         tree.ensure_directory(files_root)
         tree.ensure_directory(template_root)
         tree.ensure_directory(work_root)
-        cache_root = artifact_root(project) / ".cache"
-        ensure_secure_directory(
-            artifact_base(project), cache_root, "Artifact provider cache"
-        )
-        assert_secure_path(
-            artifact_base(project),
-            cache_root,
-            "Artifact provider cache",
-            final_kind="directory",
-        )
-        _tag_cache_directory(tree, cache_root)
         yield ArtifactCandidate(
             generation_root,
             captured,
             files_root,
             template_root,
             work_root,
-            cache_root,
         )
     finally:
         with suppress(OSError):

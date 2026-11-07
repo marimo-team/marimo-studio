@@ -18,9 +18,44 @@ from marimo_studio._compat.layout import (
     MARIMO_FRONTEND_PATCH_SHA256,
     MARIMO_RELEASE_COMMIT,
 )
-from marimo_studio.view_providers._builtin._deno import runtime as deno_runtime
 
 from .helpers import notebook_source
+
+_PROVIDER_CACHE = pytest.StashKey[tuple[tempfile.TemporaryDirectory[str], str | None]]()
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Give the whole run one provider cache in ``MARIMO_STUDIO_CACHE_DIR``.
+
+    pytest-xdist workers, provider worker processes, and CLI children inherit
+    the environment, so every test reuses the dependencies the first inspection
+    or build downloads, and the developer's user cache stays untouched. The
+    cache sits directly in the system temporary directory, because Deno's
+    package paths beneath pytest's deeper base directory exceed Windows' path
+    limit.
+    """
+    if hasattr(config, "workerinput"):
+        return
+    directory = tempfile.TemporaryDirectory(
+        prefix="studio-cache-", ignore_cleanup_errors=True
+    )
+    config.stash[_PROVIDER_CACHE] = (
+        directory,
+        os.environ.get("MARIMO_STUDIO_CACHE_DIR"),
+    )
+    os.environ["MARIMO_STUDIO_CACHE_DIR"] = directory.name
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    owned = config.stash.get(_PROVIDER_CACHE, None)
+    if owned is None:
+        return
+    directory, previous = owned
+    if previous is None:
+        os.environ.pop("MARIMO_STUDIO_CACHE_DIR", None)
+    else:
+        os.environ["MARIMO_STUDIO_CACHE_DIR"] = previous
+    directory.cleanup()
 
 
 def _reject_exclusive_flag(*_args: object) -> int:
@@ -105,21 +140,6 @@ def export_repository(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path
     monkeypatch.setenv("MARIMO_EXPORT_REPOSITORY", str(repository))
     yield repository
     monkeypatch.undo()
-
-
-@pytest.fixture(autouse=True, scope="session")
-def studio_cache() -> Iterator[Path]:
-    """Keep provider inspection caches out of the developer's user cache.
-
-    The cache sits directly in the system temporary directory, because Deno's
-    package paths beneath pytest's deeper base directory exceed Windows' path
-    limit.
-    """
-    with tempfile.TemporaryDirectory(prefix="studio-cache-") as directory:
-        monkeypatch = pytest.MonkeyPatch()
-        monkeypatch.setenv("MARIMO_STUDIO_CACHE_DIR", directory)
-        yield Path(directory)
-        monkeypatch.undo()
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -232,24 +252,3 @@ def notebook_path(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return path
-
-
-@pytest.fixture(scope="session")
-def deno_test_cache(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return tmp_path_factory.mktemp("deno-cache")
-
-
-@pytest.fixture
-def shared_deno_test_cache(
-    monkeypatch: pytest.MonkeyPatch,
-    deno_test_cache: Path,
-) -> None:
-    ensure_cache_directory = deno_runtime.ensure_cache_directory
-    monkeypatch.setattr(
-        deno_runtime,
-        "ensure_cache_directory",
-        lambda _root, relative: ensure_cache_directory(
-            deno_test_cache.resolve(),
-            relative,
-        ),
-    )

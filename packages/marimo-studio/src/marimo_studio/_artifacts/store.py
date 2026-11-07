@@ -1,6 +1,6 @@
 """Own the directory that holds one view's generated state.
 
-Each catalog view keeps receipts, revisions, pins, and provider caches in
+Each catalog view keeps receipts, revisions, and pins in
 ``artifact_root(project)``. The directory ignores itself in Git and can be
 deleted to force a clean rebuild.
 

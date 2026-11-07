@@ -25,10 +25,7 @@ from ..deno_provider_test_support import projection_targets as _projection_targe
 from ..helpers import no_display_notebook_source
 from ..provider_test_support import provider_build_request
 
-pytestmark = [
-    pytest.mark.deno,
-    pytest.mark.usefixtures("shared_deno_test_cache"),
-]
+pytestmark = pytest.mark.deno
 
 
 @pytest.mark.skipif(
@@ -403,7 +400,7 @@ def test_react_points_a_failed_package_download_to_the_network(
     _root, project = _project(tmp_path, react_provider, "marimo-studio/react")
 
     inspection = react_provider.inspect(
-        inspection_request(project, cache_root=tmp_path / "inspection-cache")
+        replace(inspection_request(project), cache_root=tmp_path / "inspection-cache")
     )
 
     assert [item.code for item in inspection.diagnostics] == [
@@ -650,7 +647,6 @@ def test_react_build_rejects_config_escape_before_process_start(
             project,
             inspection,
             files,
-            cache_root=root / ".artifacts" / ".cache",
         ),
     )
 
@@ -693,7 +689,6 @@ def test_react_build_rejects_implicit_jsx_module_outside_snapshot(
             project,
             inspection,
             files,
-            cache_root=root / ".artifacts" / ".cache",
         ),
     )
 

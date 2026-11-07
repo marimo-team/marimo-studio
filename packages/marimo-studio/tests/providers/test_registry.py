@@ -400,7 +400,7 @@ def test_provider_project_operations_surface_process_cleanup_failure(
                     project,
                     inspection(),
                     staging,
-                    cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+                    cache_root=tmp_path / "cache",
                 )
             )
 
@@ -490,7 +490,7 @@ def _render_build(tmp_path: Path, output_sizes: object) -> tuple[Any, BuildReque
             renders=(Render(_REPORT, outputs=(_FIGURE,)),),
         ),
         staging,
-        cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+        cache_root=tmp_path / "cache",
     )
     cast(Any, provider).build = lambda _request: BuildResult(
         PurePosixPath("index.html"), output_sizes=cast(Any, output_sizes)
@@ -584,6 +584,6 @@ def test_malformed_project_results_fail_at_the_provider_boundary(
                 project,
                 accepted,
                 staging,
-                cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+                cache_root=tmp_path / "cache",
             )
             installed.build(request)

@@ -111,8 +111,7 @@ class CatalogProject(ViewProject):
     """A view project in a Studio catalog, with its generated-state location.
 
     Providers receive the ``ViewProject`` fields. ``locations`` stays with
-    Studio, which keeps build receipts, revisions, pins, and provider caches
-    in ``artifacts``.
+    Studio, which keeps build receipts, revisions, and pins in ``artifacts``.
     """
 
     locations: CatalogLocations

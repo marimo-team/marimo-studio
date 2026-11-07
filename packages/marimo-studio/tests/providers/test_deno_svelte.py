@@ -24,10 +24,7 @@ from ..deno_provider_test_support import projection_targets as _projection_targe
 from ..helpers import no_display_notebook_source
 from ..provider_test_support import provider_build_request, publish
 
-pytestmark = [
-    pytest.mark.deno,
-    pytest.mark.usefixtures("shared_deno_test_cache"),
-]
+pytestmark = pytest.mark.deno
 
 
 @pytest.mark.skipif(
@@ -367,7 +364,6 @@ def test_svelte_vite_config_cannot_access_paths_outside_staging(
                 project,
                 inspection,
                 files,
-                cache_root=root / ".artifacts" / ".cache",
             ),
         )
 
@@ -408,7 +404,6 @@ def test_svelte_vite_config_does_not_inherit_parent_secrets(
             project,
             inspection,
             files,
-            cache_root=root / ".artifacts" / ".cache",
         ),
     )
 
@@ -456,7 +451,6 @@ def test_svelte_rejects_unsafe_dependency_configuration_before_install(
                 project,
                 inspection,
                 files,
-                cache_root=root / ".artifacts" / ".cache",
             ),
         )
 

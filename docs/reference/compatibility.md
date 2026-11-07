@@ -179,6 +179,11 @@ A provider written for Studio 0.3 also needs two changes:
 - Pass `title=` when a test builds a `StarterContext` directly, and read
   `context.title` instead of deriving a heading from `context.view_name`.
 
+`BuildRequest.cache_root` is the [provider cache](provider-api.md#provider-caches),
+which every view's inspections and builds share. A provider that keeps
+per-view data there must key each entry by the inputs and tool version that
+produced it, and tolerate concurrent builds of other views.
+
 [Present a starter in the New view dialog](provider-api.md#present-a-starter-in-the-new-view-dialog)
 and [Offer starter settings](provider-api.md#offer-starter-settings) describe
 the optional fields that starters can now declare. Test the provider against each

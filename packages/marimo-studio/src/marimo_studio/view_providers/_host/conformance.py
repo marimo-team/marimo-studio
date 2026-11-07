@@ -616,16 +616,14 @@ class ProviderConformance:
         if not isinstance(value, InspectionRequest):
             raise conformance_error(self.key, "requires an InspectionRequest record")
         project = self.validate_project(value.project)
-        cache = core_path(value.cache_root, self.key, "inspection cache root")
+        cache = core_path(value.cache_root, self.key, "cache root")
         if overlaps(cache, project.root):
             raise conformance_error(
                 self.key,
-                "requires inspection cache outside the view project",
+                "requires cache outside the view project",
             )
         if cache.exists() and not cache.is_dir():
-            raise conformance_error(
-                self.key, "requires inspection cache root to be a directory"
-            )
+            raise conformance_error(self.key, "requires cache root to be a directory")
         self._operation_owners(value, "inspection")
         return replace(value, project=project, cache_root=cache)
 
@@ -663,10 +661,6 @@ class ProviderConformance:
         if overlaps(template, staging):
             raise conformance_error(
                 self.key, "requires separate staging and template roots"
-            )
-        if cache.name != ".cache" or cache.parent.name != ".artifacts":
-            raise conformance_error(
-                self.key, "requires cache root to end with .artifacts/.cache"
             )
         if cache.exists() and not cache.is_dir():
             raise conformance_error(self.key, "requires cache root to be a directory")

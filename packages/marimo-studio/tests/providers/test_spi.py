@@ -268,8 +268,8 @@ def test_provider_inspection_cache_stays_outside_the_view_project(
 
     with pytest.raises(ConfigurationError, match=r"cache outside the view project"):
         installed.inspect(
-            inspection_request(
-                project,
+            replace(
+                inspection_request(project),
                 cache_root=root / ".artifacts" / ".cache",
             )
         )
@@ -354,7 +354,7 @@ def test_provider_diagnostics_locate_manifest_and_input_errors(
             project,
             accepted,
             staging,
-            cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+            cache_root=tmp_path / "cache",
         )
     ).diagnostics == (manifest_diagnostic,)
 
@@ -377,7 +377,7 @@ def test_provider_diagnostics_locate_manifest_and_input_errors(
             project,
             inspected,
             staging,
-            cache_root=tmp_path / "cache" / ".artifacts" / ".cache",
+            cache_root=tmp_path / "cache",
         )
     )
     assert result.diagnostics == (diagnostic,)

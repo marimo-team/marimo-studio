@@ -13,11 +13,11 @@ import pytest
 import marimo_studio._views.creation_plan as creation_plan_module
 import marimo_studio.view_providers._host as providers_module
 from marimo_studio._artifacts.inputs import project_input_paths
-from marimo_studio._artifacts.paths import project_artifacts
 from marimo_studio._artifacts.repository import read_profile_state
 from marimo_studio._processes.provider_runner import create_provider_runner
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._views.inspection import inspection_request
+from marimo_studio._views.provider_cache import provider_cache_root
 from marimo_studio._workspace.project_manifest import CatalogProject
 from marimo_studio.view_providers import (
     BuildInput,
@@ -108,7 +108,7 @@ def provider_build_request(
         staging_root=staging_root,
         template_root=template,
         work_root=work,
-        cache_root=cache_root or project_artifacts(project) / ".cache",
+        cache_root=cache_root or provider_cache_root(project.provider),
         cancellation=cancellation,
         runner=create_provider_runner(project.root, cancellation, command_timeout),
         command_timeout=command_timeout,
@@ -241,12 +241,6 @@ def project(root: Path, provider: ProviderStub) -> ViewProject:
         provider=provider.provider_key,
         options={"entrypoint": "index.html"},
     )
-
-
-def cache_root(root: Path) -> Path:
-    cache = root.parent / f"{root.name}-live" / ".artifacts" / ".cache"
-    cache.mkdir(parents=True, exist_ok=True)
-    return cache.resolve()
 
 
 def install_registry(
