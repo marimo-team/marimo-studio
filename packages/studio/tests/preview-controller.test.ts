@@ -151,10 +151,11 @@ it("preserves document identity through same-view navigation", () => {
     }),
   );
   dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:query-change",
+    type: "marimo-studio:location-change",
     runtime: "server",
     lifecycleId: 7,
     query: "?region=americas",
+    hash: "",
   });
   expect(syncQuery).toHaveBeenCalledWith("?region=americas");
   server.dispose();
@@ -362,10 +363,11 @@ it("suspends hidden WASM ownership and reactivates the same document", async () 
     value: 9,
   });
   dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:query-change",
+    type: "marimo-studio:location-change",
     runtime: "wasm",
     lifecycleId: 1,
     query: "?hidden=1",
+    hash: "",
   });
   await Promise.resolve();
 
@@ -407,10 +409,11 @@ it("suspends hidden WASM ownership and reactivates the same document", async () 
   );
 
   dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:query-change",
+    type: "marimo-studio:location-change",
     runtime: "wasm",
     lifecycleId: 1,
     query: "?active=1",
+    hash: "",
   });
   await vi.waitFor(() => expect(syncEditorQuery).toHaveBeenCalledOnce());
   expect(syncQuery).toHaveBeenCalledWith("?active=1");
@@ -547,10 +550,11 @@ it("reports a query failure and clears it after the editor recovers", async () =
   });
 
   dispatchPreviewMessage(null, {
-    type: "marimo-studio:query-change",
+    type: "marimo-studio:location-change",
     runtime: "wasm",
     lifecycleId: 1,
     query: "?region=apac",
+    hash: "",
   });
   await vi.waitFor(() =>
     expect(
@@ -614,10 +618,11 @@ it("reports a query failure beside a preview that fills the diagnostic budget", 
   });
 
   dispatchPreviewMessage(null, {
-    type: "marimo-studio:query-change",
+    type: "marimo-studio:location-change",
     runtime: "wasm",
     lifecycleId: 1,
     query: "?region=apac",
+    hash: "",
   });
 
   await vi.waitFor(() =>

@@ -131,10 +131,12 @@ test("a persisted page retains projection, query, and refresh capabilities", () 
   globalThis.history.pushState({}, "", "/?region=apac");
   expect(parent.postMessage).toHaveBeenCalledWith(
     {
-      type: "marimo-studio:query-change",
+      type: "marimo-studio:location-change",
       runtime: "server",
       lifecycleId: 7,
+      view: "dashboard",
       query: "?region=apac",
+      hash: "",
     },
     globalThis.location.origin,
   );

@@ -359,6 +359,8 @@ test("opaque WASM frames synchronize controls and navigation through document id
     expect(applyControls).toHaveBeenCalledWith([{ objectId: "wasm-control", value: 2 }]),
   );
 
+  const hashchange = vi.fn();
+  globalThis.addEventListener("hashchange", hashchange);
   dispatch({
     type: "marimo-studio:frame-query-apply",
     requestId: "query_current",
@@ -369,6 +371,8 @@ test("opaque WASM frames synchronize controls and navigation through document id
   await vi.waitFor(() => expect(updateQuery).toHaveBeenCalledWith("?region=emea"));
   expect(publicNotebookQuery(globalThis.location.search)).toBe("?region=emea");
   expect(globalThis.location.hash).toBe("#details");
+  await vi.waitFor(() => expect(hashchange).toHaveBeenCalledOnce());
+  globalThis.removeEventListener("hashchange", hashchange);
   expect(parent.postMessage).toHaveBeenCalledWith(
     expect.objectContaining({
       type: "marimo-studio:frame-query-applied",

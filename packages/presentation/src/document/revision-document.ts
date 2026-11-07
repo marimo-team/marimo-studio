@@ -15,6 +15,7 @@ import {
   setSupportUrl,
 } from "../runtime-config/index.ts";
 import { documentBase, resolveDocumentBase } from "./base.ts";
+import { navigateToFragment, withCurrentFragment } from "./fragment.ts";
 import { samePresentationRevision, type PresentationTarget } from "./presentation-refresh.ts";
 import { presentationRefreshUrl, presentationRenewalSupportUrl } from "./refresh-url.ts";
 import { requiresDocumentReload } from "./scripts.ts";
@@ -24,14 +25,27 @@ import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
 type RevisionHistoryMode = "push" | "replace";
 
+// The entry keeps the current fragment until the new shell is in place, then
+// `revealFragment` navigates to the target fragment so the page observes it.
 const commitHistory = (mode: RevisionHistoryMode, url: string | null): void => {
   if (url === null) {
     return;
   }
+  const entry = withCurrentFragment(url);
   if (mode === "push") {
-    globalThis.history.pushState(globalThis.history.state, "", url);
+    globalThis.history.pushState(globalThis.history.state, "", entry);
   } else {
-    globalThis.history.replaceState(globalThis.history.state, "", url);
+    globalThis.history.replaceState(globalThis.history.state, "", entry);
+  }
+};
+
+const revealFragment = (url: string | null): void => {
+  if (url === null) {
+    return;
+  }
+  const hash = new URL(url, globalThis.location.href).hash;
+  if (hash || globalThis.location.hash) {
+    navigateToFragment(hash);
   }
 };
 
@@ -49,28 +63,6 @@ const fetchDocument = async (url: string, init: RequestInit): Promise<Response> 
       true,
       "Wait for the Studio server to become available.",
     );
-  }
-};
-
-const scrollToFragment = (url: string | null): void => {
-  if (url === null) {
-    return;
-  }
-  const hash = new URL(url, globalThis.location.href).hash;
-  if (!hash) {
-    return;
-  }
-  let identifier = hash.slice(1);
-  try {
-    identifier = decodeURIComponent(identifier);
-  } catch {
-    // The browser retains malformed fragments as authored URL state.
-  }
-  const target = document.getElementById(identifier) ?? document.getElementsByName(identifier)[0];
-  try {
-    target?.scrollIntoView();
-  } catch {
-    return;
   }
 };
 
@@ -213,7 +205,7 @@ export class DocumentRevisionAdapter {
         if (nextConfig.projectionRevision !== previousConfig.projectionRevision) {
           clearProjectionBindingStale(nextConfig.projectionRevision);
         }
-        scrollToFragment(historyUrl);
+        revealFragment(historyUrl);
         this.documentUrl = nextDocumentUrl;
         return {
           target,
@@ -335,7 +327,7 @@ export class DocumentRevisionAdapter {
       this.authoredShell = nextAuthoredShell;
       stagedStyles = undefined;
       stagedShell = undefined;
-      scrollToFragment(historyUrl);
+      revealFragment(historyUrl);
       return {
         target,
         supportChanged: previousSupportUrl !== target.supportUrl,

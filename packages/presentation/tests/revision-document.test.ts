@@ -419,7 +419,7 @@ test("same-revision subscriber failure restores config, support, URL, and histor
   expect(document.querySelector("#app-shell")?.textContent).toBe("Current shell");
 });
 
-test("fragment scrolling cannot invalidate a committed same-revision navigation", async () => {
+test("a same-revision navigation reaches its fragment after the commit", async () => {
   const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
   document.body.innerHTML = `
     <main id="app-shell">
@@ -450,26 +450,29 @@ test("fragment scrolling cannot invalidate a committed same-revision navigation"
       });
     }),
   );
-  const details = document.querySelector<HTMLElement>("#details")!;
-  details.scrollIntoView = vi.fn(() => {
-    throw new Error("scroll failed");
-  });
+  const observed = vi.fn((_event: HashChangeEvent) => getSupportUrl());
+  globalThis.addEventListener("hashchange", observed);
   const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
 
-  await expect(
-    adapter.replace(
-      "/next/#details",
-      "/support/new",
-      new AbortController().signal,
-      vi.fn(),
-      "push",
-    ),
-  ).resolves.toMatchObject({ reloadDocument: false });
+  try {
+    await expect(
+      adapter.replace(
+        "/next/#details",
+        "/support/new",
+        new AbortController().signal,
+        vi.fn(),
+        "push",
+      ),
+    ).resolves.toMatchObject({ reloadDocument: false });
 
-  expect(getSupportUrl()).toBe(new URL("/support/new", globalThis.location.href).href);
-  expect(getRuntimeConfig()).toEqual(resolvedRuntimeConfig(refreshed, globalThis.location.href));
-  expect(globalThis.location.hash).toBe("#details");
-  expect(details.scrollIntoView).toHaveBeenCalledOnce();
+    expect(getRuntimeConfig()).toEqual(resolvedRuntimeConfig(refreshed, globalThis.location.href));
+    await vi.waitFor(() => expect(observed).toHaveBeenCalledOnce());
+    expect(observed).toHaveReturnedWith(new URL("/support/new", globalThis.location.href).href);
+    expect(new URL(observed.mock.calls[0][0].newURL).pathname).toBe("/next/");
+    expect(globalThis.location.hash).toBe("#details");
+  } finally {
+    globalThis.removeEventListener("hashchange", observed);
+  }
 });
 
 test("same-revision bindings remain stale until projection identity advances", async () => {

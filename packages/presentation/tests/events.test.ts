@@ -310,25 +310,29 @@ test("direct wrapper navigation commits in the child before pushing public histo
   dispose();
 });
 
-test("direct wrapper fragment links scroll and push public history without a view fetch", () => {
+test("direct wrapper fragment links push public history, then navigate the page to the fragment", async () => {
   setActiveDocumentLifecycleId(9);
   globalThis.history.replaceState({}, "", "/proxy/app/dashboard/?runtime=server");
   commitRuntimeConfig(runtimeConfig({ dev: false }));
-  const postMessage = vi.fn();
+  const order: string[] = [];
+  const postMessage = vi.fn(() => order.push("navigate-view"));
   vi.stubGlobal("parent", { postMessage });
+  const hashchange = vi.fn(() => order.push("hashchange"));
+  globalThis.addEventListener("hashchange", hashchange);
   const direct = vi.fn();
   const dispose = bindViewNavigation(direct, true);
-  const target = document.createElement("section");
-  target.id = "details";
-  target.scrollIntoView = vi.fn();
+  const length = globalThis.history.length;
   const anchor = document.createElement("a");
   anchor.href = "#details";
-  document.body.append(anchor, target);
+  document.body.append(anchor);
 
   anchor.click();
+  await vi.waitFor(() => expect(hashchange).toHaveBeenCalledOnce());
 
   expect(direct).not.toHaveBeenCalled();
-  expect(target.scrollIntoView).toHaveBeenCalledOnce();
+  expect(globalThis.location.hash).toBe("#details");
+  expect(globalThis.history.length).toBe(length);
+  expect(order).toEqual(["navigate-view", "hashchange"]);
   expect(postMessage).toHaveBeenCalledWith(
     {
       type: "marimo-studio:navigate-view",
@@ -341,19 +345,19 @@ test("direct wrapper fragment links scroll and push public history without a vie
     },
     globalThis.location.origin,
   );
+  globalThis.removeEventListener("hashchange", hashchange);
   setActiveDocumentLifecycleId(7);
   dispose();
 });
 
-test("wrapper popstate restores a fragment without a presentation transition", () => {
+test("wrapper popstate navigates the page to the restored fragment", async () => {
   setActiveDocumentLifecycleId(10);
   commitRuntimeConfig(runtimeConfig({ dev: false }));
   const parent = {};
   vi.stubGlobal("parent", parent);
-  const target = document.createElement("section");
-  target.id = "restored";
-  target.scrollIntoView = vi.fn();
-  document.body.append(target);
+  const hashchange = vi.fn();
+  globalThis.addEventListener("hashchange", hashchange);
+  const length = globalThis.history.length;
   const dispose = bindFragmentRestores();
   const event = new MessageEvent("message", {
     origin: globalThis.location.origin,
@@ -361,15 +365,17 @@ test("wrapper popstate restores a fragment without a presentation transition", (
       type: "marimo-studio:restore-fragment",
       runtime: "server",
       lifecycleId: 10,
-      hash: "#restored",
+      hash: "#/3",
     },
   });
   Object.defineProperty(event, "source", { value: parent });
 
   globalThis.dispatchEvent(event);
+  await vi.waitFor(() => expect(hashchange).toHaveBeenCalledOnce());
 
-  expect(target.scrollIntoView).toHaveBeenCalledOnce();
-  expect(globalThis.location.hash).toBe("#restored");
+  expect(globalThis.location.hash).toBe("#/3");
+  expect(globalThis.history.length).toBe(length);
+  globalThis.removeEventListener("hashchange", hashchange);
   setActiveDocumentLifecycleId(7);
   dispose();
 });

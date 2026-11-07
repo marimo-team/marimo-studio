@@ -575,6 +575,22 @@ one host works in the others.
 | Base path   | Studio serves the page from a path it mints for each request, and an export can live in any folder     | Reference assets with relative URLs, for example with Vite's `--base ./`. A root path such as `/assets/app.js` resolves outside the view.                                        |
 | Errors      | An uncaught error or unhandled rejection from the page's own scripts fails the view                    | Studio replaces the preview with the error and its file, line, and column. Catch the errors the page recovers from.                                                              |
 
+Studio passes the URL fragment to the page as a fragment navigation, so the
+browser scrolls to the named element and fires `popstate` and `hashchange`. A
+page that routes by fragment reads its route the same way it would outside
+Studio:
+
+```js
+const showRoute = () => render(location.hash.slice(1) || "/");
+addEventListener("hashchange", showRoute);
+showRoute();
+```
+
+A link to `/deck/#/3` opens that route, and routes the page writes with
+`location.hash`, `history.pushState()`, or `history.replaceState()` appear in
+the address bar. [Link views and keep state](../guide/navigation-and-sessions.md)
+describes how back and forward restore them.
+
 A static export opens the page as the top-level document of the site that
 hosts it, so its origin, storage, and permissions follow that site. With
 `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1`, a Server runtime page runs on the

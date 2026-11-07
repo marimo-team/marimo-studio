@@ -64,6 +64,7 @@ export const createStudioServices = (
     viewUrl: routes.view,
     supportUrl: routes.support,
     syncQuery: routes.syncQuery,
+    syncFragment: routes.syncFragment,
     syncEditorQuery: (query, operationId, writeGeneration, signal) =>
       syncEditorQuery(
         bootstrap.urls.query,

@@ -16,6 +16,7 @@ import { getRuntimeConfig, subscribeRuntimeConfig } from "../runtime-config/inde
 import { updateConfiguredRuntimeQuery } from "../runtime/coordinator.ts";
 import { nextBrowserOperationId } from "./browser-operation-id.ts";
 import { activeDocumentLifecycleId } from "./document-lifecycle-id.ts";
+import { navigateToFragment } from "./fragment.ts";
 import { isStudioParentMessage, postToStudioParent } from "./parent-bridge.ts";
 import { studioOwned } from "./studio-ownership.ts";
 
@@ -94,14 +95,14 @@ const commitQuery = (query: string, hash?: string): void => {
   for (const [key, value] of new URLSearchParams(publicNotebookQuery(query))) {
     target.searchParams.append(key, value);
   }
-  if (hash !== undefined) {
-    target.hash = hash;
-  }
   globalThis.history.replaceState(
     globalThis.history.state,
     "",
     `${target.pathname}${target.search}${target.hash}`,
   );
+  if (hash !== undefined && hash !== globalThis.location.hash) {
+    navigateToFragment(hash);
+  }
 };
 
 export const startFrameRuntimeBridge = (

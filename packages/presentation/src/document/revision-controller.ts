@@ -12,6 +12,7 @@ import type { DocumentRevisionCommit } from "./revision-document.ts";
 
 import { projectionReadGate } from "../projections/read-gate.ts";
 import { beginPresentationRefresh, setPresentationRefreshState } from "../readiness.ts";
+import { withCurrentFragment } from "./fragment.ts";
 import { isAbortError } from "./styles.ts";
 
 export type RevisionOperationKind = "presentation" | "view";
@@ -94,7 +95,9 @@ export class PresentationRevisionController {
       kind,
       policy,
       "replace",
-      this.options.addressFollowsDocument ? documentUrl : null,
+      // A refresh keeps the view, so the entry keeps the fragment the page
+      // navigated to since it loaded.
+      this.options.addressFollowsDocument ? withCurrentFragment(documentUrl) : null,
     );
   }
 

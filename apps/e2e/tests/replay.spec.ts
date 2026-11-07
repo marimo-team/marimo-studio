@@ -88,10 +88,11 @@ test("trusted wrapper retains its server-selected runtime", async ({ page }) => 
     await rendered.locator("html").evaluate(() => {
       globalThis.parent.postMessage(
         {
-          type: "marimo-studio:query-change",
+          type: "marimo-studio:location-change",
           runtime: "server",
           lifecycleId: 1,
           query: "?runtime=wasm",
+          hash: "",
         },
         "*",
       );

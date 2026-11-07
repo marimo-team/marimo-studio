@@ -244,11 +244,9 @@ export const StudioHost = ({
         const studioSource = new StudioRoutes(ready).studio(ready.selectedView);
         const studioQuery =
           activeEditor?.publicQuery ?? publicNotebookQuery(globalThis.location.search);
-        globalThis.history.replaceState(
-          globalThis.history.state,
-          "",
-          withPublicQuery(studioSource, studioQuery),
-        );
+        const studioUrl = withPublicQuery(studioSource, studioQuery);
+        studioUrl.hash = globalThis.location.hash;
+        globalThis.history.replaceState(globalThis.history.state, "", studioUrl);
         setInitialActivation(activation);
         setAttempt((current) => current + 1);
         setBootstrap(ready);

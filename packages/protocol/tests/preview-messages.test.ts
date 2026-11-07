@@ -72,10 +72,11 @@ test("preview messages decode every supported discriminant", () => {
       url: "/_marimo-studio/presentation/d.example/report/",
     },
     {
-      type: "marimo-studio:query-change",
+      type: "marimo-studio:location-change",
       runtime: "server",
       lifecycleId: 7,
       query: "?region=emea",
+      hash: "",
     },
     {
       type: "marimo-studio:restore-fragment",
@@ -197,9 +198,10 @@ test("preview messages reject malformed protocol classes", () => {
     null,
     { type: "unknown", view: "dashboard" },
     {
-      type: "marimo-studio:query-change",
+      type: "marimo-studio:location-change",
       runtime: "server",
       query: "?region=emea",
+      hash: "",
     },
     {
       type: "marimo-studio:receiver-ready",
@@ -231,7 +233,7 @@ test("preview messages reject malformed protocol classes", () => {
 
 test("preview message budgets reject cyclic and deeply nested structured-clone graphs", () => {
   const cyclic: CyclicPreviewProbe = {
-    type: "marimo-studio:query-change",
+    type: "marimo-studio:location-change",
     runtime: "server",
     lifecycleId: 7,
     query: "",
@@ -251,10 +253,11 @@ test("preview message budgets reject cyclic and deeply nested structured-clone g
 test("preview mutation messages reject oversized domain fields", () => {
   const oversized: JsonValue[] = [
     {
-      type: "marimo-studio:query-change",
+      type: "marimo-studio:location-change",
       runtime: "server",
       lifecycleId: 7,
       query: `?${"q".repeat(16_384)}`,
+      hash: "",
     },
     {
       type: "marimo-studio:navigate-view",

@@ -153,6 +153,11 @@ const bindRuntimeNavigation = (
       return;
     }
     const { navigation, publicQueryChanged } = historyNavigation;
+    // A fragment navigation keeps the mounted document, and the browser has
+    // already scrolled to its target.
+    if (navigation.current && !publicQueryChanged) {
+      return;
+    }
     const target = new URL(navigation.documentUrl);
     if (publicQueryChanged) {
       globalThis.location.assign(target.href);

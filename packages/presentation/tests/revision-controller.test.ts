@@ -71,7 +71,7 @@ const projectedCaller = () => {
   return { element, wrapper };
 };
 
-test("user navigation pushes history while presentation refresh replaces it", async () => {
+test("user navigation pushes history while a refresh replaces it with the live fragment", async () => {
   readiness.start();
   const histories: [string, string | null][] = [];
   const adapter = documentPort(
@@ -85,10 +85,15 @@ test("user navigation pushes history while presentation refresh replaces it", as
   await controller.navigate("/signed/report/", "/support/report", "/report/");
   await controller.transition("/report/", "/support/report");
 
+  globalThis.history.replaceState({}, "", "/report/#/4");
+  await controller.transition("/report/#/1", "/support/report");
+
   assert.deepEqual(histories, [
     ["push", "/report/"],
-    ["replace", "/report/"],
+    ["replace", new URL("/report/", globalThis.location.href).href],
+    ["replace", new URL("/report/#/4", globalThis.location.href).href],
   ]);
+  globalThis.history.replaceState({}, "", "/");
 });
 
 test("a top-level page keeps its public address through refreshes and reloads", async () => {
@@ -507,7 +512,9 @@ test("a document reload bypasses the mounted runtime handoff", async () => {
 
   await controller.transition(target.documentUrl, target.supportUrl);
 
-  assert.deepEqual(hooks.reloadDocument.mock.calls, [["/report/"]]);
+  assert.deepEqual(hooks.reloadDocument.mock.calls, [
+    [new URL("/report/", globalThis.location.href).href],
+  ]);
   assert.equal(hooks.applyRuntime.mock.calls.length, 0);
   assert.equal(hooks.onReady.mock.calls.length, 0);
   assert.equal(hooks.onSupportChanged.mock.calls.length, 0);

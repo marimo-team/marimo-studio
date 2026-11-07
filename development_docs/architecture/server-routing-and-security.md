@@ -224,8 +224,8 @@ gesture to enter fullscreen. The page environment section of
 `docs/reference/provider-api.md` documents the contract for view authors.
 
 The child receives no Studio credential or same-origin authority. A validated
-message bridge carries navigation, public query, fragment, readiness, replay,
-and diagnostic messages. The wrapper accepts child messages from
+message bridge carries navigation, public location, fragment, readiness,
+replay, and diagnostic messages. The wrapper accepts child messages from
 the iframe window with origin `null` and parent messages from the same-origin
 Studio window.
 

@@ -161,9 +161,17 @@ def waiting_document(
                             + signal("marimo-studio:receiver-unready")
                             + """
                                   // A top-level page keeps its public address. A
-                                  // framed document follows its capability URL.
+                                  // framed document follows its capability URL
+                                  // and keeps the fragment the server never saw.
                                   if (window.parent === window) location.reload();
-                                  else location.replace(refreshUrl);
+                                  else {
+                                    const next = new URL(refreshUrl, location.href);
+                                    next.hash = location.hash;
+                                    // The same URL would only navigate to
+                                    // its fragment, so it reloads instead.
+                                    if (next.href === location.href) location.reload();
+                                    else location.replace(next);
+                                  }
                                   return;
                                 }
                               } catch {}

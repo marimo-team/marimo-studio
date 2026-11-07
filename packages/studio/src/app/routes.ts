@@ -66,6 +66,16 @@ export class StudioRoutes {
     );
   };
 
+  syncFragment = (hash: string): void => {
+    const url = new URL(globalThis.location.href);
+    url.hash = hash;
+    globalThis.history.replaceState(
+      globalThis.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  };
+
   private withNotebookQuery(url: string, query = this.notebookQuery): string {
     const result = new URL(url, globalThis.location.href);
     result.search = this.pageQuery(query);
