@@ -49,6 +49,8 @@ export const bibtex: StreamParser<BibtexState> = {
         state.depth = 1;
         return "bracket";
       }
+      // A stray `@` reads as comment text, so the token always advances.
+      stream.next();
       if (!stream.skipTo("@")) {
         stream.skipToEnd();
       }
@@ -74,6 +76,10 @@ export const bibtex: StreamParser<BibtexState> = {
     }
     if (stream.match(/^[=#,]/)) {
       return "operator";
+    }
+    if (stream.eat("%")) {
+      stream.skipToEnd();
+      return "comment";
     }
     if (!stream.match(/^[^\s=#,{}()"]+/)) {
       stream.next();

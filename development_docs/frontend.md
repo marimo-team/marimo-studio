@@ -237,7 +237,7 @@ IDs from other providers use the plain-text mode.
 When a built-in provider reports a new language:
 
 1. Keep the provider language ID stable.
-2. Add the ID to `source-languages.json`. The provider test
+2. Add the ID to `source-languages.json` in sorted order. The provider test
    `test_editor_languages.py` fails until the fixture matches the providers.
 3. Load the matching CodeMirror extension on demand in `languages.ts`. The
    Source test `source-languages.test.ts` fails until every fixture ID loads.

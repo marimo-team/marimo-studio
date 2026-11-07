@@ -70,8 +70,9 @@ it("parses Markdown front matter as YAML", async () => {
 
 it("reads BibTeX field values in braces and quotes as strings", async () => {
   const doc = [
-    "Text between entries.",
+    "Text between entries, mailed to someone@ example.org @",
     "@article{smith2020deep,",
+    "  % Checked against the DOI.",
     "  url = {https://example.org/paper%20one.pdf},",
     '  title = "Deep {Learning}",',
     "  year = 2020,",
@@ -83,6 +84,8 @@ it("reads BibTeX field values in braces and quotes as strings", async () => {
     tree?.resolveInner(doc.indexOf(text) + 1, 1).name;
 
   expect(tokenAt("Text between")).toBe("comment");
+  expect(tokenAt("@ example")).toBe("comment");
+  expect(tokenAt("% Checked")).toBe("comment");
   expect(tokenAt("@article")).toBe("keyword");
   expect(tokenAt("smith2020deep")).toBe("variableName");
   expect(tokenAt("url")).toBe("propertyName");
