@@ -74,14 +74,17 @@ class ProviderProcessSpec:
     distribution: str
     version: str
     entry_point: str
+    # Working-tree package paths whose modules the worker compiles from source.
+    source: tuple[str, ...] = ()
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "key": self.key,
             "registration": self.registration,
             "distribution": self.distribution,
             "version": self.version,
             "entry_point": self.entry_point,
+            "source": list(self.source),
         }
 
 

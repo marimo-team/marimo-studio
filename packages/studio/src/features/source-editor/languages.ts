@@ -1,12 +1,13 @@
 import type { Extension } from "@codemirror/state";
 
-import { StreamLanguage } from "@codemirror/language";
+import { LanguageSupport, StreamLanguage } from "@codemirror/language";
 
 type LanguageLoader = () => Promise<Extension>;
 
 const PLAIN_TEXT_EXTENSION: Extension = [];
 
 const languageLoaders = new Map<string, LanguageLoader>([
+  ["bibtex", async () => StreamLanguage.define((await import("./bibtex.ts")).bibtex)],
   ["css", async () => (await import("@codemirror/lang-css")).css()],
   ["html", async () => (await import("@codemirror/lang-html")).html()],
   ["javascript", async () => (await import("@codemirror/lang-javascript")).javascript()],
@@ -35,9 +36,23 @@ const languageLoaders = new Map<string, LanguageLoader>([
   ],
   ["python", async () => (await import("@codemirror/lang-python")).python()],
   ["scss", async () => (await import("@codemirror/lang-sass")).sass()],
+  ["svelte", async () => (await import("@replit/codemirror-lang-svelte")).svelte()],
   [
     "toml",
     async () => StreamLanguage.define((await import("@codemirror/legacy-modes/mode/toml")).toml),
+  ],
+  [
+    "typst",
+    async () => {
+      const { typst_lezer, typstLezerFoldService, typstLezerIndentService } =
+        await import("codemirror-lang-typst/lezer");
+      // The package's complete support also adds a linter, fixed light-theme
+      // colors, and an Enter keymap that edits read-only documents.
+      return new LanguageSupport(typst_lezer().language, [
+        typstLezerIndentService,
+        typstLezerFoldService,
+      ]);
+    },
   ],
   [
     "typescript",

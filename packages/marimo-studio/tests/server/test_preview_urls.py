@@ -5,6 +5,7 @@ import shutil
 from collections.abc import Awaitable, Callable, MutableMapping
 from html import unescape
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
@@ -99,6 +100,57 @@ def test_wasm_preview_opens_without_an_editor_or_browser_client(
     assert "allow-same-origin" not in policy
     assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
+
+
+def _workspace_link(response: Any) -> str | None:
+    link = re.search(r'<a href="([^"]+)"[^>]*>this view in Studio</a>', response.text)
+    if link is None:
+        return None
+    resolved = urlsplit(urljoin(str(response.url), unescape(link.group(1))))
+    return f"{resolved.path}?{resolved.query}" if resolved.query else resolved.path
+
+
+def test_view_url_without_an_editor_links_to_the_studio_workspace(
+    notebook_path: Path,
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+    with TestClient(app) as client:
+        direct = client.get(
+            "/dashboard/", params={"access_token": "secret", "theme": "dark"}
+        )
+
+    assert direct.status_code == 202
+    assert direct.headers["retry-after"] == "1"
+    assert _workspace_link(direct) == "/studio/dashboard/?theme=dark"
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param(
+            {
+                "marimo_studio_client": "browser-client-1234",
+                "marimo_studio_lifecycle": "1",
+            },
+            id="studio-frame",
+        ),
+        pytest.param({"marimo_studio_client": "browser-client-1234"}, id="tab-bound"),
+    ],
+)
+def test_view_url_bound_to_a_studio_tab_waits_for_its_editor(
+    notebook_path: Path,
+    params: dict[str, str],
+) -> None:
+    configured(notebook_path)
+    app = marimo_app(notebook_path)
+    edit_mode(app)
+    with TestClient(app) as client:
+        waiting = client.get("/dashboard/", params=params)
+
+    assert waiting.status_code == 202
+    assert _workspace_link(waiting) is None
 
 
 def test_trusted_server_preview_keeps_the_host_origin(

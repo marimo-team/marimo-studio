@@ -15,6 +15,14 @@ import {
   waitForPreview,
 } from "./fixture.ts";
 
+// The marimo editor polls its usage endpoint every 10 seconds, and a reload
+// aborts a poll in flight. Reloading right after a poll answers keeps the
+// next one out of the reload.
+const editorUsagePolled = (target: Page) =>
+  target.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith("/_marimo-studio/editor/api/usage"),
+  );
+
 test("shares one native kernel across Studio tabs and views", async ({
   page,
   browserDiagnostics,
@@ -37,6 +45,7 @@ test("shares one native kernel across Studio tabs and views", async ({
     await expect(
       editorFrame(page).getByRole("button", { name: "Take over", exact: true }),
     ).toHaveCount(0);
+    await editorUsagePolled(peer);
     await peer.locator('iframe[title="Marimo editor"]').evaluate(
       (editor: HTMLIFrameElement) =>
         new Promise<void>((resolve) => {
@@ -105,6 +114,7 @@ test("shares one native kernel across Studio tabs and views", async ({
     await recoverRequestAbort(controls);
     await expect(third.locator('[mo-value="metric"]')).toHaveText("63");
 
+    await editorUsagePolled(page);
     await page.reload();
     const reloaded = await waitForPreview(page);
     await expect(reloaded.getByRole("button", { name: "Widget count: 10" })).toBeVisible();

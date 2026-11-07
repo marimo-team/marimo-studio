@@ -5,7 +5,21 @@ from __future__ import annotations
 import json
 from typing import cast
 
-from htpy import Node, body, head, html, link, main, meta, p, script, span, style, title
+from htpy import (
+    Node,
+    a,
+    body,
+    head,
+    html,
+    link,
+    main,
+    meta,
+    p,
+    script,
+    span,
+    style,
+    title,
+)
 from markupsafe import Markup
 
 from marimo_studio._delivery.html import node_list, render
@@ -26,8 +40,14 @@ def waiting_document(
     lifecycle_id: int | None = None,
     runtime: str = "server",
     view: str = "",
+    workspace_url: str | None = None,
 ) -> str:
-    """Return a stable loading surface that polls for the notebook session."""
+    """Return a stable loading surface that polls for the notebook session.
+
+    With `workspace_url`, the page links to the Studio workspace that starts
+    the notebook session, and keeps polling so it loads the view once the
+    session starts.
+    """
     refresh = json.dumps(refresh_url).replace("<", "\\u003c")
     receiver = (
         {
@@ -78,7 +98,11 @@ def waiting_document(
                         name="viewport",
                         content="width=device-width, initial-scale=1",
                     ),
-                    title["Starting notebook"],
+                    title[
+                        "Starting notebook"
+                        if workspace_url is None
+                        else "Waiting for notebook"
+                    ],
                     link(rel="icon", href=icon_url),
                     style[
                         Markup(
@@ -115,11 +139,14 @@ def waiting_document(
                               color: var(--foreground-muted);
                               font-size: .875rem;
                               line-height: 1.25rem;
+                              padding: 0 1rem;
                               opacity: 0;
                               animation: reveal 120ms ease-out 500ms forwards;
                             }
                             p { margin: 0; }
+                            a { color: inherit; }
                             .spinner {
+                              flex: none;
                               width: 1rem;
                               height: 1rem;
                               border: 1.5px solid var(--border);
@@ -212,7 +239,18 @@ def waiting_document(
                     main({"role": "status", "aria-live": "polite"})[
                         node_list(
                             span({"class": "spinner", "aria-hidden": "true"})[""],
-                            p["Starting notebook"],
+                            p["Starting notebook"]
+                            if workspace_url is None
+                            else p[
+                                "Open ",
+                                a(
+                                    href=workspace_url,
+                                    target="_blank",
+                                    rel="noopener noreferrer",
+                                )["this view in Studio"],
+                                " to start the notebook. This page shows the "
+                                "view once the notebook runs.",
+                            ],
                         )
                     ]
                 )

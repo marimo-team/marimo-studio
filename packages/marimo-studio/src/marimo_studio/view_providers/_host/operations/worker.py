@@ -8,8 +8,11 @@ import signal
 import sys
 import threading
 import time
+from collections.abc import Sequence
+from importlib.machinery import ModuleSpec, SourceFileLoader
 from importlib.metadata import EntryPoint
 from pathlib import Path, PurePosixPath
+from types import CodeType, ModuleType
 from typing import cast
 
 from marimo_studio._processes.cancellation import provider_cancellation
@@ -74,14 +77,60 @@ def _number(value: object, label: str) -> float:
     return float(value)
 
 
+class _SourceLoader(SourceFileLoader):
+    def get_code(self, fullname: str) -> CodeType:
+        path = self.get_filename(fullname)
+        return self.source_to_code(self.get_data(path), path)
+
+
+class _WorkingTreeFinder:
+    """Compile modules beneath a working-tree provider's paths from source.
+
+    Python accepts cached bytecode whose recorded source size and whole-second
+    modification time match, so an edit of the same size within one second
+    would otherwise run the earlier code under the edit's build identity.
+    """
+
+    def __init__(self, roots: tuple[Path, ...]) -> None:
+        self._roots = roots
+
+    def find_spec(
+        self,
+        name: str,
+        path: Sequence[str] | None = None,
+        target: ModuleType | None = None,
+    ) -> ModuleSpec | None:
+        for finder in sys.meta_path:
+            if finder is self or not hasattr(finder, "find_spec"):
+                continue
+            spec = finder.find_spec(name, path, target)
+            if spec is not None:
+                break
+        else:
+            return None
+        loader = spec.loader
+        if isinstance(loader, SourceFileLoader) and any(
+            Path(loader.path).is_relative_to(root) for root in self._roots
+        ):
+            spec.loader = _SourceLoader(loader.name, loader.path)
+            spec.cached = None
+        return spec
+
+
 def _load_provider(
     value: object,
 ) -> tuple[ViewProvider, ProviderConformance]:
     provider_data = _record(
         value,
-        {"key", "registration", "distribution", "version", "entry_point"},
+        {"key", "registration", "distribution", "version", "entry_point", "source"},
         "provider",
     )
+    source = provider_data["source"]
+    if not isinstance(source, list):
+        raise ValueError("Provider source must be a list")
+    roots = tuple(Path(_text(item, "Provider source path")) for item in source)
+    if roots:
+        sys.meta_path.insert(0, _WorkingTreeFinder(roots))
     key = _text(provider_data["key"], "Provider key")
     registration = _text(provider_data["registration"], "Provider registration")
     distribution = _text(provider_data["distribution"], "Provider distribution")

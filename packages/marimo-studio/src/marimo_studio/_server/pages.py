@@ -676,6 +676,18 @@ def _waiting_response(
             ),
             runtime=request.query_params.get("runtime", "server"),
             view=view_name,
+            # A URL bound to a Studio tab waits for that tab's editor. An
+            # unbound view URL has no editor until a Studio workspace opens.
+            workspace_url=None
+            if STUDIO_CLIENT_QUERY_PARAM in request.query_params
+            else request_reference(
+                request,
+                with_notebook_query(
+                    studio_path(view_name),
+                    request.query_params.multi_items(),
+                    context.routing_query,
+                ),
+            ),
         ),
         status_code=202,
         headers=headers,

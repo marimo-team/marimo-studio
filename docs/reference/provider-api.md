@@ -1040,7 +1040,13 @@ target in different forms.
 
 Each artifact revision records the provider distribution's version and the
 `availability()` version, so an upgrade never reuses output built by the
-earlier version.
+earlier version. For a provider installed from a local directory, such as
+with `uv add --editable ./acme-views`, the revision also covers the metadata
+of each file in the installed provider package. An editable install rebuilds
+its views after each edit, and `marimo edit` rebuilds an open view as soon as
+the file is saved. A non-editable directory install rebuilds them when it is
+reinstalled. Studio reads `info`, the starters, and whether the provider
+defines `render()` once per process, so restart marimo after changing them.
 
 ### Diagnostics
 

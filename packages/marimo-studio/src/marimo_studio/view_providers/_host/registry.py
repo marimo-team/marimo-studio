@@ -87,6 +87,10 @@ from marimo_studio.view_providers._host.starters import (
     validate_starter_plan,
     validate_starters,
 )
+from marimo_studio.view_providers._host.working_tree import (
+    source_digest,
+    working_tree_source,
+)
 
 ENTRY_POINT_GROUP = "marimo_studio.view_provider"
 # Option validation keeps the record type, so a catalog project stays one.
@@ -112,6 +116,7 @@ class ProviderCandidate:
     distribution: str
     version: str
     entry_point: EntryPoint
+    source: tuple[Path, ...] = ()
 
     @property
     def key(self) -> str:
@@ -174,6 +179,9 @@ class _RegisteredProvider:
         self.version = candidate.version
         self.registration = candidate.registration
         self.requirement = requirement
+        # Each isolated operation imports the provider's current files. An
+        # in-process provider runs the code this process imported.
+        self.source = candidate.source if process is not None else ()
         self._provider = provider
         self._registry = registry
         self._process = process
@@ -339,15 +347,18 @@ class _RegisteredProvider:
         return replace(result, diagnostics=_with_tool_problem(result.diagnostics))
 
     def provenance(self) -> ProviderProvenance:
-        """Identify the provider and tool versions that build this provider's views.
+        """Identify the provider code and tool versions that build its views.
 
         The tool version comes from the latest availability check for the
         current tool environment. Builds check availability first, so a tool
-        upgrade reaches the next build.
+        upgrade reaches the next build. An isolated provider installed from a
+        directory also contributes a digest of its package files, so an edit
+        to the provider reaches the next build.
         """
         availability = self._availability.get(current_tools().identity)
         return self._conformance.provenance(
-            (availability or self.availability()).version
+            (availability or self.availability()).version,
+            source_digest(self.source),
         )
 
     def _local_provider(self) -> ViewProvider:
@@ -425,6 +436,7 @@ class ProviderRegistry:
                         distribution.version if distribution is not None else "unknown"
                     ),
                     entry_point=point,
+                    source=working_tree_source(point),
                 )
             )
         return cls(tuple(candidates), requirements, isolate_operations=True)
@@ -506,6 +518,7 @@ class ProviderRegistry:
                                 candidate.distribution,
                                 candidate.version,
                                 candidate.entry_point.value,
+                                tuple(str(path) for path in candidate.source),
                             ),
                         )
                     )

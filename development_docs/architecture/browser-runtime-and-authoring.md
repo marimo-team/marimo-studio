@@ -357,19 +357,11 @@ first document.
 
 ## Editor languages
 
-`SourceEditor` accepts provider language IDs. The shipped CodeMirror modes load
-on demand for:
-
-- HTML
-- CSS
-- JavaScript
-- TypeScript
-- JSX
-- TSX
-
-JSON, Markdown, Svelte, text, TOML, XML, and unknown language IDs use plain
-text. Read-only documents support navigation, selection, search, and copy while
-suppressing edits and saves.
+`SourceEditor` accepts provider language IDs. It loads a CodeMirror mode on
+demand for each ID in `packages/protocol/fixtures/source-languages.json`, the
+IDs that Studio and its built-in providers report. `plaintext` and unknown
+language IDs use plain text. Read-only documents support navigation, selection,
+search, and copy while suppressing edits and saves.
 
 Language support is presentation policy. Providers report language IDs and
 remain independent of CodeMirror.
