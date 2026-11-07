@@ -848,14 +848,20 @@ def test_render_binds_notebook_values(
 
 @pytest.mark.pixi
 @tectonic
-def test_notebook_text_longer_than_a_tex_line_still_renders(tmp_path: Path) -> None:
-    project = _project(
-        tmp_path, _document("\\sbox0{\\marimovalue{words}\\marimovalue{run}}Ready")
-    )
+@pytest.mark.parametrize(
+    "text",
+    [
+        pytest.param(" ".join(["word"] * 41_000), id="words"),
+        pytest.param("x" * 201_000, id="run"),
+    ],
+)
+def test_notebook_text_longer_than_a_tex_line_still_renders(
+    tmp_path: Path, text: str
+) -> None:
+    # TeX reads a source line of at most 200,000 characters.
+    project = _project(tmp_path, _document("\\sbox0{\\marimovalue{text}}Ready"))
 
-    _output, result = _render(
-        project, {"words": " ".join(["word"] * 60_000), "run": "x" * 250_000}
-    )
+    _output, result = _render(project, {"text": text})
 
     assert result.diagnostics == ()
     assert result.main == PurePosixPath("main.pdf")
