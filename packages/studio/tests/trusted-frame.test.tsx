@@ -17,21 +17,31 @@ it("forwards the host's browser permissions", () => {
   );
 });
 
-it("delegates fullscreen to an opaque preview document", () => {
+const policy = {
+  sandbox: "allow-forms allow-scripts",
+  allow: "fullscreen *; screen-wake-lock *",
+};
+
+it("applies the server's presentation frame policy", () => {
   render(
-    <PreviewFrame frameRef={vi.fn()} runtime="server" title="Presentation" view="dashboard" />,
+    <PreviewFrame
+      frameRef={vi.fn()}
+      policy={policy}
+      runtime="server"
+      title="Presentation"
+      view="dashboard"
+    />,
   );
   const frame = screen.getByTitle("Presentation");
-  expect(frame.getAttribute("allow")?.split(/;\s*/u)).toContain("fullscreen *");
-  const sandbox = frame.getAttribute("sandbox")?.split(/\s+/u);
-  expect(sandbox).toContain("allow-scripts");
-  expect(sandbox).not.toContain("allow-same-origin");
+  expect(frame).toHaveAttribute("sandbox", "allow-forms allow-scripts");
+  expect(frame).toHaveAttribute("allow", "fullscreen *; screen-wake-lock *");
 });
 
 it("leaves a trusted server preview on the host origin", () => {
   render(
     <PreviewFrame
       frameRef={vi.fn()}
+      policy={policy}
       runtime="server"
       sameOrigin
       title="Trusted presentation"
@@ -48,6 +58,7 @@ it("keeps a visible preview inert until its runtime is ready", () => {
     <PreviewFrame
       active
       frameRef={frameRef}
+      policy={policy}
       interactive={false}
       runtime="server"
       title="dashboard custom view using server"
@@ -62,6 +73,7 @@ it("keeps a visible preview inert until its runtime is ready", () => {
     <PreviewFrame
       active
       frameRef={frameRef}
+      policy={policy}
       interactive
       runtime="server"
       title="dashboard custom view using server"

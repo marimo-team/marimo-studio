@@ -36,7 +36,6 @@ from .app_test_support import (
     _live_test_session,
     _mount_support_url,
     _presentation_fallback_url,
-    _presentation_frame_url,
     _runtime_config,
     _view_support_url,
 )
@@ -64,7 +63,7 @@ def test_preview_event_subscription_survives_publication_with_renewal_authority(
     monkeypatch.setattr("marimo_studio._server.support.change_events", scoped_events)
     with TestClient(app) as client:
         shell = client.get("/dashboard/")
-        presentation = client.get(_presentation_frame_url(shell))
+        presentation = client.get(_presentation_fallback_url(shell))
         renewal = _editor_mount_value(presentation.text, "renewalToken")
         root = f"/_marimo-studio/presentation/{renewal}/"
         instance = server_instance_id(str(_session_manager(app).skew_protection_token))
@@ -212,7 +211,7 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
             urlsplit(initial.headers["location"]).query
         )
         shell = client.get(initial.headers["location"])
-        frame_url = _presentation_frame_url(shell)
+        frame_url = _presentation_fallback_url(shell)
         assert WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM not in parse_qs(
             urlsplit(frame_url).query
         )

@@ -25,7 +25,6 @@ from .app_test_support import (
     _live_test_session,
     _mount_support_url,
     _presentation_fallback_url,
-    _presentation_frame_url,
     _view_support_url,
 )
 
@@ -74,7 +73,7 @@ def test_document_renewal_cannot_rebind_its_native_runtime_session(
     _session_manager(app).get_session_by_file_key = lambda _file_key: live_session
     with TestClient(app) as client:
         shell = client.get("/dashboard/")
-        frame_url = _presentation_frame_url(shell)
+        frame_url = _presentation_fallback_url(shell)
         assigned_runtime_session = parse_qs(urlsplit(frame_url).query)["session_id"][0]
         presentation = client.get(frame_url)
         presentation_session = _editor_mount_value(presentation.text, "sessionId")
@@ -339,7 +338,7 @@ def test_signed_document_refresh_survives_token_authentication(
         )
         authenticated.get(established.headers["location"], follow_redirects=False)
         shell = authenticated.get("/dashboard/")
-        refresh_url = _presentation_frame_url(shell)
+        refresh_url = _presentation_fallback_url(shell)
 
     with TestClient(app) as anonymous:
         refresh = anonymous.get(

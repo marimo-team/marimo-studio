@@ -41,7 +41,6 @@ from .app_test_support import (
     _live_test_session,
     _presentation_fallback_url,
     _presentation_frame_sandbox,
-    _presentation_frame_url,
     _runtime_config,
 )
 
@@ -257,7 +256,7 @@ def test_edit_view_keeps_last_good_artifact_during_source_repairs(
 
     with TestClient(app) as client:
         page = client.get("/dashboard/")
-        presentation = client.get(_presentation_frame_url(page))
+        presentation = client.get(_presentation_fallback_url(page))
         project = client.get("/_marimo-studio/views/dashboard/project").json()
 
     assert page.status_code == 200

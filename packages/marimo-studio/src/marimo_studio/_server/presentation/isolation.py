@@ -26,7 +26,6 @@ from htpy import (
     div,
     head,
     html,
-    iframe,
     link,
     meta,
     script,
@@ -37,10 +36,15 @@ from markupsafe import Markup
 
 from marimo_studio._delivery.html import node_list, render
 
+# Every frame that hosts a view applies this sandbox and permission policy,
+# and presentation responses repeat the sandbox in their CSP. The sandbox
+# omits allow-same-origin, so the page runs with an opaque origin. That origin
+# matches no named origin, so fullscreen and screen wake lock list `*`.
 PRESENTATION_SANDBOX = (
     "allow-downloads allow-forms allow-modals allow-pointer-lock "
     "allow-popups allow-scripts"
 )
+PRESENTATION_FRAME_ALLOW = "clipboard-write; fullscreen *; screen-wake-lock *"
 
 _BRIDGE = r"""(() => {
   // URL fields and the icon link are references from this document. Resolve
@@ -60,39 +64,26 @@ _BRIDGE = r"""(() => {
   });
   const allowedViews = new Set(config.views);
   const privateQueryKeys = new Set(config.privateQueryKeys);
-  const frameBlueprint = document.querySelector(
-    "#marimo-studio-presentation[data-marimo-studio-frame-blueprint]",
-  );
-  let frame = frameBlueprint
-    ? undefined
-    : document.querySelector("#marimo-studio-presentation");
-  if (frame !== undefined && !(frame instanceof HTMLIFrameElement)) return;
-  if (frameBlueprint !== null && !(frameBlueprint instanceof HTMLElement)) return;
-  if (!frame && !frameBlueprint) return;
+  const frameHost = document.querySelector("#marimo-studio-presentation");
+  if (!(frameHost instanceof HTMLElement)) return;
+  let frame;
   let currentView = config.view;
   let currentSearch = location.search;
   let childIdentity;
   let documentClosed = false;
   let activeReplayUrl = config.fallbackUrl;
-  const loadFrame = (url) => {
+  const loadFrame = (source) => {
     if (documentClosed) return;
-    activeReplayUrl = url;
-    if (!frame) {
-      const title = frameBlueprint?.dataset.frameTitle;
-      const sandbox = frameBlueprint?.dataset.frameSandbox;
-      const allow = frameBlueprint?.dataset.frameAllow;
-      if (!frameBlueprint || !title || !sandbox || !allow) return;
-      const created = document.createElement("iframe");
-      created.id = "marimo-studio-presentation";
-      created.title = title;
-      created.setAttribute("sandbox", sandbox);
-      created.setAttribute("allow", allow);
-      created.src = url;
-      frameBlueprint.replaceWith(created);
-      frame = created;
-      return;
-    }
-    frame.src = url;
+    activeReplayUrl = source;
+    const { frameTitle, frameSandbox, frameAllow } = frameHost.dataset;
+    if (!frameTitle || !frameSandbox || !frameAllow) return;
+    frame = document.createElement("iframe");
+    frame.id = "marimo-studio-presentation";
+    frame.title = frameTitle;
+    frame.setAttribute("sandbox", frameSandbox);
+    frame.setAttribute("allow", frameAllow);
+    frame.src = source;
+    frameHost.replaceWith(frame);
   };
   const childMessages = new Set([
     "marimo-studio:navigate-view",
@@ -382,7 +373,7 @@ _BRIDGE = r"""(() => {
       documentClosed = true;
       if (!event.persisted) {
         frame?.remove();
-        frameBlueprint?.remove();
+        frameHost.remove();
       }
     });
     addEventListener("pageshow", (event) => {
@@ -415,6 +406,8 @@ _BRIDGE = r"""(() => {
       location.reload();
     });
     void chooseReplay();
+  } else {
+    loadFrame(config.fallbackUrl);
   }
 })();
 """
@@ -461,29 +454,11 @@ def isolated_presentation_document(
         },
         separators=(",", ":"),
     ).replace("<", "\\u003c")
-    frame_allow = "clipboard-write; fullscreen *"
-    frame_host: Node = (
-        cast(
-            Node,
-            iframe(
-                id="marimo-studio-presentation",
-                src=child_url,
-                title=title_text,
-                sandbox=PRESENTATION_SANDBOX,
-                allow=frame_allow,
-            ),
-        )
-        if replay_scope is None
-        else cast(
-            Node,
-            div(
-                id="marimo-studio-presentation",
-                data_marimo_studio_frame_blueprint="",
-                data_frame_title=title_text,
-                data_frame_sandbox=PRESENTATION_SANDBOX,
-                data_frame_allow=frame_allow,
-            ),
-        )
+    frame_host = div(
+        id="marimo-studio-presentation",
+        data_frame_title=title_text,
+        data_frame_sandbox=PRESENTATION_SANDBOX,
+        data_frame_allow=PRESENTATION_FRAME_ALLOW,
     )
     return render(
         cast(

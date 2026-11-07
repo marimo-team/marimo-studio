@@ -72,6 +72,7 @@ const StudioWorkspace = ({
           editorWorkspace={editorWorkspace}
           editorFrame={editorFrame}
           frameRef={services.frameRef}
+          presentationFrame={bootstrap.presentationFrame}
           source={services.source}
           trustedServerRuntime={bootstrap.trustedServerRuntime}
           workspace={workspace}

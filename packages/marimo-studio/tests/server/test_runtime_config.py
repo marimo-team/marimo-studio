@@ -23,7 +23,7 @@ from ..helpers import update_notebook_config
 from .app_test_support import (
     _editor_mount_value,
     _mount_support_url,
-    _presentation_frame_url,
+    _presentation_fallback_url,
     _runtime_config,
     _studio_bootstrap,
     _view_support_url,
@@ -176,7 +176,7 @@ def test_studio_runtime_config_binds_without_exposing_its_editor_session(
             "/dashboard/",
             params={"marimo_studio_client": "browser-client-1234"},
         )
-        frame_url = _presentation_frame_url(document)
+        frame_url = _presentation_fallback_url(document)
         invalid_frame = client.get(f"{frame_url}&marimo_studio_lifecycle=0")
         presentation = client.get(f"{frame_url}&marimo_studio_lifecycle=7")
         presentation_session_id = _editor_mount_value(

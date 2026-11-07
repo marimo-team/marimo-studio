@@ -1,3 +1,5 @@
+import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
+
 import { useLayoutEffect, type RefCallback } from "react";
 
 import type { EditorWorkspace } from "../../shared/editor-workspace.ts";
@@ -14,6 +16,7 @@ interface WorkspaceProps {
   editorFrame: HTMLIFrameElement;
   editorWorkspace?: EditorWorkspace;
   frameRef: (frameId: string) => RefCallback<HTMLIFrameElement>;
+  presentationFrame: StudioBootstrap["presentationFrame"];
   source: SourceController;
   trustedServerRuntime: boolean;
   workspace: WorkspaceModel;
@@ -23,6 +26,7 @@ export const Workspace = ({
   editorFrame,
   editorWorkspace,
   frameRef,
+  presentationFrame,
   source,
   trustedServerRuntime,
   workspace,
@@ -100,6 +104,7 @@ export const Workspace = ({
               return (
                 <PreviewFrame
                   key={frame.id}
+                  policy={presentationFrame}
                   runtime={frame.runtime}
                   view={frame.view}
                   primary={frame.primary}

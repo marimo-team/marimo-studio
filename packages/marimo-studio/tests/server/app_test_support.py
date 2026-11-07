@@ -50,10 +50,12 @@ class _BootstrapParser(HTMLParser):
 
 
 class _PresentationFrameParser(HTMLParser):
+    """Read the frame policy the wrapper applies when its bridge creates the frame."""
+
     def __init__(self) -> None:
         super().__init__()
-        self.src: str | None = None
         self.sandbox: frozenset[str] | None = None
+        self.allow: frozenset[str] | None = None
 
     def handle_starttag(
         self,
@@ -61,17 +63,16 @@ class _PresentationFrameParser(HTMLParser):
         attrs: list[tuple[str, str | None]],
     ) -> None:
         values = dict(attrs)
-        if tag == "iframe" and values.get("id") == "marimo-studio-presentation":
-            self.src = values.get("src")
-            sandbox = values.get("sandbox")
-            self.sandbox = frozenset(sandbox.split()) if sandbox is not None else None
-        if (
-            tag == "div"
-            and values.get("id") == "marimo-studio-presentation"
-            and "data-marimo-studio-frame-blueprint" in values
-        ):
+        if tag == "div" and values.get("id") == "marimo-studio-presentation":
             sandbox = values.get("data-frame-sandbox")
             self.sandbox = frozenset(sandbox.split()) if sandbox is not None else None
+            self.allow = _permissions(values.get("data-frame-allow"))
+
+
+def _permissions(allow: str | None) -> frozenset[str] | None:
+    if allow is None:
+        return None
+    return frozenset(item.strip() for item in allow.split(";") if item.strip())
 
 
 class _RuntimeScriptParser(HTMLParser):
@@ -165,13 +166,6 @@ def _mount_support_url(response: Response) -> str:
         _artifact_base(response),
         _editor_mount_value(response.text, "supportUrl"),
     )
-
-
-def _presentation_frame_url(response: Response) -> str:
-    parser = _PresentationFrameParser()
-    parser.feed(response.text)
-    assert parser.src is not None
-    return _resolved(response, parser.src)
 
 
 def _presentation_frame_sandbox(document: str) -> frozenset[str]:

@@ -12,6 +12,11 @@ export const studioBootstrap: StudioBootstrap = {
   ],
   defaultRuntime: "server",
   trustedServerRuntime: false,
+  presentationFrame: {
+    sandbox:
+      "allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-scripts",
+    allow: "clipboard-write; fullscreen *; screen-wake-lock *",
+  },
   clientId: "browser-client-1234",
   serverInstance: "server-instance",
   urls: {

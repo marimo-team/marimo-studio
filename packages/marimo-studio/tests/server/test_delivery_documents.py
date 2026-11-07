@@ -123,7 +123,7 @@ def test_run_wasm_uses_the_trusted_wrapper_without_session_preservation(
     assert wrapper_config["runtime"] == "wasm"
     assert wrapper_config["runtimeExplicit"] is True
     assert wrapper_config["replayEnabled"] is False
-    assert 'data-marimo-studio-frame-blueprint=""' in wrapper.text
+    assert "<iframe" not in wrapper.text
     assert "<marimo-cell" not in wrapper.text
     assert child.status_code == 200
     assert _editor_mount_value(child.text, "runtime") == "wasm"
@@ -173,6 +173,7 @@ def test_run_preserved_session_ignores_forged_studio_frame_identity(
     sandbox_policy = raw_capability.headers["content-security-policy"].split()
     assert sandbox_policy[0] == "sandbox"
     assert "allow-same-origin" not in sandbox_policy[1:]
+    assert set(sandbox_policy[1:]) == _presentation_frame_sandbox(response.text)
     assert "<marimo-cell" in raw_capability.text
     assert artifact_html.status_code == 200
     assert artifact_html.headers["content-type"].startswith("text/html")

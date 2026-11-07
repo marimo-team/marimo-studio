@@ -48,6 +48,11 @@ const ready: StudioBootstrap = {
   runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
   trustedServerRuntime: false,
+  presentationFrame: {
+    sandbox:
+      "allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-scripts",
+    allow: "clipboard-write; fullscreen *; screen-wake-lock *",
+  },
   clientId: host.clientId,
   serverInstance: host.serverInstance,
   serverToken: host.serverToken,

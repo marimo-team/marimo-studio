@@ -1,3 +1,5 @@
+import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
+
 import { type IframeHTMLAttributes, type RefCallback, useLayoutEffect, useRef } from "react";
 
 import type { Rectangle } from "./model.ts";
@@ -11,7 +13,6 @@ type TrustedFrameProps = Omit<IframeHTMLAttributes<HTMLIFrameElement>, "ref" | "
 
 export const TrustedFrame = ({
   active = true,
-  allow = "clipboard-write",
   frameRef,
   interactive = active,
   title,
@@ -24,7 +25,6 @@ export const TrustedFrame = ({
       ref={frameRef}
       {...attributes}
       title={title}
-      allow={allow}
       aria-busy={active && !interactive ? true : undefined}
       hidden={!active}
       inert={!active || !interactive}
@@ -33,12 +33,14 @@ export const TrustedFrame = ({
 );
 
 export const PreviewFrame = ({
+  policy,
   primary = true,
   runtime,
   sameOrigin = false,
   view,
   ...props
 }: TrustedFrameProps & {
+  policy: StudioBootstrap["presentationFrame"];
   primary?: boolean;
   runtime: string;
   sameOrigin?: boolean;
@@ -46,16 +48,12 @@ export const PreviewFrame = ({
 }) => (
   <TrustedFrame
     {...props}
-    allow="clipboard-write; fullscreen *"
+    allow={policy.allow}
     data-preview-frame=""
     data-preview-cache-runtime={runtime}
     data-preview-runtime-frame={primary ? runtime : undefined}
     data-preview-view-frame={view}
-    sandbox={
-      sameOrigin
-        ? undefined
-        : "allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-scripts"
-    }
+    sandbox={sameOrigin ? undefined : policy.sandbox}
   />
 );
 
