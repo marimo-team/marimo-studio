@@ -362,8 +362,8 @@ print(await view.preview_url(runtime="server"))
 build` prints each as `warning <code>: <message>`, returns them under `issues`
 with `--json`, and exits with status 0. `view inspect` repeats the development
 build's warnings. Resolve or explain each warning before browser checks, because a build that only warned
-can still crash. A `svelte-check-store-rune-conflict` warning builds
-successfully, and the page then fails with `view-script-error`.
+can still crash. A `svelte-check-store-rune-conflict` warning can build
+successfully and then fail the page with `view-script-error`.
 
 `inspect()` reports development freshness. For a run-mode server, build with
 `profile="production"`, request `preview_url(runtime="server", exact=True)`, and

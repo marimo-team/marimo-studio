@@ -17,11 +17,12 @@ immutable. Its primary API is `numRows`, `numCols`, `names`, `schema`,
 `toArray()`, or `undefined` for an unknown name. `column.toArray()` returns a
 typed array, such as `Float64Array` or `Int32Array`, for a numeric, date, or
 timestamp column with no nulls. Dates and timestamps read as epoch
-milliseconds. It returns a plain `Array` for a numeric column with a null and
-for every string and boolean column, with `null` for each missing value. A list
+milliseconds. It returns a plain `Array` for a numeric, date, or timestamp column with a
+null and for every string and boolean column, with `null` for each missing value. A list
 column returns an `Array` of cells. A cell is a typed array when the batch's
 list values are floats or integers up to 32 bits with no nulls, and an `Array`
-otherwise. Use `Array.from(cell)` when code needs a plain array. Copy an array
+otherwise. A null cell is `null`. Use `Array.from(cell)` on a non-null cell when
+code needs a plain array. Copy an array
 from `toArray()` before sorting or writing to it, because it can be the table's
 own array.
 
