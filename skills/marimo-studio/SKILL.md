@@ -28,6 +28,26 @@ This core contains the ordinary authoring workflow. Read conditional references
 when the task needs their detail. Reuse this briefing while the Python
 environment and Studio installation remain unchanged.
 
+## Choose the CLI or code mode
+
+| Work                                                                  | Use                                                                                    | Requires                                    |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Create, build, inspect, or validate a view of a saved notebook        | `marimo-studio view` commands and `marimo-studio validate` with `--target notebook.py` | The saved notebook file                     |
+| Read live values, run changed cells, or activate a view with `show()` | `marimo pair execute` with this guide's Python examples                                | A running notebook with its Studio tab open |
+
+Saved-notebook work runs from the terminal with no server, browser, or session:
+
+```console
+uvx marimo-studio view create dashboard --target notebook.py
+uvx marimo-studio view build dashboard --target notebook.py
+uvx marimo-studio view inspect dashboard --target notebook.py
+uvx marimo-studio validate dashboard --target notebook.py
+```
+
+An agent already paired with the notebook can stay in code mode for this work.
+`marimo-studio view show dashboard --target notebook.py --server <URL>` also
+activates a view from the terminal.
+
 ## Bind to the intended notebook
 
 Live Studio work runs in the notebook's kernel through marimo code mode.
@@ -88,8 +108,7 @@ sandboxed kernels import the same Studio as the server. For views across
 several notebooks, serve their folder as
 [setup](references/setup.md#serve-several-notebooks) describes. Create, edit,
 and run cells through `marimo._code_mode`, following the `pair --help`
-workflow. Without a way to run the notebook, continue with
-saved-notebook authoring from a terminal.
+workflow.
 
 Inside notebook code mode, combine connection with the first inspection:
 
@@ -105,10 +124,9 @@ Reimport and reacquire the workspace and view in every code-mode execution.
 Scratch variables and handles may not survive between calls. Use the user's
 intended notebook and view, including when another view is currently visible.
 
-From a terminal, use `marimo_studio.authoring.open_workspace("notebook.py")`
-or CLI commands with `--target notebook.py`. Preview URL lookup also needs the
-running `server` URL or `--server`. See [setup](references/setup.md) for
-connection, environment selection, or missing capabilities.
+From a terminal, preview URL lookup needs the running `server` URL or
+`--server`. See [setup](references/setup.md) for connection, environment
+selection, or missing capabilities.
 
 `workspace.inspect_notebook()` inspects saved source. Its optional runtime
 inspection executes an isolated process. Neither is a snapshot of the live
@@ -316,6 +334,14 @@ references on authored regions. Read [projections](references/projections.md)
 for adapters, Arrow tables, dynamic selectors, and the complete source-linking
 contract. These conventions apply even when Lens is not installed.
 
+Keep state only the view reads, such as an open panel or a slide number, in
+the URL fragment, and state Python reads in `mo.query_params()`. In `marimo
+run`, a different query selects a different Python session, even with
+`preserve_session`, and a fragment change stays in the current document and
+session. In `marimo edit`, tabs share one kernel.
+[Link views and keep state](https://marimo-team.github.io/marimo-studio/guide/navigation-and-sessions.md)
+has the complete URL contract.
+
 ## Build, show, and verify
 
 After editing, build and check source freshness in the same call:
@@ -327,8 +353,17 @@ view = marimo_studio.agent.current_workspace().view("dashboard")
 build = await view.build()
 inspection = await view.inspect()
 print(build.revision, inspection.freshness)
+for issue in build.issues:
+    print(issue.severity, issue.code, issue.source, issue.message, issue.hint)
 print(await view.preview_url(runtime="server"))
 ```
+
+`build.issues` lists the warnings of a successful build. `marimo-studio view
+build` prints each as `warning <code>: <message>`, returns them under `issues`
+with `--json`, and exits with status 0. `view inspect` repeats the development
+build's warnings. Resolve or explain each warning before browser checks, because a build that only warned
+can still crash. A `svelte-check-store-rune-conflict` warning builds
+successfully, and the page then fails with `view-script-error`.
 
 `inspect()` reports development freshness. For a run-mode server, build with
 `profile="production"`, request `preview_url(runtime="server", exact=True)`, and
@@ -348,7 +383,8 @@ tool or interpreter. Keep the edit-mode notebook session open.
 Wait for `html[data-marimo-studio-state="ready"]`, then verify the actual
 application. Studio readiness does not prove a chart rendered or a control's
 dependent values updated. For exact URLs, authentication, revision comparison,
-or stalled readiness, read [verification](references/verification.md).
+stalled readiness, plain-HTTP origins, or iPhone and Safari checks, read
+[verification](references/verification.md).
 
 Exercise affected controls and navigation. Check projected values, analytical
 prose, and custom charts after a relevant input changes. Inspect wide and
@@ -361,10 +397,13 @@ source and credentials on the server while sending projected outputs to
 visitors. The Browser runtime sends notebook source and browser-accessible data
 to visitors. The Prepared runtime sends prepared outputs and public files,
 including unselected states. Keep secrets out of browser delivery. A live preview does not prove
-an exported site's behavior. Verify the actual export over HTTP.
+an exported site's behavior. Verify the actual export over HTTP at the origin
+visitors open, as [verification](references/verification.md#verify-at-the-origin-people-open)
+shows.
 
-Report the notebook, view, changed source, artifact revision, and checks
-performed. Keep the notebook and view runnable.
+Report the notebook, view, changed source, artifact revision, checks
+performed, and each build warning you kept with its reason. Keep the notebook
+and view runnable.
 
 ## Read a conditional reference
 

@@ -11,11 +11,32 @@ their corresponding browser values. An eager dataframe that the active Python
 environment can write as Arrow IPC becomes a shared
 [Flechette `Table`](https://github.com/uwdata/flechette). Treat the table as
 immutable. Its primary API is `numRows`, `numCols`, `names`, `schema`,
-`get(index)`, `getChild(name)`, `select(names)`, and `toColumns()`. Call
-`toArray()` when a consumer requires row objects. Integer columns, including
-64-bit integers, read as numbers, list cells as arrays, and dates and
-timestamps as epoch milliseconds. Reading a 64-bit value beyond
-`Number.MAX_SAFE_INTEGER` throws.
+`get(index)`, `getChild(name)`, `select(names)`, and `toColumns()`.
+
+`getChild(name)` returns a column with `length`, `nullCount`, `at(index)`, and
+`toArray()`, or `undefined` for an unknown name. `column.toArray()` returns a
+typed array, such as `Float64Array` or `Int32Array`, for a numeric, date, or
+timestamp column with no nulls. Dates and timestamps read as epoch
+milliseconds. It returns a plain `Array` for a numeric column with a null and
+for every string and boolean column, with `null` for each missing value. A list
+column returns an `Array` of cells. A cell is a typed array when the batch's
+list values are floats or integers up to 32 bits with no nulls, and an `Array`
+otherwise. Use `Array.from(cell)` when code needs a plain array. Copy an array
+from `toArray()` before sorting or writing to it, because it can be the table's
+own array.
+
+64-bit integers read as numbers in the Python and Browser runtimes, and reading
+a value beyond `Number.MAX_SAFE_INTEGER` throws. A Prepared export reads them as
+`bigint`, and `bigint + 1` throws `TypeError`. Convert non-null values with
+`Number()` in code that runs in both, because `Number(null)` is `0`.
+
+Read columns for charts, tables, and aggregates. `table.toArray()` and
+`table.get(index)` build one object per row: on a 1,000,000-row table in
+Chromium, `table.toArray()` took about 300 ms and `toArray()` on one float
+column about 1 ms. Each `toArray()` call on a string column decodes it again,
+so keep the result. The
+[value codecs reference](https://marimo-team.github.io/marimo-studio/reference/projections#value-codecs)
+has the column table.
 
 React and Svelte starter helpers export `getMarimoDataSource(table)`. It returns
 the table's codec, fingerprint, and shared Arrow IPC bytes under

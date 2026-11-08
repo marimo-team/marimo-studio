@@ -98,6 +98,14 @@ Serve the folder over HTTP and keep its relative paths intact:
 uv run --no-project python -m http.server --bind 127.0.0.1 --directory dist/dashboard
 ```
 
+The Prepared reader verifies each file with
+[Web Crypto](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API),
+which browsers offer only in a
+[secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts):
+HTTPS or a loopback host such as `localhost`. Over plain HTTP on any other host,
+the page stops at `Export verification requires Web Crypto SHA-256.` Serve the folder
+through HTTPS when visitors open it from another machine.
+
 The site is relocatable but not offline. Remote scripts, fonts, maps, and data
 keep their network requirements, and the host's
 [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP)

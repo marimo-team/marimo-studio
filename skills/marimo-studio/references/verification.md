@@ -111,3 +111,88 @@ as blocked if the environment cannot capture or inspect images.
 
 Use `view.validate(level="static")` for saved source and projection declarations,
 or `level="runtime"` to execute the saved notebook in an isolated process.
+
+## Verify at the origin people open
+
+Browsers treat loopback hosts such as `localhost` and `127.0.0.1` as
+[secure contexts](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts),
+so a local check can pass while the same page fails for someone opening it
+over plain HTTP on another host. `navigator.gpu`, `navigator.clipboard`, and
+`crypto.subtle` exist only in a secure context, and a Prepared export verifies
+its files with `crypto.subtle`.
+
+Reproduce a remote plain-HTTP origin with
+[Playwright](https://playwright.dev/python/), a browser automation library.
+Chromium's `--host-resolver-rules` flag points a made-up host name at this
+machine:
+
+```console
+uvx --from playwright playwright install chromium webkit
+```
+
+```python
+# check_view.py
+import sys
+
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(args=["--host-resolver-rules=MAP insecure.test 127.0.0.1"])
+    page = browser.new_page()
+    page.on("console", lambda message: print(message.type, message.text))
+    page.on("pageerror", lambda error: print("pageerror", error))
+    page.goto(sys.argv[1])
+    page.wait_for_selector(
+        'html[data-marimo-studio-state="ready"], html[data-marimo-studio-state="error"]',
+        state="attached",
+    )
+    print("state:", page.evaluate("document.documentElement.dataset.marimoStudioState"))
+    print("diagnostics:", page.evaluate("marimoStudio.diagnostics()"))
+    frame = page.query_selector("iframe#marimo-studio-presentation")
+    view = frame.content_frame() if frame else page
+    print("secure context:", view.evaluate("isSecureContext"))
+    browser.close()
+```
+
+```console
+uv run --no-project --with playwright python check_view.py http://insecure.test:<port>/dashboard/
+```
+
+The script prints `secure context: False`, and `True` for
+`http://localhost:<port>/dashboard/`. On plain HTTP it also prints browser
+notices about the clipboard and COOP headers. The same script runs against a
+Prepared export or a `view preview` URL, which render in the top-level document.
+A Prepared export on that origin prints `state: error` with
+`static-runtime-failed`.
+
+## Run WebKit for iPhone and Safari
+
+A device descriptor such as Playwright's `iPhone 14` sets the viewport and user
+agent, and the engine comes from the browser you launch. `requestIdleCallback`
+exists in Chromium under that descriptor and is undefined in WebKit, so a view
+that calls it passes Chromium emulation and crashes on an iPhone. Replace the
+launch and page lines in `check_view.py`, then open a `localhost` URL, because
+WebKit has no resolver flag:
+
+```python
+browser = p.webkit.launch()
+page = browser.new_page(**p.devices["iPhone 14"])
+```
+
+Treat a printed `pageerror` as a failed check. A classic inline script that
+throws can leave the state at `ready`. Playwright's WebKit is a desktop build
+of Safari's engine. Use a real iPhone or the iOS Simulator for touch and
+iOS-only behavior.
+
+## Read a framed view's console
+
+On a view's public address, the view, its result hosts, and its console output
+live in `iframe#marimo-studio-presentation`. In the Studio tab, find the view's
+frame in `page.frames`. `page.on("console", ...)` in `check_view.py` receives
+messages from every frame, and `content_frame()` evaluates inside it.
+
+To check the view at the top level, open a `view preview` or `preview_url()`
+URL. It applies the same sandbox and puts the console, the full `marimoStudio`
+API, and the result hosts on the page. The frame's own `src` needs the wrapper's
+session. Opened alone, it stays at `connecting` or fails with
+`kernel-disconnected`.

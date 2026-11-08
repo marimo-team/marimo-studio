@@ -107,8 +107,9 @@ dependency.
 - Use the versions pinned by `package.json`, `deno.json`, and `deno.lock`.
   TypeScript source imports may retain their `.ts` suffix.
 
-Studio's Svelte build runs `svelte-check` before Vite. Treat that build as the
-acceptance boundary for actions, runes, imports, and packaged assets.
+Studio's Svelte build runs `svelte-check` before Vite. Treat a build with no
+unexplained warnings as the acceptance boundary for actions, runes, imports, and
+packaged assets.
 
 ## Link custom results to notebook inputs
 

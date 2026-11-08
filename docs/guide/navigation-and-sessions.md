@@ -28,6 +28,14 @@ and `dist/analysis/report/`.
 
 ## Share state in the URL
 
+Choose the URL part by what reads the state. Python reads the query through
+`mo.query_params()`, and page code reads the fragment. In `marimo run`, each
+page load starts a [session](../reference/glossary.md#session), and a different
+query selects a different session, even with `preserve_session`. In `marimo
+edit`, tabs share one kernel. A fragment change stays in the current document
+and session, so state only the page uses, such as an open panel or a slide
+number, belongs there.
+
 Read and write query parameters in the notebook with `mo.query_params()`:
 
 ```python

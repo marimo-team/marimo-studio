@@ -132,6 +132,7 @@ Review public files, data URLs, authored browser code, and remote dependencies
 before publishing.
 
 Serve the completed export over HTTP and exercise its controls and projected
-results. Verify a failed state selection retains the preceding display when
+results. A Prepared export opens only over HTTPS or a loopback host, as
+[verification](verification.md#verify-at-the-origin-people-open) shows. Verify a failed state selection retains the preceding display when
 the view includes recovery behavior. A live preview and an exported view need
 their own runtime evidence.
