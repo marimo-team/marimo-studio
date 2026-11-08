@@ -1,0 +1,1 @@
+self.classicChunk = "classic chunk";

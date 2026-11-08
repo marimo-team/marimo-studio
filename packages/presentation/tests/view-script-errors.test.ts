@@ -110,6 +110,32 @@ test("browser warnings and code outside the view files leave the page ready", as
   expect(pageState()).toBe("ready");
 });
 
+test("worker failures from before startup and after it warn without failing the view", async () => {
+  globalThis.__MARIMO_STUDIO_WORKER_ERRORS__ = [
+    { url: viewFile("assets/map.worker.js"), message: "Uncaught TypeError: rows is undefined" },
+    { url: "blob:null/1234", message: "" },
+  ];
+  const { renderedViewDiagnostics } = await readyView();
+
+  globalThis.__MARIMO_STUDIO_WORKER_ERRORS__?.push({
+    url: viewFile("assets/late.worker.js"),
+    message: `Failed to load ${viewFile("assets/late.worker.js")} after http://other.test/token/x.js`,
+  });
+
+  const warnings = renderedViewDiagnostics().filter(
+    (diagnostic) => diagnostic.code === "view-worker-error",
+  );
+  expect(warnings.map(({ severity, message }) => [severity, message])).toEqual([
+    ["warning", "worker assets/map.worker.js: Uncaught TypeError: rows is undefined"],
+    ["warning", "inline worker: failed to start"],
+    [
+      "warning",
+      "worker assets/late.worker.js: Failed to load assets/late.worker.js after (worker URL)",
+    ],
+  ]);
+  expect(pageState()).toBe("ready");
+});
+
 test("a crash before observers start shows as an error once they start", async () => {
   vi.resetModules();
   const [{ watchViewScriptErrors }, observer, config] = await Promise.all([

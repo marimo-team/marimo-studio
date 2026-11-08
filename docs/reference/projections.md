@@ -456,6 +456,10 @@ the first one with its built file and position, such as
 from Studio's runtime, notebook files, and remote scripts, and browser warnings
 such as ResizeObserver loop notices, leave the state unchanged.
 
+A worker's `error` event also leaves the state unchanged.
+`marimoStudio.diagnostics()` lists it as a `view-worker-error` warning, with the
+worker's file.
+
 A failed build leaves the state as it was and keeps the previous build on
 screen. The page shows an alert that starts with `Latest build failed`, and
 `marimoStudio.diagnostics()` lists the build's first error, such as

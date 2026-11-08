@@ -106,6 +106,18 @@ def test_the_storage_fallback_runs_before_authored_head_scripts() -> None:
     assert "<" not in scripts[fallback]
 
 
+def test_the_worker_fallback_runs_before_authored_head_scripts() -> None:
+    scripts = _rendered_head_scripts('<script src="vendor/map-worker.js"></script>')
+
+    fallback = next(
+        index
+        for index, item in enumerate(scripts)
+        if "__MARIMO_STUDIO_WORKER_ERRORS__" in item
+    )
+    assert fallback < scripts.index("src:vendor/map-worker.js")
+    assert "<" not in scripts[fallback]
+
+
 @pytest.mark.requires_node
 def test_the_storage_fallback_behaves_like_storage_in_strict_code() -> None:
     (fallback,) = (

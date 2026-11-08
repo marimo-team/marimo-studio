@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from html import escape
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import cast
 
 from htpy import Element, Node, Renderable, base, div, fragment, link, script
@@ -38,6 +39,10 @@ _STORAGE_FALLBACK = (
     "{value:s.get(k(n)),writable:true,enumerable:true,configurable:true}:undefined});"
     "Object.defineProperty(window,'localStorage',{configurable:true,"
     "enumerable:true,get:()=>storage})}})();"
+)
+
+_WORKER_FALLBACK = (
+    Path(__file__).with_name("worker_fallback.js").read_text(encoding="utf-8")
 )
 
 # Browsers refuse module scripts on file:// pages, so an exported site opened
@@ -108,6 +113,7 @@ def runtime_head(
     return fragment[
         node_list(
             script({"data-marimo-studio-runtime": True})[Markup(_STORAGE_FALLBACK)],
+            script({"data-marimo-studio-runtime": True})[Markup(_WORKER_FALLBACK)],
             script({"data-marimo-studio-runtime": True})[Markup(_FILE_PROTOCOL_NOTICE)],
             *(
                 link(

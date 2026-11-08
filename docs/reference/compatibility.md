@@ -69,7 +69,7 @@ you keep into the folder Studio uses, then remove the old folder.
 | [Quarto](https://quarto.org/)                       | 1.9.38 or newer for the Quarto provider                                                       |
 | [Typst](https://typst.app/)                         | The `typst` Python package 0.15 or newer, from the `typst` extra, for the Typst provider      |
 | [Tectonic](https://tectonic-typesetting.github.io/) | 0.15 or newer for the LaTeX provider                                                          |
-| Browser acceptance                                  | Current Chromium on Linux and Windows                                                         |
+| Browser acceptance                                  | Current Chromium on Linux and Windows. Worker startup also runs in WebKit on Linux            |
 
 Windows builds and exports require [Win32 long paths](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation),
 which let Python create staging files beyond the default 260-character path

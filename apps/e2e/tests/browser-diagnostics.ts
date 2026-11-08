@@ -141,7 +141,7 @@ export interface BrowserRequestFailureExpectation extends BrowserRequestMatcher 
 }
 
 export interface BrowserConsoleExpectation {
-  type?: "warning" | "error";
+  type?: "warning" | "error" | "pageerror";
   text: RegExp;
   count?: number;
   required?: boolean;
@@ -255,7 +255,26 @@ const observePageDiagnostics = (
     projectionReadWindows.forEach((window) => window.recordStart(request, owner, start));
     requestRecovery.recordStart(request, owner);
   };
-  const onPageError = (error: Error) => messages.push(`pageerror: ${error.message}`);
+  const claimExpectedConsole = (type: string, text: string): boolean => {
+    const expected = expectedConsole.find((item) => {
+      item.text.lastIndex = 0;
+      return (
+        !item.isRecovered &&
+        item.seen < expectedCardinality(item.count) &&
+        (item.type === type || (item.type === undefined && type !== "pageerror")) &&
+        item.text.test(text)
+      );
+    });
+    if (expected) {
+      expected.seen += 1;
+    }
+    return expected !== undefined;
+  };
+  const onPageError = (error: Error) => {
+    if (!claimExpectedConsole("pageerror", error.message)) {
+      messages.push(`pageerror: ${error.message}`);
+    }
+  };
   const terminalizeSpecializedRequest = (request: Request) => {
     projectionReadWindows.forEach((window) => window.recordFailure(request));
   };
@@ -264,17 +283,7 @@ const observePageDiagnostics = (
     terminalizeSpecializedRequest(request);
   };
   const onConsole = (message: ConsoleMessage) => {
-    const expected = expectedConsole.find((item) => {
-      item.text.lastIndex = 0;
-      return (
-        !item.isRecovered &&
-        item.seen < expectedCardinality(item.count) &&
-        (item.type === undefined || item.type === message.type()) &&
-        item.text.test(message.text())
-      );
-    });
-    if (expected) {
-      expected.seen += 1;
+    if (claimExpectedConsole(message.type(), message.text())) {
       return;
     }
     if (shouldRecordConsoleMessage(message.type(), message.text())) {

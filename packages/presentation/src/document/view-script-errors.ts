@@ -4,6 +4,16 @@ import { readiness } from "../readiness.ts";
 import { configuredView } from "../rendered-view-state.ts";
 import { initialDocumentBaseUrl } from "./base.ts";
 
+interface WorkerFailure {
+  readonly url: string;
+  readonly message: string;
+}
+
+declare global {
+  // The worker fallback fills this before the runtime module loads.
+  var __MARIMO_STUDIO_WORKER_ERRORS__: { push(failure: WorkerFailure): void } | undefined;
+}
+
 // View scripts load from the initial base, and inline module scripts report
 // the page URL captured before Studio rewrites the query.
 const viewBase = initialDocumentBaseUrl;
@@ -55,8 +65,37 @@ const report = (url: string, line: number, column: number, cause: unknown): void
   });
 };
 
+// Browser messages can quote URLs, and Studio's URLs carry the capability.
+const withoutUrls = (message: string): string =>
+  message.replace(/https?:\/\/[^\s'"]+/g, (url) => viewSource(url) ?? "(worker URL)");
+
+const workerName = (url: string): string =>
+  /^(?:blob|data):/.test(url) ? "inline worker" : `worker ${viewSource(url) ?? "script"}`;
+
+// Worker libraries often recover from their own failures, so the view keeps
+// running.
+const reportWorkerFailure = ({ url, message }: WorkerFailure): void => {
+  readiness.warn({
+    code: "view-worker-error",
+    severity: "warning",
+    message: `${workerName(url)}: ${withoutUrls(message) || "failed to start"}`,
+    hint: "Check the worker's script path and startup code. A classic worker that throws while loading reports a load failure.",
+    view: configuredView(),
+    scope: "presentation",
+  });
+};
+
+const drainWorkerFailures = (): void => {
+  const buffered = globalThis.__MARIMO_STUDIO_WORKER_ERRORS__;
+  if (Array.isArray(buffered)) {
+    globalThis.__MARIMO_STUDIO_WORKER_ERRORS__ = { push: reportWorkerFailure };
+    buffered.forEach(reportWorkerFailure);
+  }
+};
+
 /** Fail the page on the first uncaught error from the view's own scripts. */
 export const watchViewScriptErrors = (): (() => void) => {
+  drainWorkerFailures();
   // Browser warnings such as ResizeObserver loops arrive without an error value.
   const onError = (event: ErrorEvent) => {
     if (event.error != null) {
