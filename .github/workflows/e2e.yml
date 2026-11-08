@@ -168,7 +168,7 @@ jobs:
           name: browser-pyodide
           path: apps/e2e/.cache/pyodide
 
-      - name: Install Chromium
+      - name: Install browsers
         run: make _browser-install
 
       - name: Run browser shard
@@ -235,7 +235,7 @@ jobs:
           name: browser-pyodide
           path: apps/e2e/.cache/pyodide
 
-      - name: Install Chromium
+      - name: Install browsers
         run: make _browser-install
 
       - name: Set up pixi

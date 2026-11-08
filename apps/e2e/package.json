@@ -11,7 +11,7 @@
     "e2e:windows": "playwright test tests/forced-interruption.spec.ts tests/vanilla-local-sources.spec.ts",
     "e2e:windows:providers": "playwright test --config playwright.providers.config.ts provider-runtime.spec.ts provider-reveal.spec.ts provider-notebook.spec.ts provider-preview.spec.ts external-provider.spec.ts",
     "e2e:ui": "playwright test --ui",
-    "install-browser": "playwright install --with-deps chromium",
+    "install-browser": "playwright install --with-deps chromium webkit",
     "test": "vp test unit",
     "typecheck": "tsc --noEmit -p scripts/tsconfig.json"
   },

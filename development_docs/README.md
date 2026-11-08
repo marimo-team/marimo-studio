@@ -78,8 +78,8 @@ make setup
 
 `make setup` installs the pixi environment of system tools, the Python and
 [pnpm](https://pnpm.io/) JavaScript workspaces, prepares the pinned Marimo
-frontend source, builds Studio's browser assets, and installs Chromium for
-browser acceptance tests. It also prepares the pinned Pyodide test payload in
+frontend source, builds Studio's browser assets, and installs Chromium and
+WebKit for browser acceptance tests. It also prepares the pinned Pyodide test payload in
 `apps/e2e/.cache/pyodide`. Python tooling runs through `uv`. Browser and
 documentation tooling runs through the pnpm workspace, where
 [Vite Plus](https://viteplus.dev/guide) owns formatting, linting, TypeScript

@@ -34,5 +34,10 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"], ...e2eBrowserUse },
     },
+    {
+      name: "webkit",
+      testMatch: "presentation-workers.spec.ts",
+      use: devices["Desktop Safari"],
+    },
   ],
 });

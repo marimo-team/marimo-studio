@@ -28,6 +28,7 @@ _DOCUMENTS = (
     PurePosixPath("src/scripts/app.js"),
     PurePosixPath("src/scripts/message.js"),
 )
+_WORKERS = PurePosixPath("src/workers")
 _LANGUAGES = {".html": "html", ".css": "css", ".js": "javascript"}
 
 
@@ -91,9 +92,17 @@ class MultiFileProvider:
         entry = project.path_option(
             "entrypoint", default=_ENTRY.as_posix(), suffix=".html"
         )
+        workers = project.root.joinpath(*_WORKERS.parts)
         documents = tuple(
             path
-            for path in (entry, *_DOCUMENTS[1:])
+            for path in (
+                entry,
+                *_DOCUMENTS[1:],
+                *(
+                    _WORKERS / worker.name
+                    for worker in sorted(workers.glob("*.js"))
+                ),
+            )
             if project.root.joinpath(*path.parts).is_file()
         )
         if entry not in documents:

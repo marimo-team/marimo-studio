@@ -168,6 +168,16 @@ export const restoreWorkspace = async () => {
   await copyFixtureFile("studio/notebook/vanilla-local/styles/app.css");
   await copyFixtureFile("studio/notebook/vanilla-local/scripts/app.js");
   await removeViews(workspaceDirectory, "plain");
+  await removeViews(workspaceDirectory, "workers");
+  await removeTree(resolve(staticExportDirectory, "workers"));
+  await copyFixtureFile("workers.py");
+  await cp(
+    resolve(fixtureDirectory, "studio/workers"),
+    resolve(workspaceDirectory, "studio/workers"),
+    {
+      recursive: true,
+    },
+  );
 };
 
 export const restoreHostedWorkspace = async () => {

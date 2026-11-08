@@ -1,0 +1,5 @@
+schema = 1
+provider = "marimo-studio-e2e-provider/web"
+
+[options]
+entrypoint = "src/index.html"

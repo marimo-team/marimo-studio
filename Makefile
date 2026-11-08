@@ -28,7 +28,7 @@ PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: ## Prepare dependencies, system tools, browser assets, and Chromium.
+setup: ## Prepare dependencies, system tools, browser assets, Chromium, and WebKit.
 	$(PIXI) install --locked
 	$(UV) sync --locked --reinstall-package marimo-studio
 	$(PNPM) install --frozen-lockfile
@@ -105,7 +105,7 @@ serve: _serve-notebook _frontend-ready build ## Serve NOTEBOOK in Studio at a Po
 _serve-notebook:
 	@test -n "$(NOTEBOOK)" || { echo "Set NOTEBOOK, as in: make serve NOTEBOOK=examples/athletes.py" >&2; exit 2; }
 
-e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
+e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in the browser.
 	$(PNPM) --filter @marimo-studio/e2e e2e
 	$(PIXI) run --locked bash ./scripts/fetch-tex-packages.sh
 	$(PIXI) run --locked $(PNPM) --filter @marimo-studio/e2e e2e:providers

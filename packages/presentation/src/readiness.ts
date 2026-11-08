@@ -20,6 +20,8 @@ export interface ReadinessSnapshot {
   // A problem beside a working presentation, such as a failed build that
   // keeps the previous publication on screen.
   readonly presentationNotice?: PresentationDiagnostic;
+  // Problems the page carries on through, such as a failed worker.
+  readonly presentationWarnings: readonly PresentationDiagnostic[];
 }
 
 interface Deferred {
@@ -76,6 +78,7 @@ export class ReadinessController {
   // A view script failure belongs to the whole document. Observer restarts
   // keep it, and the next document starts without it.
   private fault: PresentationDiagnostic | undefined;
+  private warnings: readonly PresentationDiagnostic[] = [];
   private hostStates: readonly string[] = [];
   private readonly presentationOwners = new Map<
     PresentationRefreshOwner,
@@ -91,6 +94,7 @@ export class ReadinessController {
     presentation: "ready",
     page: "connecting",
     settled: false,
+    presentationWarnings: [],
   };
   private readonly listeners = new Set<Listener>();
 
@@ -143,6 +147,12 @@ export class ReadinessController {
     }
     this.fault = diagnostic;
     this.updatePresentation();
+    this.commit();
+  }
+
+  /** Record a problem for the rest of this document without failing the page. */
+  warn(diagnostic: PresentationDiagnostic): void {
+    this.warnings = [...this.warnings, diagnostic];
     this.commit();
   }
 
@@ -219,6 +229,7 @@ export class ReadinessController {
       runtimeDiagnostic: this.runtimeDiagnostic,
       presentationDiagnostic: this.presentationDiagnostic,
       presentationNotice: this.presentationNotice,
+      presentationWarnings: this.warnings,
     };
     if (hasDocument(globalThis)) {
       globalThis.document.documentElement.dataset.marimoStudioState = page;
