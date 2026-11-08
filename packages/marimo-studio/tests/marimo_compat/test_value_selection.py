@@ -4,7 +4,9 @@ import base64
 import datetime
 import io
 import math
+import random
 import sys
+from hashlib import sha256
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -398,6 +400,48 @@ def test_kernel_projection_replaces_and_releases_arrow_resources() -> None:
     context.virtual_file_registry.shutdown()
 
 
+def test_kernel_projection_gives_a_seeded_notebook_distinct_arrow_resources() -> None:
+    import polars as pl
+
+    context = _native_output_context()
+    encoder = ValueEncoder(context)
+
+    def read(second: int) -> dict[str, dict[str, object]]:
+        random.seed(42)
+        result = _read_values(
+            {
+                "first": pl.DataFrame({"value": [1]}),
+                "second": pl.DataFrame({"value": [second]}),
+            },
+            _selectors("first", "second"),
+            consumer_id="preview",
+            revision="revision-1",
+            encoder=encoder,
+        )
+        return cast(dict[str, dict[str, object]], result.values)
+
+    def served(descriptor: dict[str, object]) -> bytes:
+        name = cast(str, descriptor["dataUrl"]).removeprefix("./@file/")
+        length, filename = name.split("-", 1)
+        return context.virtual_file_registry.storage.read(filename, int(length))
+
+    with context.install():
+        before = read(2)
+        after = read(3)
+
+        assert after["first"]["dataUrl"] == before["first"]["dataUrl"]
+        assert after["second"]["dataUrl"] not in {
+            before["first"]["dataUrl"],
+            before["second"]["dataUrl"],
+        }
+        for descriptor in after.values():
+            digest = f"sha256:{sha256(served(descriptor)).hexdigest()}"
+            assert digest == descriptor["fingerprint"]
+
+        encoder.close()
+    context.virtual_file_registry.shutdown()
+
+
 def test_kernel_projection_isolates_arrow_resources_by_consumer_and_revision() -> None:
     import polars as pl
 
@@ -633,8 +677,8 @@ def test_kernel_projection_reports_arrow_allocation_failure_locally(
     def fail(*_args: Any, **_kwargs: Any) -> Any:
         raise OSError("storage full")
 
-    monkeypatch.setattr(representations.VirtualFile, "create_and_register", fail)
     with _installed_value_encoder() as (context, encoder):
+        monkeypatch.setattr(context.virtual_file_registry.storage, "store", fail)
         result = _preview_value_read(
             encoder,
             {"frame": _sample_arrow_table(), "count": 3},

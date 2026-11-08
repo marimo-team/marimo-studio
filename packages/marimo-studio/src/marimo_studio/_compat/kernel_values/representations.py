@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
-from marimo._runtime.virtual_file import VirtualFile, random_filename
+from marimo._runtime.virtual_file import VirtualFile
 from marimo._runtime.virtual_file.storage import SharedMemoryStorage
 from marimo_export.values import (
     RepresentationError,
@@ -211,16 +212,18 @@ class ValueEncoder:
             resource = current[1]
             reused = True
         else:
-            resource = (
-                VirtualFile.create_and_register(ipc, "arrow")
-                if self._context is not None
-                and _fits_shared_memory(self._context, len(ipc))
-                else VirtualFile(
-                    random_filename("arrow"),
-                    ipc,
-                    as_data_url=True,
-                )
-            )
+            context = self._context
+            if (
+                context is not None
+                and context.virtual_files_supported
+                and _fits_shared_memory(context, len(ipc))
+            ):
+                # marimo's random_filename draws from the global random module,
+                # so a notebook's random.seed() would reissue a served name.
+                resource = VirtualFile(f"{secrets.token_hex(8)}.arrow", ipc)
+                context.virtual_file_registry.add(resource, context)
+            else:
+                resource = VirtualFile("value.arrow", ipc, as_data_url=True)
             reused = False
         return EncodedValue(
             payload={

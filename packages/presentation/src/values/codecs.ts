@@ -56,19 +56,6 @@ const loadArrowModule = (): Promise<typeof ArrowModule> => {
   return arrowModule;
 };
 
-const sha256Fingerprint = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> => {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) {
-    throw new ValueDecodeError(
-      "value-integrity-unavailable",
-      "The Arrow IPC resource could not be verified because SHA-256 is unavailable.",
-    );
-  }
-  const digest = new Uint8Array(await subtle.digest("SHA-256", bytes));
-  const hex = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `sha256:${hex}`;
-};
-
 const readArrowBytes = async (
   descriptor: ArrowValueDescriptor,
   signal?: AbortSignal,
@@ -118,14 +105,6 @@ const decodeArrowValue = async (
   baseUrl?: string | URL,
 ): Promise<DecodedArrowValue> => {
   const bytes = await readArrowBytes(descriptor, signal, baseUrl);
-  const fingerprint = await sha256Fingerprint(bytes);
-  signal?.throwIfAborted();
-  if (fingerprint !== descriptor.fingerprint) {
-    throw new ValueDecodeError(
-      "value-fingerprint-mismatch",
-      "The Arrow IPC resource did not match its declared fingerprint.",
-    );
-  }
   const { attachMarimoDataSource, tableFromIPC } = await loadArrowModule();
   signal?.throwIfAborted();
   return {
