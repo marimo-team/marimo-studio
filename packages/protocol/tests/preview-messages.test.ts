@@ -246,6 +246,10 @@ test("a public URL message carries one absolute web address", () => {
   assert.ok(parsePreviewMessage(publicUrl("http://127.0.0.1:2718/dashboard/?region=emea")));
   assert.equal(parsePreviewMessage(publicUrl("/dashboard/")), undefined);
   assert.equal(parsePreviewMessage(publicUrl("javascript:alert(1)")), undefined);
+  const prefix = "https://hub.example/";
+  const atLimit = prefix + "a".repeat(32 * 1_024 - prefix.length);
+  assert.ok(parsePreviewMessage(publicUrl(atLimit)));
+  assert.equal(parsePreviewMessage(publicUrl(`${atLimit}a`)), undefined);
   assert.equal(
     parsePreviewMessage({ ...publicUrl("https://hub.example/dashboard/"), lifecycleId: 0 }),
     undefined,

@@ -143,6 +143,9 @@ test("gives each host the view's public address beneath a stripped proxy prefix"
   await tab.goto(`${proxiedUrl()}dashboard/?region=emea`);
   const standalone = presentationFrame(tab).locator("html");
   await expect(standalone).toHaveAttribute("data-marimo-studio-state", "ready");
+  const documentUrl = await standalone.evaluate(() => location.href);
+  expect(documentUrl).toContain("/_marimo-studio/presentation/");
+  expect(documentUrl).toContain("session_id=");
   await standalone.evaluate(() => {
     location.hash = "#details";
   });
