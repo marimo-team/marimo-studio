@@ -243,6 +243,14 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
       "data-marimo-studio-state",
       "ready",
     );
+    await playwrightExpect(page.locator("html")).toHaveAttribute(
+      "data-marimo-studio-state",
+      "ready",
+    );
+    await playwrightExpect(page.locator("html")).toHaveAttribute(
+      "data-marimo-studio-revision",
+      (await rendered.locator("html").getAttribute("data-marimo-studio-revision")) ?? "",
+    );
 
     playwrightExpect(
       await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),

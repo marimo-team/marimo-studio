@@ -1,11 +1,13 @@
 import type { Page, Route } from "@playwright/test";
 
 import {
+  childLifecycleId,
   expect,
   labeledSlider,
   presentationFrame,
   presentationMount,
   readWorkspaceFile,
+  recordViewStateReports,
   recoverRequestAbort,
   test,
   workspaceNotebookPath,
@@ -69,6 +71,7 @@ test("trusted wrapper retains its server-selected runtime", async ({ page }) => 
     workspaceNotebookPath,
     source.replace("# preserve_session = false", "# preserve_session = true"),
   );
+  await recordViewStateReports(page);
   const server = startRunServer();
   const rendered = presentationFrame(page);
   const waitForRunMode = async () => {
@@ -85,18 +88,21 @@ test("trusted wrapper retains its server-selected runtime", async ({ page }) => 
       .locator("html")
       .evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__);
 
-    await rendered.locator("html").evaluate(() => {
-      globalThis.parent.postMessage(
-        {
-          type: "marimo-studio:location-change",
-          runtime: "server",
-          lifecycleId: 1,
-          query: "?runtime=wasm",
-          hash: "",
-        },
-        "*",
-      );
-    });
+    await rendered.locator("html").evaluate(
+      (_root, lifecycleId) => {
+        globalThis.parent.postMessage(
+          {
+            type: "marimo-studio:location-change",
+            runtime: "server",
+            lifecycleId,
+            query: "?runtime=wasm",
+            hash: "",
+          },
+          "*",
+        );
+      },
+      await childLifecycleId(page),
+    );
 
     await expect(page).toHaveURL(`${runServerUrl()}/dashboard/?runtime=server`);
     await page.reload();
@@ -249,6 +255,7 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
     const firstSession = await sessionId(rendered);
 
     second = await page.context().newPage();
+    await recordViewStateReports(second);
     const secondRendered = presentationFrame(second);
     await second.goto(`${runServerUrl()}/dashboard/`);
     await waitForReady(secondRendered);
@@ -263,22 +270,26 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
     if (!retainedReplay) {
       throw new Error("The wrapper did not retain its current replay candidate");
     }
+    const lifecycleId = await childLifecycleId(second);
     for (const malformed of [
       { url: "x".repeat(32 * 1_024 + 1) },
       { url: retainedReplay[1], extra: true },
     ]) {
-      await secondRendered.locator("html").evaluate((_root, candidate) => {
-        globalThis.parent.postMessage(
-          {
-            type: "marimo-studio:replay-document",
-            runtime: "server",
-            lifecycleId: 1,
-            view: "dashboard",
-            ...candidate,
-          },
-          "*",
-        );
-      }, malformed);
+      await secondRendered.locator("html").evaluate(
+        (_root, { candidate, lifecycleId }) => {
+          globalThis.parent.postMessage(
+            {
+              type: "marimo-studio:replay-document",
+              runtime: "server",
+              lifecycleId,
+              view: "dashboard",
+              ...candidate,
+            },
+            "*",
+          );
+        },
+        { candidate: malformed, lifecycleId },
+      );
       await expect.poll(replayStorage).toEqual(retainedReplay);
       expect(await sessionId(secondRendered)).toBe(currentSession);
     }

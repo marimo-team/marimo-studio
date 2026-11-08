@@ -559,6 +559,7 @@ export class PreviewController {
       message.type === "marimo-studio:presentation-refresh" ||
       message.type === "marimo-studio:presentation-refresh-barrier" ||
       message.type === "marimo-studio:replay-document" ||
+      message.type === "marimo-studio:view-state" ||
       message.type === "marimo-studio:restore-fragment" ||
       message.type === "marimo-studio:receiver-admitted" ||
       message.runtime !== this.runtime

@@ -185,11 +185,40 @@ test("preview messages decode every supported discriminant", () => {
       view: "dashboard",
       diagnostics: [pendingDiagnostic],
     },
+    {
+      type: "marimo-studio:view-state",
+      runtime: "server",
+      lifecycleId: 7,
+      state: "ready",
+      revision: "presentation-v2",
+      diagnostics: [pendingDiagnostic],
+    },
+    {
+      type: "marimo-studio:view-state",
+      runtime: "server",
+      lifecycleId: 7,
+      state: "connecting",
+      diagnostics: [],
+    },
   ];
 
   messages.forEach((message) =>
     assert.deepEqual(parsePreviewMessage(message), message, JSON.stringify(message)),
   );
+});
+
+test("view state reports carry a known page state", () => {
+  const report = {
+    type: "marimo-studio:view-state",
+    runtime: "server",
+    lifecycleId: 7,
+    state: "ready",
+    diagnostics: [],
+  };
+
+  assert.notEqual(parsePreviewMessage(report), undefined);
+  assert.equal(parsePreviewMessage({ ...report, state: "stale" }), undefined);
+  assert.equal(parsePreviewMessage({ ...report, diagnostics: undefined }), undefined);
 });
 
 test("preview view identities use the portable 238-byte contract", () => {

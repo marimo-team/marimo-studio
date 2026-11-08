@@ -11,6 +11,22 @@ from markupsafe import Markup
 from marimo_studio._delivery.html import node_list, render
 
 
+def _script_json(value: object) -> str:
+    return json.dumps(value, separators=(",", ":")).replace("<", "\\u003c")
+
+
+def _standalone_report(runtime: str) -> str:
+    # A wrapper mirrors the report of the document in its frame. Each render
+    # mints a lifecycle, so a repair page that reloads replaces its last report.
+    report = _script_json({"type": "marimo-studio:view-state", "runtime": runtime})
+    return (
+        "if(parent!==window)parent.postMessage({"
+        f"...{report},state:'error',diagnostics:[diagnostic],"
+        "lifecycleId:1+Math.floor(Math.random()*(Number.MAX_SAFE_INTEGER-1))"
+        "},'*');"
+    )
+
+
 def repair_document(
     message: str,
     hint: str,
@@ -26,6 +42,14 @@ def repair_document(
     """Show a view error, following source repairs when recovery is possible."""
     heading = "View needs repair" if recoverable else "Preview unavailable"
     events = json.dumps(events_url).replace("<", "\\u003c")
+    diagnostic = {
+        "scope": "runtime",
+        "code": code,
+        "severity": "error",
+        "message": message,
+        "hint": hint,
+        "view": view,
+    }
     node = html(
         lang="en",
         data_marimo_studio_preview_state="error",
@@ -79,28 +103,23 @@ def repair_document(
                     ],
                     script[
                         Markup(
-                            (
+                            f"const diagnostic={_script_json(diagnostic)};"
+                            "globalThis.marimoStudio={"
+                            "diagnostics:()=>[{...diagnostic}]};"
+                            + (
                                 "parent.postMessage("
-                                + json.dumps(
+                                + _script_json(
                                     {
                                         "type": "marimo-studio:view-error",
                                         "runtime": runtime,
                                         "lifecycleId": lifecycle_id,
                                         "view": view,
-                                        "diagnostic": {
-                                            "scope": "runtime",
-                                            "code": code,
-                                            "severity": "error",
-                                            "message": message,
-                                            "hint": hint,
-                                            "view": view,
-                                        },
-                                    },
-                                    separators=(",", ":"),
-                                ).replace("<", "\\u003c")
+                                        "diagnostic": diagnostic,
+                                    }
+                                )
                                 + ", '*');"
                                 if lifecycle_id is not None and view
-                                else ""
+                                else _standalone_report(runtime)
                             )
                             + (
                                 f"const url=new URL({events},location.href);"

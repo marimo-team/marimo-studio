@@ -45,6 +45,14 @@ const documentLifecycleField = {
 
 const previewMessageInputSchema = z.discriminatedUnion("type", [
   z.strictObject({
+    type: z.literal("marimo-studio:view-state"),
+    ...runtimeField,
+    ...documentLifecycleField,
+    state: z.enum(["connecting", "loading", "ready", "error"]),
+    revision: revisionSchema.optional(),
+    diagnostics: z.array(viewDiagnosticSchema).max(200),
+  }),
+  z.strictObject({
     type: z.literal("marimo-studio:view-progress"),
     ...runtimeField,
     ...documentLifecycleField,
@@ -196,6 +204,7 @@ export const previewMessageSchema = previewMessageInputSchema.superRefine((messa
 
 export type ViewDiagnostic = BrowserDiagnostic;
 export type PreviewMessage = z.infer<typeof previewMessageSchema>;
+export type ViewStateMessage = Extract<PreviewMessage, { type: "marimo-studio:view-state" }>;
 export type ViewProgressMessage = Extract<PreviewMessage, { type: "marimo-studio:view-progress" }>;
 export type NavigateViewMessage = Extract<PreviewMessage, { type: "marimo-studio:navigate-view" }>;
 export type ReplayDocumentMessage = Extract<
@@ -263,7 +272,7 @@ export type PresentationToStudioMessage =
   | ReceiverUnreadyMessage
   | ReceiverWaitingMessage
   | ViewPreviewMessage;
-export type PresentationToWrapperMessage = ReplayDocumentMessage;
+export type PresentationToWrapperMessage = ReplayDocumentMessage | ViewStateMessage;
 export type StudioToPresentationMessage =
   | SwitchViewMessage
   | RestoreFragmentMessage

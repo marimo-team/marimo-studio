@@ -1,3 +1,5 @@
+import type { ViewStateMessage } from "@marimo-studio/protocol/preview-messages";
+
 import { parseMountConfig, type MountConfig } from "@marimo-studio/protocol/runtime-config";
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
 import {
@@ -236,6 +238,49 @@ export const expectEditorModelReplayRecovery = (diagnostics: BrowserDiagnostics,
     },
     recovered: recovery.recovered,
   };
+};
+
+declare global {
+  var __viewStateReports: ViewStateMessage[] | undefined;
+  var __mirroredStates: (string | null)[] | undefined;
+}
+
+export const recordViewStateReports = (page: Page) =>
+  page.addInitScript(() => {
+    if (globalThis.top !== globalThis.self) {
+      return;
+    }
+    globalThis.__viewStateReports = [];
+    globalThis.__mirroredStates = [];
+    globalThis.addEventListener("message", (event: MessageEvent) => {
+      if (event.data?.type === "marimo-studio:view-state") {
+        globalThis.__viewStateReports?.push(event.data);
+      }
+    });
+    new MutationObserver(() => {
+      const state = document.documentElement.getAttribute("data-marimo-studio-state");
+      if (globalThis.__mirroredStates?.at(-1) !== state) {
+        globalThis.__mirroredStates?.push(state);
+      }
+    }).observe(document, {
+      attributes: true,
+      attributeFilter: ["data-marimo-studio-state"],
+      subtree: true,
+    });
+  });
+
+export const viewStateReports = (page: Page) =>
+  page.evaluate(() => globalThis.__viewStateReports ?? []);
+
+export const mirroredStates = (page: Page) =>
+  page.evaluate(() => globalThis.__mirroredStates ?? []);
+
+export const childLifecycleId = async (page: Page): Promise<number> => {
+  const lifecycleId = (await viewStateReports(page)).at(-1)?.lifecycleId;
+  if (lifecycleId === undefined) {
+    throw new Error("The standalone view has not reported a document lifecycle");
+  }
+  return lifecycleId;
 };
 
 export const presentationFrame = (page: Page): FrameLocator =>
