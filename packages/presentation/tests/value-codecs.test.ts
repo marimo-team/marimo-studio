@@ -38,7 +38,7 @@ test("JSON values decode without loading a resource", async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 
-test("Arrow values expose one verified Flechette table and its source bytes", async () => {
+test("Arrow values expose one Flechette table and its source bytes", async () => {
   const bytes = arrowBytes();
   const fetchedBuffer = bytes.buffer;
   vi.stubGlobal(
@@ -104,7 +104,7 @@ test("Arrow cache follows fingerprints, selector ownership, and projection scope
   expect(second.values.frame?.value).toBe(first.values.frame?.value);
   expect(fetch).toHaveBeenCalledTimes(1);
 
-  const failed = await decode(
+  const replaced = await decode(
     {
       values: {
         frame: {
@@ -116,15 +116,17 @@ test("Arrow cache follows fingerprints, selector ownership, and projection scope
     },
     revisionOne,
   );
-  const recovered = await decode(response, revisionOne);
+  const restored = await decode(response, revisionOne);
 
-  expect(failed.values.frame).toBeUndefined();
-  expect(failed.errors.frame?.code).toBe("value-fingerprint-mismatch");
-  expect(recovered.values.frame?.value).not.toBe(first.values.frame?.value);
+  expect(replaced.errors).toEqual({});
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(replaced.values.frame?.fingerprint).toBe(`sha256:${"1".repeat(64)}`);
+  expect(replaced.values.frame?.value).not.toBe(first.values.frame?.value);
+  expect(restored.values.frame?.value).not.toBe(replaced.values.frame?.value);
 
   await decode({ values: {}, errors: {} }, { activeSelectors: [], scope: "revision-1" });
   const reacquired = await decode(response, revisionOne);
-  expect(reacquired.values.frame?.value).not.toBe(recovered.values.frame?.value);
+  expect(reacquired.values.frame?.value).not.toBe(restored.values.frame?.value);
 
   const nextRevision = await decode(response, {
     activeSelectors: ["frame"],
@@ -176,8 +178,9 @@ test("Arrow authorization failures stay terminal and selector-local", async () =
   expect(decoded.errors.frame?.code).toBe("value-resource-unavailable");
 });
 
-test("Arrow decoding fails locally when SHA-256 verification is unavailable", async () => {
+test("Arrow values decode where crypto.subtle is absent", async () => {
   const bytes = arrowBytes();
+  const declared = `sha256:${"0".repeat(64)}`;
   vi.stubGlobal("crypto", {});
   vi.stubGlobal(
     "fetch",
@@ -186,27 +189,27 @@ test("Arrow decoding fails locally when SHA-256 verification is unavailable", as
 
   const decoded = await decodeValueReadResponse({
     values: {
-      report: {
-        codec: "json-v1",
-        fingerprint: `sha256:${"0".repeat(64)}`,
-        value: { total: 42 },
-      },
       frame: {
         codec: "arrow-ipc-v1",
-        fingerprint: `sha256:${"0".repeat(64)}`,
+        fingerprint: declared,
         dataUrl: "/@file/frame.arrow",
         byteLength: bytes.byteLength,
       },
     },
     errors: {},
   });
+  expect(decoded.errors).toEqual({});
+  const projected = decoded.values.frame;
+  if (projected?.codec !== "arrow-ipc-v1") {
+    throw new Error("Expected an Arrow value");
+  }
 
-  expect(decoded.values.report?.value).toEqual({ total: 42 });
-  expect(decoded.values.frame).toBeUndefined();
-  expect(decoded.errors.frame?.code).toBe("value-integrity-unavailable");
+  expect(projected.fingerprint).toBe(declared);
+  expect(projected.value.get(1)).toEqual({ city: "Paris", score: 9 });
+  expect(getMarimoDataSource(projected.value)?.fingerprint).toBe(declared);
 });
 
-test("Arrow verification failures stay local to their selectors", async () => {
+test("Arrow read failures stay local to their selectors", async () => {
   const bytes = arrowBytes();
   vi.stubGlobal(
     "fetch",
@@ -217,25 +220,12 @@ test("Arrow verification failures stay local to their selectors", async () => {
     }),
   );
 
-  const corruptFingerprint = await globalThis.crypto.subtle.digest(
-    "SHA-256",
-    new Uint8Array([1, 2, 3, 4]),
-  );
-  const corruptHex = Array.from(new Uint8Array(corruptFingerprint), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
   const decoded = await decodeValueReadResponse({
     values: {
       good: {
         codec: "json-v1",
         fingerprint: `sha256:${"0".repeat(64)}`,
         value: 42,
-      },
-      mismatch: {
-        codec: "arrow-ipc-v1",
-        fingerprint: `sha256:${"1".repeat(64)}`,
-        dataUrl: "/mismatch.arrow",
-        byteLength: bytes.byteLength,
       },
       wrongSize: {
         codec: "arrow-ipc-v1",
@@ -245,7 +235,7 @@ test("Arrow verification failures stay local to their selectors", async () => {
       },
       corrupt: {
         codec: "arrow-ipc-v1",
-        fingerprint: `sha256:${corruptHex}`,
+        fingerprint: `sha256:${"2".repeat(64)}`,
         dataUrl: "/corrupt.arrow",
         byteLength: 4,
       },
@@ -254,7 +244,6 @@ test("Arrow verification failures stay local to their selectors", async () => {
   });
 
   expect(decoded.values.good?.value).toBe(42);
-  expect(decoded.errors.mismatch?.code).toBe("value-fingerprint-mismatch");
   expect(decoded.errors.wrongSize?.code).toBe("value-size-mismatch");
   expect(decoded.errors.corrupt?.code).toBe("value-decode-failed");
 });

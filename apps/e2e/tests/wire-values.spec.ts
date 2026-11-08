@@ -1,8 +1,10 @@
+import { e2eNetwork } from "../scripts/network.ts";
 import {
   dashboardHtmlPath,
   expect,
   labeledSlider,
-  type presentationFrame,
+  observeBrowserContext,
+  presentationFrame,
   readWorkspaceFile,
   studioEntryUrl,
   test,
@@ -11,6 +13,7 @@ import {
   workspaceNotebookPath,
   writeWorkspaceFile,
 } from "./fixture.ts";
+import { startNotebookServer } from "./notebook-server.ts";
 
 test.describe.configure({ timeout: 210_000 });
 
@@ -168,4 +171,59 @@ test("delivers and refreshes dataframe values in Server and WebAssembly runtimes
   await labeledSlider(wasm.locator('marimo-cell[name="controls"]'), /^Scale/).press("Home");
   await expectProjectedDataframe(wasm, 21);
   await expectLargeDataframe(wasm, 1);
+});
+
+// Chromium and marimo report these on an insecure origin, where the listed
+// browser features are absent.
+const INSECURE_ORIGIN_CONSOLE = [
+  /^The Cross-Origin-Opener-Policy header has been ignored/,
+  /^\[iframe\] Clipboard API unavailable$/,
+  /^\[iframe\] Media devices API unavailable$/,
+];
+
+test("delivers and refreshes dataframe values on an insecure origin", async ({
+  launchOptions,
+  playwright,
+}) => {
+  await installProjectedDataframe();
+  const browser = await playwright.chromium.launch({
+    ...launchOptions,
+    args: ["--host-resolver-rules=MAP insecure.test 127.0.0.1"],
+  });
+  const context = await browser.newContext();
+  const diagnostics = observeBrowserContext(context);
+  const insecureConsole = INSECURE_ORIGIN_CONSOLE.map((text) =>
+    diagnostics.expectConsole({ text, count: 1, required: false }),
+  );
+  const endpoint = e2eNetwork.main.recovery;
+  const server = startNotebookServer({
+    command: "run",
+    target: workspaceNotebookPath,
+    endpoint,
+    authentication: ["--no-token"],
+  });
+
+  try {
+    await server.waitUntilReady(`${endpoint.origin}/dashboard/`);
+    const page = await context.newPage();
+    await page.goto(`http://insecure.test:${endpoint.port}/dashboard/`);
+
+    const view = presentationFrame(page);
+    await expect(view.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+    expect(await view.locator("html").evaluate(() => globalThis.isSecureContext)).toBe(false);
+    await expectProjectedDataframe(view, 42);
+    await expectEmptyDataframe(view);
+    await expectLargeDataframe(view, 2);
+
+    await labeledSlider(view.locator('marimo-cell[name="controls"]'), /^Scale/).press("End");
+    await expectProjectedDataframe(view, 63);
+    await expectLargeDataframe(view, 3);
+    insecureConsole.forEach(({ recovered }) => recovered());
+  } finally {
+    await diagnostics.close();
+    await context.close();
+    await browser.close();
+    await server.close();
+  }
+  expect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
 });
