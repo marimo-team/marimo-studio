@@ -130,6 +130,35 @@ test("creates, edits, and previews a view beneath a stripped proxy prefix", asyn
   await tab.close();
 });
 
+test("gives each host the view's public address beneath a stripped proxy prefix", async ({
+  page,
+}) => {
+  await createDashboard(page);
+  const readPublicUrl = () => globalThis.marimoStudio.publicUrl();
+
+  const editorAddress = await previewFrame(page).locator("html").evaluate(readPublicUrl);
+  expect(editorAddress).toBe(`${proxiedUrl()}dashboard/`);
+
+  const tab = await page.context().newPage();
+  await tab.goto(`${proxiedUrl()}dashboard/?region=emea`);
+  const standalone = presentationFrame(tab).locator("html");
+  await expect(standalone).toHaveAttribute("data-marimo-studio-state", "ready");
+  const documentUrl = await standalone.evaluate(() => location.href);
+  expect(documentUrl).toContain("/_marimo-studio/presentation/");
+  expect(documentUrl).toContain("session_id=");
+  await standalone.evaluate(() => {
+    location.hash = "#details";
+  });
+  const expected = `${proxiedUrl()}dashboard/?region=emea#details`;
+  await expect(tab).toHaveURL(expected);
+  const standaloneAddress = await standalone.evaluate(readPublicUrl);
+  expect(standaloneAddress).toBe(expected);
+  for (const secret of ["session_id", "marimo_studio", "_marimo-studio"]) {
+    expect(standaloneAddress).not.toContain(secret);
+  }
+  await tab.close();
+});
+
 test("switches preview runtimes beneath a stripped proxy prefix", async ({
   browserDiagnostics,
   page,

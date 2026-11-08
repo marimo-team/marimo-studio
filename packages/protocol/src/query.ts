@@ -10,6 +10,7 @@ export const UNFRAMED_QUERY_PARAM = "marimo_studio_unframed";
 export const EDITOR_SESSION_QUERY_PARAM = "marimo_studio_editor_session";
 export const PRESENTATION_REVISION_QUERY_PARAM = "marimo_studio_revision";
 export const DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume";
+export const HOST_SESSION_HANDOFF_QUERY_PARAM = "marimo_studio_handoff";
 
 const PRIVATE_QUERY_KEYS = [
   "access_token",
@@ -26,6 +27,7 @@ const PRIVATE_QUERY_KEYS = [
   WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
   WORKSPACE_STREAM_QUERY_PARAM,
   DOCUMENT_REPLAY_QUERY_PARAM,
+  HOST_SESSION_HANDOFF_QUERY_PARAM,
   "marimo_studio_view",
   UNFRAMED_QUERY_PARAM,
   "refresh_token",

@@ -41,6 +41,9 @@ test("serves directory views beneath a stripped proxy prefix", async ({ page }) 
   await tab.goto(`${proxiedDirectoryUrl()}report/?file=notebook.py`);
   await expect(view.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
   await expect(tab).toHaveURL(`${proxiedDirectoryUrl()}report/?file=notebook.py`);
+  expect(await view.locator("html").evaluate(() => globalThis.marimoStudio.publicUrl())).toBe(
+    `${proxiedDirectoryUrl()}report/?file=notebook.py`,
+  );
   const report = view.getByRole("heading", { name: "Proxied report" });
   await expect(report).toBeVisible();
   // The authored stylesheet resolves against the artifact base beneath the prefix.

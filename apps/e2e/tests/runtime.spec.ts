@@ -160,6 +160,17 @@ test("static WebAssembly executes the mounted dependency closure", async ({ page
   await expect(page.locator("#surrogate-pair")).toHaveText("emoji");
 });
 
+test("a static export reports its own address without private parameters", async ({ page }) => {
+  await page.goto(`${staticExportUrl()}?region=emea&session_id=s_abcdef#details`);
+  await expect(page.locator("#projected-status")).toHaveAttribute("data-state", "ready", {
+    timeout: WASM_PREVIEW_TIMEOUT,
+  });
+
+  expect(await page.evaluate(() => globalThis.marimoStudio.publicUrl())).toBe(
+    `${staticExportUrl()}?region=emea#details`,
+  );
+});
+
 test("explains that a static export opened from disk needs a web server", async ({ browser }) => {
   // Chromium blocks the export's runtime assets on a file:// page. The page
   // loads outside every server under test, so its context skips their checks.

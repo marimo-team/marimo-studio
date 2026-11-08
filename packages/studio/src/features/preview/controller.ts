@@ -561,6 +561,7 @@ export class PreviewController {
       message.type === "marimo-studio:replay-document" ||
       message.type === "marimo-studio:view-state" ||
       message.type === "marimo-studio:restore-fragment" ||
+      message.type === "marimo-studio:public-url" ||
       message.type === "marimo-studio:receiver-admitted" ||
       message.runtime !== this.runtime
     ) {

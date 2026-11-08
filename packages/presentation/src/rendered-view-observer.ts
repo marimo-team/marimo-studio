@@ -9,6 +9,7 @@ import type { RuntimeStateApi } from "./runtime-state.ts";
 
 import { documentLifecycleEnvelope } from "./document/document-lifecycle-id.ts";
 import { postToStudioParent } from "./document/parent-bridge.ts";
+import { publicUrl } from "./document/public-url.ts";
 import { clearDiagnostic, showDiagnostic, showNotice } from "./document/status.ts";
 import { studioOwned } from "./document/studio-ownership.ts";
 import { projectionHosts } from "./projections/host-runtime.ts";
@@ -21,6 +22,7 @@ interface MarimoStudioApi {
   ready: () => Promise<void>;
   diagnostics: () => readonly StudioDiagnostic[];
   identity: () => { readonly projectionRevision: string; readonly revision: string };
+  publicUrl: () => string;
   updateQuery: (query: string) => Promise<void>;
   state?: RuntimeStateApi;
 }
@@ -211,6 +213,7 @@ export const startRenderedViewObserver = (updateQuery: (query: string) => Promis
         revision: config.revision,
       };
     },
+    publicUrl,
     updateQuery,
   };
   stopReadinessChanges = readiness.subscribe(publish);

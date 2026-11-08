@@ -18,6 +18,7 @@ import { isCurrentDocument } from "./document/fragment.ts";
 import { startFrameRuntimeBridge } from "./document/frame-runtime-bridge.ts";
 import { onFinalPageHide } from "./document/page-lifecycle";
 import { postToStudioParent } from "./document/parent-bridge.ts";
+import { bindWrapperPublicUrl } from "./document/public-url.ts";
 import {
   bindRuntimeQueryHistory,
   startQuerySync,
@@ -88,6 +89,7 @@ if (
 ) {
   onFinalPageHide(startViewStateReport());
 }
+onFinalPageHide(bindWrapperPublicUrl());
 onFinalPageHide(startQuerySync());
 globalThis.addEventListener("pagehide", () => documentBase.stop());
 globalThis.addEventListener("pageshow", () => documentBase.start());
