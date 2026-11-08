@@ -287,6 +287,9 @@ inputs. The `development` profile serves Studio Preview, and `production`
 serves run mode and static export. Each profile keeps its own latest attempt
 and retained artifact.
 
+Warnings print as `warning <code>: <message>` and appear under `issues` with
+`--json`. A build with warnings exits with status `0`.
+
 A failed build keeps the last successful artifact for the selected profile
 available. A successful build publishes the candidate only after output
 validation and a final source and ownership check.

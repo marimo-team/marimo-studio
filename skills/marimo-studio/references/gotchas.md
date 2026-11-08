@@ -155,6 +155,12 @@ The latest build failed, and the page keeps showing the previous build.
 location when it has one. Follow the diagnostic's hint, then build the view
 again.
 
+**A Prepared export stops at `Export verification requires Web Crypto SHA-256.`**
+The diagnostic code is `static-runtime-failed`. The page loaded over plain HTTP
+on a host other than a loopback name, where browsers withhold Web Crypto. Serve
+the folder over HTTPS. See
+[verification](verification.md#verify-at-the-origin-people-open).
+
 **Browser automation in the Studio tab cannot read the view.**
 The Studio tab renders the view in a sandboxed frame. Use frame-aware
 automation, or open the view's preview URL as in

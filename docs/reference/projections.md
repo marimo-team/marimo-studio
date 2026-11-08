@@ -155,11 +155,40 @@ A `json-v1` value encodes within 1,000,000 bytes and an `arrow-ipc-v1` value
 within 64 MiB. [Runtime payloads](limits.md#runtime-payloads) lists the
 per-read budgets.
 
-Studio decodes Arrow tables with Flechette's default extraction options.
-Integer columns, including 64-bit integers, read as numbers, and a 64-bit value
-beyond `Number.MAX_SAFE_INTEGER` throws. Booleans and strings keep their
-JavaScript types, list cells read as arrays, and dates and timestamps read as
-epoch milliseconds. `table.toArray()` returns plain row objects.
+`table.getChild(name)` returns a column with `length`, `nullCount`,
+`at(index)`, and `toArray()`, or `undefined` for an unknown name. For common
+column types, `column.toArray()` returns:
+
+| Arrow column                                       | `column.toArray()`                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Float, or integer up to 32 bits, with no nulls     | Typed array, such as `Float64Array`, `Float32Array`, `Int32Array`, or `Uint8Array`                                                                                                                                                                                                        |
+| 64-bit integer with no nulls                       | `Float64Array`. In a Prepared export, `BigInt64Array` or `BigUint64Array`                                                                                                                                                                                                                 |
+| Date or timestamp with no nulls                    | `Float64Array` of epoch milliseconds                                                                                                                                                                                                                                                      |
+| Time32 with no nulls                               | `Int32Array` of seconds or milliseconds                                                                                                                                                                                                                                                   |
+| Time64 or duration with no nulls                   | `Float64Array` in the column's own unit. In a Prepared export, `BigInt64Array`                                                                                                                                                                                                            |
+| Numeric, date, or timestamp with at least one null | `Array` of numbers and `null`. In a Prepared export, 64-bit integers are `bigint`                                                                                                                                                                                                         |
+| String, with or without nulls                      | `Array` of strings and `null`                                                                                                                                                                                                                                                             |
+| Boolean, with or without nulls                     | `Array` of booleans and `null`                                                                                                                                                                                                                                                            |
+| List                                               | `Array` with one cell per row. A cell is a typed array when the batch's list values are floats or integers up to 32 bits with no nulls, and an `Array` otherwise. In a Prepared export, 64-bit integer cells with no nulls are `BigInt64Array` or `BigUint64Array`. A null cell is `null` |
+
+A typed array fails `Array.isArray()` and serializes as an object in
+`JSON.stringify()`, which throws on `bigint` values. Call `Array.from()` when
+code needs a plain array. `toArray()` can return the table's own array, so copy
+it before sorting or writing to it.
+
+The Python and Browser runtimes read 64-bit integers as numbers, and reading a
+value beyond `Number.MAX_SAFE_INTEGER` throws. A Prepared export reads them as
+`bigint`, and arithmetic that mixes `bigint` with a number throws `TypeError`.
+Convert non-null values with `Number()` in code that runs in both, because
+`Number(null)` is `0`, or cast the column to `Float64` or `Int32` in the
+notebook.
+
+Read columns for charts, tables, and aggregates. `table.toArray()` and
+`table.get(index)` return plain objects, and build one for each row they read.
+On a 1,000,000-row table in Chromium, `table.toArray()` took about 300 ms and
+`toArray()` on one float column about 1 ms. Each `toArray()` call on a string
+column decodes the column again, so keep the result instead of calling it per
+frame.
 
 React starters export `useMarimoValue()` and `getMarimoDataSource()` from
 `src/lib/use-marimo-value.ts`, and Svelte starters export
