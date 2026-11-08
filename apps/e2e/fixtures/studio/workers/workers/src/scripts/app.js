@@ -1,7 +1,7 @@
 const started = (worker) =>
   new Promise((resolve) => {
     worker.addEventListener("message", ({ data }) => {
-      resolve({ ...data, instance: worker instanceof Worker });
+      resolve({ ...data, instance: worker instanceof Worker, kind: worker.constructor.name });
     });
     worker.addEventListener("error", () => resolve({ failed: true }));
   });
@@ -19,6 +19,12 @@ const workerUrl = (path) => new URL(`../workers/${path}`, import.meta.url);
 const inlineWorkerUrl = (source) =>
   URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
 const pageBlob = URL.createObjectURL(new Blob(["page blob"]));
+const revokedBlobs = [];
+const revokeObjectURL = URL.revokeObjectURL.bind(URL);
+URL.revokeObjectURL = (url) => {
+  revokedBlobs.push(url);
+  revokeObjectURL(url);
+};
 const inlineSource = `self.postMessage({ name: self.name, source: "inline" });`;
 
 class ListeningWorker extends Worker {
@@ -56,6 +62,7 @@ globalThis.workerResults = (async () => ({
       type: "module",
     }),
   ),
+  revokedBlobs: revokedBlobs.length,
   inlineClassic: await started(
     new Worker(inlineWorkerUrl(inlineSource), { name: "inline-classic-worker" }),
   ),

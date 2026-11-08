@@ -29,6 +29,7 @@ const expectFixtureWorkerFailure = (diagnostics: BrowserDiagnostics) =>
 
 test("starts URL and inline workers in a sandboxed Server view", async ({
   browserDiagnostics,
+  browserName,
   page,
 }) => {
   const workerFailure = expectFixtureWorkerFailure(browserDiagnostics);
@@ -69,9 +70,11 @@ test("starts URL and inline workers in a sandboxed Server view", async ({
       instance: true,
     },
     largeInlineModule: { name: "large-inline-module-worker", source: "inline", instance: true },
+    // Chromium starts this worker from a private blob copy, released once it runs.
+    revokedBlobs: browserName === "chromium" ? 1 : 0,
     inlineClassic: { name: "inline-classic-worker", source: "inline", instance: true },
     failing: { failed: true },
-    subclass: { name: "", instance: true },
+    subclass: { name: "", instance: true, kind: "ListeningWorker" },
     credentialed: { fetched: true, instance: true },
     crossOrigin: true,
   });

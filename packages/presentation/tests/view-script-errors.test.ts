@@ -16,6 +16,7 @@ const disposers: (() => void)[] = [];
 
 afterEach(() => {
   disposers.splice(0).forEach((dispose) => dispose());
+  delete globalThis.__MARIMO_STUDIO_WORKER_ERRORS__;
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });

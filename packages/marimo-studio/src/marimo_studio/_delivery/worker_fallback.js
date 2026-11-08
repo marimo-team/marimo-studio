@@ -14,7 +14,13 @@
   // Serialized into the worker. A data: worker has a data: location, so relative
   // URLs need the worker's real address as their base.
   const rebaseWorkerUrls = (workerUrl) => {
-    const absolute = (url) => URL.parse(url, workerUrl)?.href ?? url;
+    const absolute = (url) => {
+      try {
+        return new URL(url, workerUrl).href;
+      } catch {
+        return url;
+      }
+    };
     Object.defineProperty(self, "location", {
       configurable: true,
       enumerable: true,
@@ -60,24 +66,40 @@
     const script = dataScript(source);
     if (script.length > 2 * 1024 * 1024) {
       const copy = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-      return dataScript(`import ${JSON.stringify(copy)};`);
+      return { script: dataScript(`import ${JSON.stringify(copy)};`), copy };
     }
-    return script;
+    return { script };
   };
 
-  const startUrl = (url, requested, options) => {
-    const isModule = options?.type === "module";
+  const start = (url, requested, type) => {
+    const isModule = type === "module";
     if (url?.protocol === "blob:" && isModule && !runsBlobModules) {
       try {
         return blobModule(url.href);
       } catch {
-        return requested;
+        return { script: requested };
       }
     }
     if (url?.origin === new URL(document.baseURI).origin && /^https?:$/.test(url.protocol)) {
-      return dataScript((isModule ? moduleBootstrap : classicBootstrap)(url.href));
+      return { script: dataScript((isModule ? moduleBootstrap : classicBootstrap)(url.href)) };
     }
-    return requested;
+    return { script: requested };
+  };
+
+  const listen = (worker, type, listener, options) => {
+    EventTarget.prototype.addEventListener.call(worker, type, listener, options);
+  };
+
+  // The worker's asynchronous import needs the copy, and only this page can
+  // revoke it. A first message proves the module loaded.
+  const releaseCopyWith = (worker, copy) => {
+    const release = () => URL.revokeObjectURL(copy);
+    listen(worker, "message", release, { once: true });
+    listen(worker, "error", release, { once: true });
+    worker.terminate = () => {
+      release();
+      Object.getPrototypeOf(worker).terminate.call(worker);
+    };
   };
 
   // view-script-errors.ts drains this array when the runtime starts and replaces
@@ -94,19 +116,32 @@
     }
   };
 
+  const parsed = (requested) => {
+    try {
+      return new URL(String(requested), document.baseURI);
+    } catch {
+      return null;
+    }
+  };
+
   // A Proxy keeps `instanceof Worker`, subclassing, and the constructor's name.
   self.Worker = new Proxy(self.Worker, {
     construct(target, [requested, options], newTarget) {
-      const url = URL.parse(String(requested), document.baseURI);
+      const url = parsed(requested);
+      const { type, name } = options ?? {};
+      const { script, copy } = start(url, requested, type);
       // An opaque origin has no cookies, and the bootstrap's cross-origin import
       // cannot satisfy `credentials: "include"`.
       const worker = Reflect.construct(
         target,
-        [startUrl(url, requested, options), { ...options, credentials: "same-origin" }],
+        [script, { type, name, credentials: "same-origin" }],
         newTarget,
       );
+      if (copy) {
+        releaseCopyWith(worker, copy);
+      }
       // A subclass override would run before the subclass's own fields exist.
-      EventTarget.prototype.addEventListener.call(worker, "error", (event) =>
+      listen(worker, "error", (event) =>
         report((url?.href ?? String(requested)).slice(0, 2048), event),
       );
       return worker;

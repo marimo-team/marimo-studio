@@ -457,8 +457,8 @@ from Studio's runtime, notebook files, and remote scripts, and browser warnings
 such as ResizeObserver loop notices, leave the state unchanged.
 
 A worker's `error` event also leaves the state unchanged.
-`marimoStudio.diagnostics()` lists it as a `view-worker-error` warning, with the
-worker's file.
+`marimoStudio.diagnostics()` lists it as a `view-worker-error` warning that names
+the worker's file, or `inline worker` for a `blob:` or `data:` worker.
 
 A failed build leaves the state as it was and keeps the previous build on
 screen. The page shows an alert that starts with `Latest build failed`, and

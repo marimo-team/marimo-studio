@@ -12,4 +12,5 @@ fetch("classic-chunk.js")
       chunk: self.classicChunk,
       fetched: text === request.responseText && text.includes("classicChunk"),
     });
-  });
+  })
+  .catch((error) => self.postMessage({ fetchError: String(error) }));
