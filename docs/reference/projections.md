@@ -431,6 +431,23 @@ projections. Custom charts, frameworks, and remote requests need their own
 assertions. `data-marimo-studio-revision` on `<html>` holds the
 committed presentation revision.
 
+A view's public address, such as `/dashboard/`, serves a wrapper page around
+the view's sandboxed frame. The wrapper's top-level `<html>` mirrors both
+attributes from the frame, and `marimoStudio.diagnostics()` on the wrapper
+returns the frame's current diagnostics, up to 200 records, so the selector and
+the call work from top-level browser automation. That call is the wrapper's
+whole `marimoStudio` API. The view's content, `marimoStudio.ready()`, its
+events, and its result hosts stay inside `iframe#marimo-studio-presentation`.
+A [`view preview`](cli.md#marimo-studio-view-preview) URL, a static export, and
+a Server view under `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME` render the view in
+the top-level document, which carries the attributes and the full API itself.
+
+The state is `connecting`, `loading`, `ready`, or `error`. It leaves `ready`
+while the frame replaces its document, rebuilds, reconnects, or refreshes
+projections. After the frame first reports `ready`, the wrapper focuses it when
+no element on the wrapper page holds focus, so keyboard shortcuts reach the
+view without a click.
+
 An uncaught error or unhandled rejection from a view file or inline module
 script sets the state to `error` for the rest of that document. Studio shows
 the first one with its built file and position, such as

@@ -134,7 +134,8 @@ Use the state that protects the caller. Runtime mount does not prove projection
 readiness. Presentation commit does not prove Preview admission. The document's
 `data-marimo-studio-revision` exposes its committed presentation revision.
 `data-marimo-studio-state` covers Studio runtime and projection readiness.
-Application behavior requires its own browser assertions.
+A standalone wrapper mirrors both attributes from its current document
+lifecycle. Application behavior requires its own browser assertions.
 
 ## Mutation rule
 

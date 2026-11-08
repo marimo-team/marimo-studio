@@ -71,6 +71,8 @@ to the incarnation they observed.
 
 The browser document exposes its committed presentation revision as
 `data-marimo-studio-revision` on `<html>`, beside `data-marimo-studio-state`.
+A view's public address mirrors both attributes on the top-level `<html>` of
+its wrapper page.
 An exact preview URL rejects a different presentation revision or unbuilt or
 failed view source, even when a previous artifact is retained.
 

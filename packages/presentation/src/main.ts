@@ -39,6 +39,7 @@ import {
   viewHistoryNavigationForUrl,
 } from "./document/view-navigation.ts";
 import { watchViewScriptErrors } from "./document/view-script-errors.ts";
+import { startViewStateReport } from "./document/view-state-report.ts";
 import { errorMessage } from "./errors";
 import { startPresentationObservers, stopPresentationObservers } from "./observers";
 import { projectionHosts } from "./projections/host-runtime";
@@ -77,6 +78,16 @@ documentBase.start(initialDocumentBaseUrl);
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
 const documentLifetime = new AbortController();
 onFinalPageHide(() => documentLifetime.abort(new PresentationDocumentRetiredError()));
+// The first message from a new wrapped document identifies it to the wrapper.
+// A presentation session marks a document served behind a trusted wrapper. A
+// static export has none, and its report would reach an unrelated embedding page.
+if (
+  globalThis.parent !== globalThis.window &&
+  !studioOwned() &&
+  getMountConfig().sessionId !== undefined
+) {
+  onFinalPageHide(startViewStateReport());
+}
 onFinalPageHide(startQuerySync());
 globalThis.addEventListener("pagehide", () => documentBase.stop());
 globalThis.addEventListener("pageshow", () => documentBase.start());

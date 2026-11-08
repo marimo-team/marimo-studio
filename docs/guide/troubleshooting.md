@@ -230,9 +230,10 @@ the current notebook and Studio tab, with the edit-mode session open. Run
 `view.show()` in its own execution to activate the view. To check the page,
 get `await view.preview_url(runtime="server")`, finish the execution, then
 open the URL with a browser tool and wait for
-`html[data-marimo-studio-state="ready"]`. Waiting inside code mode can block
-the computations the page needs. If readiness stalls, read the visible status,
-console errors, and failed requests.
+`html[data-marimo-studio-state="ready"]` on the top-level page. Waiting inside
+code mode can block the computations the page needs. If the state becomes
+`error`, call `marimoStudio.diagnostics()` on the top-level page. If readiness
+stalls, read the visible status, console errors, and failed requests.
 
 If the preview asks you to run changed cells, run them in the live notebook or
 use **Run all**, then retry. Building and validating the view leave the live

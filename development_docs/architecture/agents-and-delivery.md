@@ -167,6 +167,17 @@ A failed replacement retains the previous committed revision. A failed build
 leaves the state `ready` and adds its error to `marimoStudio.diagnostics()`.
 These values serve ordinary DOM queries and browser predicates.
 
+A standalone document posts `marimo-studio:view-state` to its trusted wrapper
+for every change to its page state, revision, or diagnostics. The wrapper
+mirrors the report on its top-level `<html>` and serves
+`marimoStudio.diagnostics()` from it. Each standalone document mints its own
+lifecycle ID. A report under a new ID retires the previous one, so a late
+report from a replaced document never reaches the mirror. A document reports
+`loading` on its final page hide, which leaves the wrapper `loading` until the
+next document reports. A repair page in the frame reports
+`error` the same way. The frame authors these reports, so they carry the trust
+of the view's own code.
+
 Agents finish code-mode execution before waiting on the browser, so notebook
 execution can proceed. Browser tools own tab selection, waits, screenshots,
 console and network inspection, and application assertions. Application code

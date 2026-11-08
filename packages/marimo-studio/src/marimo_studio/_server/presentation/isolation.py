@@ -72,6 +72,23 @@ _BRIDGE = r"""(() => {
   let childIdentity;
   let documentClosed = false;
   let activeReplayUrl = config.fallbackUrl;
+  const viewStates = new Set(["connecting", "loading", "ready", "error"]);
+  const retiredChildren = new Set();
+  let viewDiagnostics = "[]";
+  let frameFocusOffered = false;
+  const mirrorView = (state, revision, diagnostics) => {
+    const root = document.documentElement;
+    root.dataset.marimoStudioState = state;
+    if (revision === undefined) delete root.dataset.marimoStudioRevision;
+    else root.dataset.marimoStudioRevision = revision;
+    viewDiagnostics = diagnostics;
+  };
+  if (parent === window) {
+    mirrorView("loading", undefined, "[]");
+    window.marimoStudio = Object.freeze({
+      diagnostics: () => JSON.parse(viewDiagnostics),
+    });
+  }
   const loadFrame = (source) => {
     if (documentClosed) return;
     activeReplayUrl = source;
@@ -90,6 +107,7 @@ _BRIDGE = r"""(() => {
     frameHost.replaceWith(frame);
   };
   const childMessages = new Set([
+    "marimo-studio:view-state",
     "marimo-studio:navigate-view",
     "marimo-studio:location-change",
     "marimo-studio:replay-document",
@@ -227,11 +245,58 @@ _BRIDGE = r"""(() => {
       value.lifecycleId <= 0 ||
       !allowedViews.has(value.view) ||
       !boundedText(value.url, 32 * 1_024) ||
-      !childIdentity ||
+      !childIdentity?.ready ||
       value.runtime !== childIdentity.runtime ||
       value.lifecycleId !== childIdentity.lifecycleId
     ) return undefined;
     return replayUrl(value.url, value.view);
+  };
+  const viewStateReport = (value) =>
+    value &&
+    typeof value === "object" &&
+    boundedText(value.runtime, 128) &&
+    /^[a-z][a-z0-9-]*$/.test(value.runtime) &&
+    Number.isSafeInteger(value.lifecycleId) &&
+    value.lifecycleId > 0 &&
+    viewStates.has(value.state) &&
+    (value.revision === undefined ||
+      (value.revision !== "" && boundedText(value.revision, 256))) &&
+    Array.isArray(value.diagnostics) &&
+    value.diagnostics.length <= 200 &&
+    value.diagnostics.every(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        typeof item.code === "string" &&
+        typeof item.severity === "string" &&
+        typeof item.message === "string",
+    );
+  const receiveViewState = (report) => {
+    if (!viewStateReport(report) || retiredChildren.has(report.lifecycleId)) return;
+    let diagnostics;
+    try {
+      diagnostics = JSON.stringify(report.diagnostics);
+    } catch {
+      return;
+    }
+    if (childIdentity?.lifecycleId !== report.lifecycleId) {
+      // Each document reports under its own lifecycle. Adopting a new one
+      // retires the last, so a late report from a replaced document is dropped.
+      if (childIdentity) retiredChildren.add(childIdentity.lifecycleId);
+      childIdentity = {
+        runtime: report.runtime,
+        lifecycleId: report.lifecycleId,
+        ready: false,
+      };
+    } else if (childIdentity.runtime !== report.runtime) {
+      return;
+    }
+    mirrorView(report.state, report.revision, diagnostics);
+    if (report.state !== "ready" || frameFocusOffered) return;
+    frameFocusOffered = true;
+    if (!document.activeElement || document.activeElement === document.body) {
+      frame?.focus({ preventScroll: true });
+    }
   };
   const rememberReplay = (view, value) => {
     const key = replayStorageKey(view, location.href);
@@ -347,11 +412,17 @@ _BRIDGE = r"""(() => {
         }
         return;
       }
-      if (type === "marimo-studio:view-ready" && parent === window) {
-        childIdentity = {
-          runtime: event.data.runtime,
-          lifecycleId: event.data.lifecycleId,
-        };
+      if (type === "marimo-studio:view-state") {
+        if (parent === window) receiveViewState(event.data);
+        return;
+      }
+      if (
+        type === "marimo-studio:view-ready" &&
+        parent === window &&
+        childIdentity &&
+        event.data.lifecycleId === childIdentity.lifecycleId
+      ) {
+        childIdentity.ready = true;
         rememberReplay(event.data.view, activeReplayUrl);
       }
       if (parent !== window) parent.postMessage(event.data, location.origin);
@@ -411,7 +482,7 @@ _BRIDGE = r"""(() => {
     if (
       targetView === currentView &&
       location.search === currentSearch &&
-      childIdentity
+      childIdentity?.ready
     ) {
       frame?.contentWindow?.postMessage(
         {

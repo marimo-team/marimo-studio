@@ -364,7 +364,9 @@ Successful activation commits the selected frame and its browser-authored
 address. Before inspecting outputs or interacting, wait inside the frame for
 `html[data-marimo-studio-state="ready"]`. Activation and readiness are separate
 milestones so `show()` can return from code mode and marimo can process the
-preview's kernel work. Refresh these fields with `view show` after a view,
+preview's kernel work. A URL from
+[`view preview`](#marimo-studio-view-preview) reports the same state on its
+top-level page. Refresh these fields with `view show` after a view,
 runtime, or session change.
 
 ## `marimo-studio view preview`
@@ -401,11 +403,12 @@ failed, even when the previous artifact is retained. The HTML attribute
 `data-marimo-studio-revision` identifies the committed presentation. It differs
 from the artifact revision that `view build` returns.
 
-Wait for `html[data-marimo-studio-state="ready"]`, which covers the runtime
-and mounted projections, before asserting content and behavior, inspecting
-console and network failures, or capturing screenshots. When a previous
-successful artifact stays visible after a failed build, check `view inspect`
-for build freshness.
+Wait for `html[data-marimo-studio-state="ready"]` on the top-level page, which
+covers the runtime and mounted projections, before asserting content and
+behavior, inspecting console and network failures, or capturing screenshots.
+A state of `error` means the view failed: call `marimoStudio.diagnostics()` on
+the top-level page to read why. When a previous successful artifact stays
+visible after a failed build, check `view inspect` for build freshness.
 
 ## `marimo-studio view preflight`
 
