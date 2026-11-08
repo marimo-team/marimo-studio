@@ -76,6 +76,42 @@ test("mirrors the view's readiness and revision on the top-level document", asyn
   }
 });
 
+test("gives the view its public address inside the frame", async ({ page }) => {
+  const server = startRunServer();
+  try {
+    await server.waitUntilReady(standaloneUrl());
+    await page.goto(`${standaloneUrl()}&region=emea`);
+    await expectTopLevelReady(page);
+    const frameDocument = presentationFrame(page).locator("html");
+
+    const announced = await frameDocument.evaluate(
+      () =>
+        new Promise<string>((resolve) => {
+          addEventListener("message", (event: MessageEvent<{ type?: string; url: string }>) => {
+            if (event.data.type === "marimo-studio:public-url") {
+              resolve(event.data.url);
+            }
+          });
+          const target = new URL(location.href);
+          target.searchParams.set("tab", "map");
+          target.hash = "#details";
+          history.replaceState(null, "", target);
+        }),
+    );
+
+    const expected = `${runServerUrl()}/dashboard/?region=emea&tab=map#details`;
+    expect(announced).toBe(expected);
+    await expect(page).toHaveURL(expected);
+    const publicUrl = await frameDocument.evaluate(() => globalThis.marimoStudio.publicUrl());
+    expect(publicUrl).toBe(expected);
+    for (const secret of ["session_id", "access_token", "marimo_studio", "_marimo-studio"]) {
+      expect(publicUrl).not.toContain(secret);
+    }
+  } finally {
+    await closeAll(page, server);
+  }
+});
+
 test("surfaces a runtime failure and its diagnostic at the top level", async ({
   browserDiagnostics,
   page,

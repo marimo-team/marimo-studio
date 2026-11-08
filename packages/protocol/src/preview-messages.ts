@@ -94,6 +94,12 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     hash: hashSchema,
   }),
   z.strictObject({
+    type: z.literal("marimo-studio:public-url"),
+    ...documentLifecycleField,
+    view: viewNameSchema,
+    url: z.url({ protocol: /^https?$/ }).max(32 * 1_024),
+  }),
+  z.strictObject({
     type: z.literal("marimo-studio:receiver-ready"),
     ...runtimeField,
     ...documentLifecycleField,
@@ -220,6 +226,7 @@ export type RestoreFragmentMessage = Extract<
   PreviewMessage,
   { type: "marimo-studio:restore-fragment" }
 >;
+export type PublicUrlMessage = Extract<PreviewMessage, { type: "marimo-studio:public-url" }>;
 export type ReceiverReadyMessage = Extract<
   PreviewMessage,
   { type: "marimo-studio:receiver-ready" }
@@ -276,6 +283,7 @@ export type PresentationToWrapperMessage = ReplayDocumentMessage | ViewStateMess
 export type StudioToPresentationMessage =
   | SwitchViewMessage
   | RestoreFragmentMessage
+  | PublicUrlMessage
   | PresentationChangeMessage
   | PresentationRefreshMessage
   | PresentationRefreshBarrierMessage

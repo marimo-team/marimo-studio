@@ -93,6 +93,12 @@ test("preview messages decode every supported discriminant", () => {
       hash: "#details",
     },
     {
+      type: "marimo-studio:public-url",
+      lifecycleId: 7,
+      view: "report",
+      url: "https://hub.example/s/f3a9/p/77c1/report/?region=emea#details",
+    },
+    {
       type: "marimo-studio:receiver-ready",
       runtime: "server",
       lifecycleId: 7,
@@ -228,6 +234,22 @@ test("preview view identities use the portable 238-byte contract", () => {
   for (const message of viewIdentityMessages("v".repeat(239))) {
     assert.equal(parsePreviewMessage(message), undefined, message.type);
   }
+});
+
+test("a public URL message carries one absolute web address", () => {
+  const publicUrl = (url: string) => ({
+    type: "marimo-studio:public-url",
+    lifecycleId: 7,
+    view: "report",
+    url,
+  });
+  assert.ok(parsePreviewMessage(publicUrl("http://127.0.0.1:2718/dashboard/?region=emea")));
+  assert.equal(parsePreviewMessage(publicUrl("/dashboard/")), undefined);
+  assert.equal(parsePreviewMessage(publicUrl("javascript:alert(1)")), undefined);
+  assert.equal(
+    parsePreviewMessage({ ...publicUrl("https://hub.example/dashboard/"), lifecycleId: 0 }),
+    undefined,
+  );
 });
 
 test("preview messages reject malformed protocol classes", () => {

@@ -253,6 +253,7 @@ export const installMarimoStudioGlobal = (): void => {
     ready: async () => {},
     diagnostics: () => [],
     identity: () => ({ projectionRevision: "4".repeat(64), revision: "revision-1" }),
+    publicUrl: () => "http://localhost/dashboard/",
     updateQuery: async () => {},
   };
 };

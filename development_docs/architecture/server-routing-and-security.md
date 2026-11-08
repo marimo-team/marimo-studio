@@ -229,6 +229,16 @@ replay, and diagnostic messages. The wrapper accepts child messages from
 the iframe window with origin `null` and parent messages from the same-origin
 Studio window.
 
+Once its adopted child reports `marimo-studio:view-ready`, a top-level wrapper
+sends `marimo-studio:public-url`, with its own address and current view, and
+repeats it after each location change. `marimoStudio.publicUrl()` returns that
+address while its view, query, and fragment match the document. Otherwise, and
+in Studio Preview, a framed wrapper, a `view preview` document, or a trusted
+same-origin view, the page builds the address from `publicRootUrl`, its view,
+and its own location. A static export filters its own `location`. The
+address reveals the view's public path to view code. The page already holds its
+query, fragment, and `publicRootUrl`, so the reveal grants no capability.
+
 Trusted server deployments may set `MARIMO_STUDIO_TRUSTED_SERVER_RUNTIME=1`.
 A marimohub sandbox context with proxy exposure enables the same policy
 when the variable is unset, because the hub already serves notebook output on

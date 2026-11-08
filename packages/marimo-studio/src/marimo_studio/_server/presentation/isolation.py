@@ -175,6 +175,18 @@ _BRIDGE = r"""(() => {
     target.hash = hash;
     return target.toString();
   };
+  const announcePublicUrl = (lifecycleId) => {
+    if (!childIdentity?.ready || childIdentity.lifecycleId !== lifecycleId) return;
+    frame?.contentWindow?.postMessage(
+      {
+        type: "marimo-studio:public-url",
+        lifecycleId,
+        view: currentView,
+        url: location.href,
+      },
+      "*",
+    );
+  };
   const replayStorageKey = (view, source) => {
     if (!config.replayEnabled || typeof config.replayScope !== "string") {
       return undefined;
@@ -383,6 +395,7 @@ _BRIDGE = r"""(() => {
           publicViewUrl(currentView, event.data.query, hash),
         );
         currentSearch = location.search;
+        announcePublicUrl(event.data.lifecycleId);
         return;
       }
       if (type === "marimo-studio:navigate-view" && parent === window) {
@@ -395,6 +408,7 @@ _BRIDGE = r"""(() => {
             publicViewUrl(event.data.view, event.data.query, event.data.hash),
           );
           currentSearch = location.search;
+          announcePublicUrl(event.data.lifecycleId);
           return;
         }
         location.assign(
@@ -424,6 +438,7 @@ _BRIDGE = r"""(() => {
       ) {
         childIdentity.ready = true;
         rememberReplay(event.data.view, activeReplayUrl);
+        announcePublicUrl(event.data.lifecycleId);
       }
       if (parent !== window) parent.postMessage(event.data, location.origin);
       return;

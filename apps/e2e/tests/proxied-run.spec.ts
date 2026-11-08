@@ -41,11 +41,27 @@ test("presents and links views beneath a stripped proxy prefix", async ({ page }
   await labeledSlider(view.locator("body"), /^Proxied scale/).press("End");
   await expect(view.locator('[mo-value="metric"]')).toHaveText("63");
 
+  const announced = await view.locator("html").evaluateHandle(() => ({
+    report: new Promise<string>((resolve) => {
+      addEventListener(
+        "message",
+        (event: MessageEvent<{ type?: string; view?: string; url: string }>) => {
+          if (event.data.type === "marimo-studio:public-url" && event.data.view === "report") {
+            resolve(event.data.url);
+          }
+        },
+      );
+    }),
+  }));
   await view.getByRole("link", { name: "Report" }).click();
   await expect(page).toHaveURL(`${proxiedRunUrl()}report/`);
   await ready(view);
   const report = view.getByRole("heading", { name: "Proxied report" });
   await expect(report).toBeVisible();
+  expect(await view.locator("html").evaluate(() => globalThis.marimoStudio.publicUrl())).toBe(
+    `${proxiedRunUrl()}report/`,
+  );
+  expect(await announced.evaluate(({ report: url }) => url)).toBe(`${proxiedRunUrl()}report/`);
   // The authored stylesheet resolves against the artifact base beneath the prefix.
   await expect(report).toHaveCSS("color", "rgb(12, 34, 56)");
   await expect(view.getByRole("heading", { name: "Proxied total: 63" })).toBeVisible();
@@ -120,4 +136,8 @@ test("opens an exact preview URL beneath a stripped proxy prefix", async ({ page
   await expect(page.locator("html")).toHaveAttribute("data-marimo-studio-revision", revision!);
   await expect(page.getByRole("heading", { name: "Proxied dashboard" })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe(new URL(`${proxiedRunUrl()}dashboard/`).pathname);
+  // This document is top-level, and its own URL carries the revision and token state.
+  expect(await page.evaluate(() => globalThis.marimoStudio.publicUrl())).toBe(
+    `${proxiedRunUrl()}dashboard/?runtime=server`,
+  );
 });

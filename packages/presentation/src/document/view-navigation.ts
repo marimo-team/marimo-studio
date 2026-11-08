@@ -42,7 +42,7 @@ export const setEditorBindingQuery = (url: URL, clientId?: string, supportUrl?: 
   }
 };
 
-const publicViewUrl = (root: URL, view: string, query: string): URL => {
+export const publicViewUrl = (root: URL, view: string, query: string): URL => {
   const url = new URL(`${encodeURIComponent(view)}/`, root);
   url.search = root.search;
   for (const [key, value] of new URLSearchParams(query)) {

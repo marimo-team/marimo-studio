@@ -55,6 +55,11 @@ Studio keeps its own parameters, such as `runtime`, `session_id`, and access
 tokens, out of `mo.query_params()`. When a notebook allows both runtimes,
 `?runtime=wasm` or `?runtime=server` picks one for the request.
 
+A Share button copies
+[`marimoStudio.publicUrl()`](../reference/provider-api.md#read-the-public-address),
+which returns the view's address with its current query and fragment, free of
+session IDs and access tokens.
+
 ## Open multiple tabs
 
 In `marimo edit`, tabs on the same notebook share one Python kernel. Changing

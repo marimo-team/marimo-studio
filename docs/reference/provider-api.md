@@ -598,6 +598,51 @@ hosts it, so its origin, storage, and permissions follow that site. With
 host origin without the sandbox and uses the browser's own storage. See
 [Deploy](../guide/deploy.md).
 
+### Read the public address
+
+`marimoStudio.publicUrl()` returns this view's public address, with its current
+query and fragment, as an absolute URL string. The value is current in the same
+task as a `location.hash`, `history.pushState()`, or `history.replaceState()`
+write.
+
+`location.href` inside the frame is a document URL that Studio mints for one
+session, so build links from `publicUrl()`. A Share button copies it on click:
+
+```js
+document.querySelector("#share").addEventListener("click", () => {
+  const url = globalThis.marimoStudio?.publicUrl();
+  if (url && navigator.clipboard) {
+    navigator.clipboard.writeText(url).catch(console.warn);
+  }
+});
+```
+
+Studio creates `marimoStudio` during startup, so the handler checks for it. An
+uncaught error fails the view, and `navigator.clipboard` is undefined on a plain
+HTTP page.
+
+| Host                                           | `publicUrl()` returns                         |
+| ---------------------------------------------- | --------------------------------------------- |
+| View URL, such as `/report/`                   | The address in the browser's address bar      |
+| Studio Preview                                 | The address **Open preview in new tab** opens |
+| `view preview` URL or same-origin Server view  | The view's address on the server              |
+| Server behind a path prefix                    | The view's address beneath the prefix         |
+| Static export                                  | The page's own address                        |
+| View framed by another page, such as marimohub | The view's address on the framed server       |
+
+A framed view has no access to the address of the page around it, so in
+marimohub the value is the sandbox's address. Share the notebook page with other
+people, as [Coding agents in marimohub](../guide/marimohub.md#coding-agents-in-marimohub)
+describes.
+
+The address leaves out `session_id`, access tokens, the minted document path,
+and Studio's `marimo_studio_*` parameters. It keeps `file` for a notebook served
+from a directory and, on a live server, `runtime` when the request named one.
+
+The link carries the view, the query, and the fragment. A reader starts from the
+notebook's defaults for state kept out of the URL, and the server's
+authentication still applies.
+
 ## Render files from notebook results
 
 A render turns notebook results into files with the provider's tools: a PDF
