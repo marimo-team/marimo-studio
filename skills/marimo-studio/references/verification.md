@@ -64,7 +64,7 @@ connected.
 `show()` activates the user's Studio tab. That tab renders the view in a
 sandboxed frame with an opaque origin, so scripts running in the Studio tab
 cannot read the frame's document. Inspect it with frame-aware browser
-automation, or open the standalone URL. Wait for the frame's requested
+automation, or open the preview URL. Wait for the frame's requested
 navigation before checking readiness: its previous document may still be
 visible. On an edit-mode server, an open standalone page follows the
 development build of each source change and keeps its address, so the user can
@@ -75,14 +75,21 @@ exact URL returns HTTP 409 if its revision differs or current view source is
 unbuilt or failed, even while the previous artifact remains available.
 
 Wait with the browser's native selector or predicate tools for
-`html[data-marimo-studio-state="ready"]`. Read
+`html[data-marimo-studio-state="ready"]`. A URL from `preview_url()` or
+`view preview` renders the view in the top-level document. A view's public
+address, such as `/dashboard/`, serves a wrapper page around the view's
+sandboxed frame, and the wrapper's top-level `<html>` mirrors the frame's state
+and revision, so the same selector works there too. The state leaves `ready`
+while the frame replaces its document, rebuilds, or reconnects. Read
 `document.documentElement.dataset.marimoStudioRevision` for the committed
 presentation revision, which differs from the artifact's `build.revision`.
 Studio readiness covers its runtime, mounted projections, and uncaught errors
 from view scripts, which set the state to `error` and show their location.
-A failed build keeps the previous build `ready`, so compare the revision or
-check `marimoStudio.diagnostics()` for the build's error before trusting the
-content.
+Treat `error` as a failed check even when the top-level page logs no errors,
+and read `marimoStudio.diagnostics()` on the top-level page for the view's
+records. A failed build keeps the previous build `ready`, so compare the
+revision or check `marimoStudio.diagnostics()` for the build's error before
+trusting the content.
 Assert the application's intended result separately. After changing a control, wait for
 the dependent metric, text, and custom chart to update. The selected control
 value alone does not prove reactive completion.
