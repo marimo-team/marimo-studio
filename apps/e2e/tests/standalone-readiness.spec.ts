@@ -326,6 +326,17 @@ test("an embedded wrapper leaves readiness and focus to its host", async ({
     endpoint: e2eNetwork.main.recovery,
     authentication: ["--no-token"],
   });
+  await page.addInitScript(() => {
+    if (globalThis.top !== globalThis.self) {
+      return;
+    }
+    globalThis.addEventListener("message", (event: MessageEvent) => {
+      const host = document.querySelector<HTMLIFrameElement>("#host-frame");
+      if (event.source === host?.contentWindow && event.data?.type === "marimo-studio:view-ready") {
+        document.documentElement.dataset.embeddedViewReady = "";
+      }
+    });
+  });
   try {
     await server.waitUntilReady(`${runServerUrl()}/dashboard/`);
     await page.goto(`${runServerUrl()}/dashboard/`);
@@ -341,6 +352,9 @@ test("an embedded wrapper leaves readiness and focus to its host", async ({
       wrapper.frameLocator("iframe#marimo-studio-presentation").locator("html"),
     ).toHaveAttribute("data-marimo-studio-state", "ready", { timeout: 65_000 });
 
+    // The frame reports state before ready, and the wrapper relays ready after
+    // handling both, so this marks the point where the state was already seen.
+    await expect(page.locator("html")).toHaveAttribute("data-embedded-view-ready", "");
     await expect(wrapper.locator("html")).not.toHaveAttribute("data-marimo-studio-state");
     expect(
       await wrapper.locator("html").evaluate(() => document.activeElement === document.body),

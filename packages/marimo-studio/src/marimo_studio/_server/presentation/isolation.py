@@ -262,7 +262,15 @@ _BRIDGE = r"""(() => {
     (value.revision === undefined ||
       (value.revision !== "" && boundedText(value.revision, 256))) &&
     Array.isArray(value.diagnostics) &&
-    value.diagnostics.length <= 200;
+    value.diagnostics.length <= 200 &&
+    value.diagnostics.every(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        typeof item.code === "string" &&
+        typeof item.severity === "string" &&
+        typeof item.message === "string",
+    );
   const receiveViewState = (report) => {
     if (!viewStateReport(report) || retiredChildren.has(report.lifecycleId)) return;
     let diagnostics;
@@ -411,7 +419,8 @@ _BRIDGE = r"""(() => {
       if (
         type === "marimo-studio:view-ready" &&
         parent === window &&
-        event.data.lifecycleId === childIdentity?.lifecycleId
+        childIdentity &&
+        event.data.lifecycleId === childIdentity.lifecycleId
       ) {
         childIdentity.ready = true;
         rememberReplay(event.data.view, activeReplayUrl);

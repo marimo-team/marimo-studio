@@ -172,8 +172,9 @@ for every change to its page state, revision, or diagnostics. The wrapper
 mirrors the report on its top-level `<html>` and serves
 `marimoStudio.diagnostics()` from it. Each standalone document mints its own
 lifecycle ID. A report under a new ID retires the previous one, so a late
-report from a replaced document never reaches the mirror, and a document
-reports `loading` as it is finally hidden. A repair page in the frame reports
+report from a replaced document never reaches the mirror. A document reports
+`loading` on its final page hide, which leaves the wrapper `loading` until the
+next document reports. A repair page in the frame reports
 `error` the same way. The frame authors these reports, so they carry the trust
 of the view's own code.
 

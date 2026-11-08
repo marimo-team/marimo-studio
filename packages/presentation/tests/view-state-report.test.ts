@@ -69,6 +69,7 @@ test("a failed build reports ready with its error beside the previous build", as
   stopReport = view.startViewStateReport();
 
   view.setRuntimeConnectionState("ready");
+  view.commitRuntimeConfig(runtimeConfig());
   const buildClaim = view.beginPresentationRefresh("build");
   view.setPresentationRefreshState(buildClaim, "ready", {
     scope: "presentation",
@@ -81,11 +82,12 @@ test("a failed build reports ready with its error beside the previous build", as
 
   expect(reports().at(-1)).toMatchObject({
     state: "ready",
+    revision: runtimeConfig().revision,
     diagnostics: [{ code: "view-build-failed", severity: "error" }],
   });
 });
 
-test("a runtime failure before the observer starts reports its diagnostic", async () => {
+test("a runtime failure before the rendered view observer starts reports its diagnostic", async () => {
   const view = await newDocument();
   stopReport = view.startViewStateReport();
 
