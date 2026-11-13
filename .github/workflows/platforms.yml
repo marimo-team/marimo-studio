@@ -20,7 +20,7 @@ concurrency:
 jobs:
   changes:
     name: Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     permissions:
       actions: read
       contents: read
@@ -170,7 +170,7 @@ jobs:
       needs.changes.outputs.windows_lifecycle == 'true' ||
       needs.changes.outputs.windows_provider == 'true' ||
       needs.changes.outputs.windows_installed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 30
     env:
       WINDOWS_BROWSER: ${{ needs.changes.outputs.windows_lifecycle == 'true' ||
@@ -446,7 +446,7 @@ jobs:
       needs.windows-provider-e2e.result == 'success' || needs.windows-provider-e2e.result ==
       'failure' || needs.windows-installed-e2e.result == 'success' ||
       needs.windows-installed-e2e.result == 'failure')"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -489,7 +489,7 @@ jobs:
       - windows-provider-e2e
       - windows-installed-e2e
       - reports
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 1
     steps:
       - name: Check out repository
