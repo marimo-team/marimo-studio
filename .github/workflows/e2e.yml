@@ -15,7 +15,7 @@ concurrency:
 jobs:
   changes:
     name: Changes
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     permissions:
       actions: read
       contents: read
@@ -58,7 +58,7 @@ jobs:
     if:
       needs.changes.outputs.main_browser == 'true' || needs.changes.outputs.provider_browser == 'true'
       || needs.changes.outputs.installed_browser == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 20
     outputs:
       wheel: ${{ steps.package.outputs.wheel }}
@@ -116,7 +116,7 @@ jobs:
       - browser-assets
     if: >-
       needs.changes.outputs.main_browser == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -205,7 +205,7 @@ jobs:
     if: >-
       (needs.changes.outputs.provider_browser == 'true' || needs.changes.outputs.installed_browser
       == 'true')
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -293,7 +293,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.windows_unit == 'true'
-    runs-on: windows-latest
+    runs-on: "${{ vars.CI_RUNNER_WINDOWS || 'windows-latest' }}"
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -325,7 +325,7 @@ jobs:
       - package-e2e
     if: "!cancelled() && (needs.e2e.result == 'success' || needs.e2e.result == 'failure' ||
       needs.package-e2e.result == 'success' || needs.package-e2e.result == 'failure')"
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -366,7 +366,7 @@ jobs:
       - windows-unit
       - browser-assets
       - reports
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 1
     steps:
       - name: Check out repository
