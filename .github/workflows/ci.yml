@@ -15,7 +15,7 @@ concurrency:
 jobs:
   changes:
     name: Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     permissions:
       actions: read
       contents: read
@@ -58,7 +58,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.quality == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -92,7 +92,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.python_contracts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -111,7 +111,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.frontend_contracts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -150,7 +150,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.distribution == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -220,7 +220,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.python_contracts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 15
     steps:
       - name: Check out repository
@@ -239,7 +239,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.python_contracts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -258,7 +258,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.python_contracts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -282,7 +282,7 @@ jobs:
     needs: [changes, package]
     if: >-
       needs.changes.outputs.distribution == 'true' && needs.package.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -328,7 +328,7 @@ jobs:
       - deno
       - pixi
       - installed-package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 1
     steps:
       - name: Check out repository
