@@ -15,6 +15,7 @@ import {
   readWorkspaceFile,
   recordViewStateReports,
   recoverRequestAbort,
+  recoverResponseTransition,
   studioEntryUrl,
   studioOrigin,
   test,
@@ -453,6 +454,19 @@ test("a repair page in the frame reports its error at the top level", async ({
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const standalone = await context.newPage();
+  const projectRepair = browserDiagnostics.expectResponseTransition(page, {
+    origin: studioOrigin(),
+    method: "GET",
+    path: /^\/_marimo-studio\/views\/dashboard\/project$/,
+    failureStatus: 500,
+    failureError: "configuration-error",
+    successStatus: 200,
+  });
+  const readProject = () =>
+    page.evaluate(async () => {
+      const response = await fetch("/_marimo-studio/views/dashboard/project?file=notebook.py");
+      return { status: response.status, body: await response.json() };
+    });
   try {
     await standalone.goto(`${studioOrigin()}/dashboard/?file=notebook.py`);
     await expectTopLevelReady(standalone);
@@ -462,6 +476,11 @@ test("a repair page in the frame reports its error at the top level", async ({
       required: false,
     });
     await writeWorkspaceFile(dashboardManifestPath, "schema = 'broken'\n");
+    // Exercise the open editor's refresh while the manifest is invalid.
+    expect(await readProject()).toMatchObject({
+      status: 500,
+      body: { error: "configuration-error" },
+    });
 
     await presentationFrame(standalone)
       .locator("html")
@@ -475,6 +494,11 @@ test("a repair page in the frame reports its error at the top level", async ({
     expect(await standalone.evaluate(() => globalThis.marimoStudio.diagnostics())).toEqual([
       expect.objectContaining({ severity: "error", view: expect.any(String) }),
     ]);
+    await writeWorkspaceFile(dashboardManifestPath, manifest);
+    projectRepair.seal();
+    await waitForPreview(page);
+    expect((await readProject()).status).toBe(200);
+    await recoverResponseTransition(projectRepair);
     refused.recovered();
   } finally {
     await writeWorkspaceFile(dashboardManifestPath, manifest);
