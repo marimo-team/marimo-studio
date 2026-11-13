@@ -116,7 +116,7 @@ jobs:
       - browser-assets
     if: >-
       needs.changes.outputs.main_browser == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: ubuntu-p-medium
     timeout-minutes: 45
     strategy:
       fail-fast: false
