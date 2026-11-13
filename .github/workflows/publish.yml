@@ -34,7 +34,7 @@ jobs:
       (github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 5
     outputs:
       channel: ${{ steps.release.outputs.channel || steps.preview.outputs.channel }}
@@ -87,7 +87,7 @@ jobs:
     name: Build package
     needs: resolve
     if: needs.resolve.outputs.publish == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 45
     steps:
       - name: Check out repository
@@ -133,7 +133,7 @@ jobs:
   attest:
     name: Build provenance
     needs: build
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 55
     permissions:
       actions: read
@@ -187,7 +187,7 @@ jobs:
     name: Publish to PyPI
     needs: [resolve, attest]
     if: needs.resolve.outputs.channel == 'release'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     environment:
       name: pypi
@@ -219,7 +219,7 @@ jobs:
   verify-pypi:
     name: Verify PyPI release
     needs: [resolve, pypi]
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -238,7 +238,7 @@ jobs:
   release-notes:
     name: Release notes
     needs: [pypi, verify-pypi]
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     permissions:
       actions: read
@@ -285,7 +285,7 @@ jobs:
     name: Publish preview
     needs: [resolve, attest]
     if: needs.resolve.outputs.channel == 'preview'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     # Every preview edits the same release, so uploads, notes, and pruning run
     # one commit at a time.
