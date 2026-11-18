@@ -189,72 +189,37 @@ def test_distribution_checksums_cover_release_artifacts(tmp_path: Path) -> None:
     ]
 
 
-def test_release_dry_run_checks_the_exact_main_commit_without_tagging(
-    tmp_path: Path,
-) -> None:
+def test_release_dispatches_main_without_local_git_changes(tmp_path: Path) -> None:
     script, binaries = _release_workspace(tmp_path, "release.sh")
-    root = script.parents[1]
-    command_log = root / "commands"
-    release_notes = root / ".github" / "release-notes" / "v0.1.0.md"
-    release_notes.parent.mkdir(parents=True)
-    release_notes.write_text("release notes\n", encoding="utf-8")
-    _write_executable(
-        binaries / "git",
-        """#!/bin/sh
-printf '%s\n' "$*" >> "$COMMAND_LOG"
-case "$*" in
-  "branch --show-current") printf 'main\n' ;;
-  "status --porcelain") ;;
-  "fetch origin main --tags") ;;
-  "rev-parse HEAD"|"rev-parse origin/main") printf '%s\n' "$EXPECTED_COMMIT" ;;
-  "rev-parse -q --verify refs/tags/v0.1.0") exit 1 ;;
-  tag*|push*) exit 93 ;;
-  *) exit 94 ;;
-esac
-""",
-    )
-    _write_executable(
-        binaries / "uv",
-        """#!/bin/sh
-[ "$*" = "version --package marimo-studio --short" ] || exit 95
-printf '0.1.0\n'
-""",
-    )
+    command_log = tmp_path / "commands"
+    _write_executable(binaries / "git", "#!/bin/sh\nexit 93\n")
     _write_executable(
         binaries / "gh",
-        """#!/bin/sh
-[ "$*" = "repo view --json url --jq .url" ] || exit 96
-printf 'https://example.test/repo\n'
-""",
+        '#!/bin/sh\nprintf "%s\\n" "$@" > "$COMMAND_LOG"\n',
     )
-    _write_executable(
-        root / "scripts" / "require-release-checks.sh",
-        """#!/bin/sh
-[ "$1" = "$EXPECTED_COMMIT" ] || exit 97
-printf 'CI: https://example.test/ci\nBrowser acceptance: https://example.test/e2e\n'
-printf 'Documentation: https://example.test/pages\n'
-""",
-    )
-
     completed = subprocess.run(
-        [script, "--dry-run"],
+        [script, "0.3.0"],
         capture_output=True,
         text=True,
         check=False,
         env={
             **os.environ,
             "COMMAND_LOG": str(command_log),
-            "EXPECTED_COMMIT": _COMMIT,
             "PATH": f"{binaries}{os.pathsep}{os.environ['PATH']}",
         },
     )
-
     assert completed.returncode == 0, completed.stderr
-    assert _COMMIT in completed.stdout
-    assert "Documentation: https://example.test/pages" in completed.stdout
-    commands = command_log.read_text(encoding="utf-8").splitlines()
-    assert "fetch origin main --tags" in commands
-    assert not any(command.startswith(("tag ", "push ")) for command in commands)
+    assert command_log.read_text().splitlines() == [
+        "workflow",
+        "run",
+        "release-pr.yml",
+        "--repo",
+        "marimo-team/marimo-studio",
+        "--ref",
+        "main",
+        "-f",
+        "version=0.3.0",
+    ]
 
 
 @pytest.mark.parametrize(

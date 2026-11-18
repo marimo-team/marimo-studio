@@ -64,3 +64,7 @@ Read [Frontend development](development_docs/frontend.md) for browser changes an
 
 First-time contributors may be asked to sign the [marimo contributor license
 agreement](https://marimo.io/cla).
+
+## Releases
+
+See [Releases](RELEASING.md) to request, review, and publish a version through a release PR.

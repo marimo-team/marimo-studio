@@ -202,58 +202,12 @@ Repository visibility and security settings are managed independently of package
 publication. The release preflight checks the version, tag, and successful
 workflows for the exact commit.
 
-## Verify the exact release commit
+## Request and approve a release
 
-Update local `main`, then run the preflight:
-
-```console
-git pull --ff-only origin main
-./scripts/release.sh --dry-run
-```
-
-The preflight validates:
-
-1. The current branch is `main`.
-2. The working tree is clean.
-3. Local `main` matches `origin/main` after fetching branches and tags.
-4. The package version has final `X.Y.Z` form.
-5. The corresponding `vX.Y.Z` tag is available.
-6. Push-triggered CI, Browser acceptance, Platform acceptance, and
-   documentation passed for the exact commit.
-
-Validation first checks the comparison base: the PR base commit or the main
-commit before a push. A base with missing, pending, or failed workflow evidence
-requires the complete workflow. A successful base permits changed-file
-selection. Platform acceptance and GitHub Pages also select changed files while
-their base run is still in progress, because their `main` runs outlast pull
-request updates. Missing path-filter results fail the Changes job.
-
-Each pull request CI and Browser acceptance run records its tested Git tree.
-After merge, those workflows can reuse a successful same-repository PR run
-when the tree matches and the comparison base passed. Expired, ambiguous,
-failed, or mismatched PR evidence uses changed-file validation against that
-successful base. Documentation always produces the selected site artifact.
-
-Superseded pull request runs are canceled. Every main commit keeps its own CI,
-Browser acceptance, and documentation run so failures remain attributable to an
-exact commit. Documentation checks and artifact production run independently.
-Deployment requires both to pass and confirms that the commit is still the
-tip of `main`. Deploy jobs use one ordered queue and confirm the tip again
-immediately before publication. `Documentation gate` includes the selected
-checks, build, and deployment outcomes.
-
-The command prints the release tag, commit, and the four workflow URLs. The
-publish workflow repeats the exact-commit check before building artifacts.
-
-## Start publication
-
-Create and push the annotated tag:
-
-```console
-./scripts/release.sh
-```
-
-The tag starts `.github/workflows/publish.yml`.
+Use the [release PR workflow](../RELEASING.md).
+Add authored notes at `.github/release-notes/vX.Y.Z.md` to the generated PR.
+The tagging workflow waits for CI, Browser acceptance, Platform acceptance, and documentation on the exact merge commit.
+The App then creates the annotated tag that starts `publish.yml`.
 
 ```mermaid
 flowchart LR
