@@ -456,6 +456,9 @@ test("a repair page in the frame reports its error at the top level", async ({
   try {
     await standalone.goto(`${studioOrigin()}/dashboard/?file=notebook.py`);
     await expectTopLevelReady(standalone);
+    const retirement = browserDiagnostics.expectPageRetirement(page);
+    await page.close();
+    retirement.recovered();
     const refused = browserDiagnostics.expectResponse({
       path: /\/dashboard\/$/,
       status: 500,
