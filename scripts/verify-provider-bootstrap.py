@@ -97,6 +97,12 @@ async def _prepare(root: Path) -> None:
     document["project"] = project
     tool = tomlkit.table()
     uv = tomlkit.table()
+    # The acceptance project must resolve wheels for every supported CI platform.
+    uv["required-environments"] = [
+        "sys_platform == 'darwin' and platform_machine == 'arm64'",
+        "sys_platform == 'linux' and platform_machine == 'x86_64'",
+        "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    ]
     sources = tomlkit.table()
     for name, path in (
         ("marimo-studio", studio_wheel),

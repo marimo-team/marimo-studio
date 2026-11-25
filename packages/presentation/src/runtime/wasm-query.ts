@@ -1,4 +1,4 @@
-import { notebookQueryValues } from "@marimo-studio/protocol/query";
+import { notebookQueryValues, publicNotebookQuery } from "@marimo-studio/protocol/query";
 import { z } from "zod";
 
 import type { RuntimeInvoke } from "./runtime";
@@ -58,6 +58,7 @@ export const createWasmQueryWriter = (ownerSignal: AbortSignal) => {
   let active: PendingQueryUpdate | undefined;
   let pending: PendingQueryUpdate | undefined;
   let disposed = false;
+  let acknowledgedQuery: string | undefined;
   const disposal = new AbortController();
   const signal = AbortSignal.any([ownerSignal, disposal.signal]);
   let resolveClosed = () => {};
@@ -77,7 +78,9 @@ export const createWasmQueryWriter = (ownerSignal: AbortSignal) => {
         active = update;
         try {
           signal.throwIfAborted();
+          acknowledgedQuery = undefined;
           await synchronize(update.invoke, update.query, update.generation, signal);
+          acknowledgedQuery = update.query;
           update.waiters.forEach(({ resolve }) => resolve());
         } catch (error) {
           const failure =
@@ -101,10 +104,16 @@ export const createWasmQueryWriter = (ownerSignal: AbortSignal) => {
 
   return {
     write(invoke: RuntimeInvoke, query: string): Promise<void> {
-      if (disposed) {
+      if (disposed || signal.aborted) {
         return Promise.reject(
           signal.reason ?? new DOMException("The runtime was disposed.", "AbortError"),
         );
+      }
+      query = publicNotebookQuery(query);
+      // Startup already synchronizes this query before executing projections.
+      // Do not queue the same query behind potentially expensive notebook work.
+      if (!active && !pending && acknowledgedQuery === query) {
+        return Promise.resolve();
       }
       const operation = new Promise<void>((resolve, reject) => {
         pending = {

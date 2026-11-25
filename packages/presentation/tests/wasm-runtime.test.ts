@@ -159,6 +159,43 @@ describe("WebAssembly query synchronization", () => {
     await writer.dispose();
   });
 
+  it("acknowledges the initialized query without waiting behind notebook execution", async () => {
+    const owner = new AbortController();
+    const writer = createWasmQueryWriter(owner.signal);
+    const invoke = vi.fn<RuntimeInvoke>(async (request) => ({
+      found: true,
+      status: { code: "ok", message: null },
+      return_value: { generation: request.args.generation, applied: true },
+    }));
+    await writer.write(invoke, "?region=emea&file=notebook.py");
+    // The worker is occupied rendering the notebook after startup. An unchanged
+    // activation query already has an acknowledgement and needs no worker RPC.
+    invoke.mockImplementation(() => new Promise(() => {}));
+    const repeated = writer.write(invoke, "?region=emea&runtime=wasm");
+    expect(invoke).toHaveBeenCalledTimes(1);
+    await repeated;
+    await writer.dispose();
+  });
+
+  it("does not reuse an acknowledgement after a different query fails", async () => {
+    const writer = createWasmQueryWriter(new AbortController().signal);
+    const invoke = vi.fn<RuntimeInvoke>(async (request) => ({
+      found: true,
+      status: { code: "ok", message: null },
+      return_value: { generation: request.args.generation, applied: true },
+    }));
+    await writer.write(invoke, "?region=emea");
+    invoke.mockResolvedValueOnce({
+      found: true,
+      status: { code: "error", message: "query failed" },
+      return_value: null,
+    });
+    await expect(writer.write(invoke, "?region=apac")).rejects.toThrow("query failed");
+    await writer.write(invoke, "?region=emea");
+    expect(invoke).toHaveBeenCalledTimes(3);
+    await writer.dispose();
+  });
+
   it("stops retrying when the runtime is disposed", async () => {
     let rejectInvoke = (_error: Error) => {};
     const invoke = vi.fn<RuntimeInvoke>(

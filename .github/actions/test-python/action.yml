@@ -26,6 +26,10 @@ runs:
         if [[ "${{ runner.os }}" != "Linux" && "${{ inputs.profile }}" != "supported-python" ]]; then
           parallel+=(--parallel)
         fi
+        # Native tests launch process trees; four macOS workers exceed their startup deadlines.
+        if [[ "${{ runner.os }}" == "macOS" && "${{ inputs.profile }}" == "native" ]]; then
+          export PYTEST_XDIST_AUTO_NUM_WORKERS=2
+        fi
         ./scripts/python-test.sh \
           --profile "${{ inputs.profile }}" \
           --python "${{ inputs.python-version }}" \
