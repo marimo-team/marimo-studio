@@ -189,7 +189,9 @@ def test_distribution_checksums_cover_release_artifacts(tmp_path: Path) -> None:
     ]
 
 
-def test_release_requests_shared_preparation_without_local_git_changes(tmp_path: Path) -> None:
+def test_release_requests_shared_preparation_without_local_git_changes(
+    tmp_path: Path,
+) -> None:
     script, binaries = _release_workspace(tmp_path, "release.sh")
     command_log = tmp_path / "commands"
     _write_executable(binaries / "git", "#!/bin/sh\nexit 93\n")
