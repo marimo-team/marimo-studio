@@ -189,13 +189,13 @@ def test_distribution_checksums_cover_release_artifacts(tmp_path: Path) -> None:
     ]
 
 
-def test_release_dispatches_main_without_local_git_changes(tmp_path: Path) -> None:
+def test_release_requests_shared_preparation_without_local_git_changes(tmp_path: Path) -> None:
     script, binaries = _release_workspace(tmp_path, "release.sh")
     command_log = tmp_path / "commands"
     _write_executable(binaries / "git", "#!/bin/sh\nexit 93\n")
     _write_executable(
         binaries / "gh",
-        '#!/bin/sh\nprintf "%s\\n" "$@" > "$COMMAND_LOG"\n',
+        '#!/bin/sh\nprintf "%s\\n" "$@" "$GITHUB_REPOSITORY" > "$COMMAND_LOG"\n',
     )
     completed = subprocess.run(
         [script, "0.3.0"],
@@ -210,15 +210,10 @@ def test_release_dispatches_main_without_local_git_changes(tmp_path: Path) -> No
     )
     assert completed.returncode == 0, completed.stderr
     assert command_log.read_text().splitlines() == [
-        "workflow",
-        "run",
-        "release-pr.yml",
-        "--repo",
+        "release-control",
+        "request",
+        "0.3.0",
         "marimo-team/marimo-studio",
-        "--ref",
-        "main",
-        "-f",
-        "version=0.3.0",
     ]
 
 
